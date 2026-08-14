@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model cities {
+  code           String      @id @db.VarChar(10)
+  name           String      @db.VarChar(255)
+  slug           String?     @db.VarChar(255)
+  type           String?     @db.VarChar(50)
+  name_with_type String?     @db.VarChar(255)
+  districts      districts[]
+  posts          posts[]
+}
+
+model districts {
+  code           String  @id @db.VarChar(10)
+  name           String  @db.VarChar(255)
+  type           String? @db.VarChar(50)
+  slug           String? @db.VarChar(255)
+  name_with_type String? @db.VarChar(255)
+  path           String? @db.VarChar(255)
+  path_with_type String? @db.VarChar(255)
+  parent_code    String? @db.VarChar(10)
+  cities         cities? @relation(fields: [parent_code], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  posts          posts[]
+}
+
+model posts {
+  id        Int        @id @default(autoincrement())
+  title     String     @db.VarChar(255)
+  thumbnail String?
+  price     Decimal    @db.Decimal
+  area      Decimal    @db.Decimal
+  city      String?    @db.VarChar(10)
+  district  String?    @db.VarChar(10)
+  content   String?
+  cities    cities?    @relation(fields: [city], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  districts districts? @relation(fields: [district], references: [code], onDelete: NoAction, onUpdate: NoAction)
+}

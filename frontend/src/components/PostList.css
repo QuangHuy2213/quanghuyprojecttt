@@ -1,0 +1,134 @@
+.post-list-container {
+  font-family: Arial, sans-serif;
+}
+
+/* Thanh tìm kiếm màu cam */
+.search-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  background-color: #f6d5a1;
+  padding: 20px;
+  border-radius: 5px;
+  margin-bottom: 15px;
+  align-items: flex-end;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 130px;
+}
+
+.form-group label {
+  font-weight: bold;
+  font-size: 14px;
+  margin-bottom: 5px;
+}
+
+.search-input, .form-group select {
+  padding: 9px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  outline: none;
+}
+
+.flex-bottom {
+  flex: 0;
+}
+
+.btn-filter {
+  padding: 10px 25px;
+  background-color: #f7941d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.action-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 15px;
+}
+
+.btn-reset {
+  padding: 8px 16px;
+  background-color: #777;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+/* Danh sách bài viết */
+.post-list {
+  background-color: #faebeb;
+  border: 1px solid #e5a9a9;
+  border-radius: 4px;
+}
+
+.post-item {
+  display: flex;
+  padding: 15px;
+  border-bottom: 1px solid #e5a9a9;
+  gap: 20px;
+}
+
+.post-item:last-child {
+  border-bottom: none;
+}
+
+.post-thumbnail {
+  width: 200px;
+  height: 150px;
+  object-fit: cover;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.post-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.post-title {
+  margin: 0;
+  color: #d32f2f;
+  font-size: 16px;
+  text-transform: uppercase;
+}
+
+.post-price {
+  color: #2e7d32;
+  font-weight: bold;
+  font-size: 15px;
+}
+
+.post-meta {
+  font-size: 14px;
+  color: #0000ee; /* Màu xanh của địa chỉ */
+}
+
+.post-meta span {
+  color: #0000ee;
+}
+
+.post-content {
+  font-size: 14px;
+  color: #333;
+  margin: 5px 0 0 0;
+  line-height: 1.4;
+}
+
+.no-data {
+  padding: 30px;
+  text-align: center;
+  color: #666;
+}
