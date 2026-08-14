@@ -4,15 +4,18 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
-  // Cho phép Frontend (cổng 3000) gọi API
+  // Sửa chỗ này: Thêm domain Vercel vào danh sách cho phép
   app.enableCors({
-    origin: 'http://localhost:3000',
+    origin: [
+      'http://localhost:3000', 
+      'https://nguyenducquanghuy.vercel.app'
+    ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
 
-  // Đổi cổng Backend sang 3001
-  await app.listen(3001);
-  console.log(`🚀 Backend NestJS đang chạy tại: http://localhost:3001`);
+  await app.listen(process.env.PORT || 3000); 
+  // Lưu ý: Render thường tự cấp phát cổng qua process.env.PORT, 
+  // hãy giữ là process.env.PORT || 3000 để tránh lỗi không khởi động được trên Render.
 }
 bootstrap();
