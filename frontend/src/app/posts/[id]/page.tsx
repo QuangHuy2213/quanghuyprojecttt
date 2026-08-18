@@ -217,18 +217,34 @@ export default function PostDetailPage() {
                 {/* 2. NÚT CHAT */}
                 <button 
                   onClick={() => {
-                    const currentUser = localStorage.getItem('user');
-                    if (!currentUser) {
-                      // GỌI POPUP THAY VÌ DÙNG ALERT
+                    const currentUserStr = localStorage.getItem('user');
+                    if (!currentUserStr) {
                       showToast('Vui lòng đăng nhập để chat với người bán!', 'error');
                       setTimeout(() => {
                         router.push('/login');
                       }, 2000);
                       return;
                     }
-                    const sellerId = post.user?.id || 'unknown';
+                    
+                    const currentUser = JSON.parse(currentUserStr);
+                    
+                    // 1. Sửa lỗi "unknown": Lấy đúng ID từ object user hoặc từ trường userId
+                    const sellerId = post.user?.id || post.userId;
+                    
+                    if (!sellerId) {
+                      showToast('Dữ liệu người bán đang bị lỗi, không thể chat!', 'error');
+                      return;
+                    }
+
+                    // 2. CHẶN TỰ CHAT VỚI CHÍNH MÌNH
+                    if (String(currentUser.id) === String(sellerId)) {
+                      showToast('Bạn không thể tự chat trong bài đăng của chính mình!', 'error');
+                      return;
+                    }
+
                     const sellerName = encodeURIComponent(post.user?.fullName || 'Người bán');
                     
+                    // Chuyển hướng sang trang chat với ID chính xác
                     router.push(`/chat?sellerId=${sellerId}&sellerName=${sellerName}&postId=${post.id}`);
                   }} 
                   className="w-full bg-white border-2 border-[#1877F2] text-[#1877F2] hover:bg-blue-50 font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-sm active:scale-[0.98] transform hover:-translate-y-0.5"
