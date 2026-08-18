@@ -26,11 +26,9 @@ function ChatContent() {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  // Dùng Ref để lưu trữ activeChat hiện tại cho Event Listener của Supabase
   const activeChatRef = useRef(activeChat);
   useEffect(() => { activeChatRef.current = activeChat; }, [activeChat]);
 
-  // STATE QUẢN LÝ POPUP (TOAST NOTIFICATION)
   const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({
     show: false, message: '', type: 'success'
   });
@@ -40,7 +38,7 @@ function ChatContent() {
     setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3500);
   };
 
-  // [1] Kiểm tra đăng nhập và tải danh sách chat
+  // [1] Kiểm tra đăng nhập và tải danh sách chat (ĐÃ FIX LỖI TRÙNG LẶP)
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     if (!storedUser) {
@@ -51,29 +49,37 @@ function ChatContent() {
     const user = JSON.parse(storedUser);
     setCurrentUser(user);
 
+    // Lấy dữ liệu từ LocalStorage
     const savedChatList = JSON.parse(localStorage.getItem(`chat_list_${user.id}`) || '[]');
-    setChatList(savedChatList);
+    
+    // FIX TẬN GỐC: Dùng Map để lọc sạch các liên hệ bị trùng ID
+    const uniqueChats = Array.from(new Map(savedChatList.map((item: any) => [String(item.id), item])).values());
+    
+    setChatList(uniqueChats);
+    
+    // Lưu ngược lại danh sách đã làm sạch vào LocalStorage
+    localStorage.setItem(`chat_list_${user.id}`, JSON.stringify(uniqueChats));
   }, [router]);
 
-  // [2] CHẶN TỰ CHAT VỚI CHÍNH MÌNH VÀ TẠO CUỘC TRÒ CHUYỆN MỚI
+  // [2] CHẶN TỰ CHAT VÀ TẠO CUỘC TRÒ CHUYỆN MỚI TỪ URL
   useEffect(() => {
     if (sellerId && sellerName && currentUser) {
-      // KIỂM TRA: Nếu ID người bán trùng với ID của mình thì báo lỗi và trở về
-      if (sellerId === String(currentUser.id)) {
+      if (String(sellerId) === String(currentUser.id)) {
         showToast('Bạn không thể tự chat trong bài đăng của chính mình!', 'error');
-        router.replace('/chat'); // Xóa URL params
+        router.replace('/chat'); 
         return;
       }
 
       setChatList((prevList) => {
-        const isExist = prevList.find(chat => chat.id === sellerId);
+        // FIX: Ép kiểu chuỗi String() để so sánh ID chính xác 100%
+        const isExist = prevList.find(chat => String(chat.id) === String(sellerId));
         if (isExist) {
           setActiveChat(isExist);
           return prevList;
         }
 
         const newChatTarget = {
-          id: sellerId,
+          id: String(sellerId),
           name: sellerName,
           avatar: DEFAULT_AVATAR, 
           lastMessage: 'Bắt đầu cuộc trò chuyện...',
@@ -81,14 +87,18 @@ function ChatContent() {
         };
 
         const updatedList = [newChatTarget, ...prevList];
-        localStorage.setItem(`chat_list_${currentUser.id}`, JSON.stringify(updatedList));
+        
+        // FIX: Lọc trùng một lần nữa trước khi lưu cho chắc chắn
+        const cleanList = Array.from(new Map(updatedList.map((item: any) => [String(item.id), item])).values());
+        
+        localStorage.setItem(`chat_list_${currentUser.id}`, JSON.stringify(cleanList));
         setActiveChat(newChatTarget);
-        return updatedList;
+        return cleanList;
       });
     }
   }, [sellerId, sellerName, currentUser, router]);
 
-  // [3] LẤY LỊCH SỬ TIN NHẮN (Khi chọn 1 người để chat)
+  // [3] LẤY LỊCH SỬ TIN NHẮN 
   useEffect(() => {
     if (!currentUser || !activeChat) return;
     const fetchMessages = async () => {
@@ -103,8 +113,7 @@ function ChatContent() {
     fetchMessages();
   }, [activeChat, currentUser]);
 
-  // [4] LẮNG NGHE TIN NHẮN MỚI TOÀN CẦU (GLOBAL REALTIME LISTENER)
-  // Tính năng này giúp Người B nhận được tin nhắn ngay lập tức kể cả khi họ chưa từng chat với Người A
+  // [4] LẮNG NGHE TIN NHẮN MỚI TOÀN CẦU (ĐÃ CẬP NHẬT FIX TRÙNG ID)
   useEffect(() => {
     if (!currentUser) return;
 
@@ -118,41 +127,37 @@ function ChatContent() {
         (payload) => {
           const newMsg = payload.new;
           
-          // Kiểm tra xem tin nhắn có liên quan đến mình không
           if (newMsg.receiver_id === String(currentUser.id) || newMsg.sender_id === String(currentUser.id)) {
             
-            // 1. CẬP NHẬT LÊN MÀN HÌNH (Nếu đang mở đúng khung chat đó)
             const currentActiveChat = activeChatRef.current;
             if (currentActiveChat && (
               (newMsg.sender_id === String(currentActiveChat.id) && newMsg.receiver_id === String(currentUser.id)) ||
               (newMsg.sender_id === String(currentUser.id) && newMsg.receiver_id === String(currentActiveChat.id))
             )) {
               setMessages((prev) => {
-                if (prev.find(m => m.id === newMsg.id)) return prev; // Chống trùng lặp
+                if (prev.find(m => m.id === newMsg.id)) return prev; 
                 return [...prev, newMsg];
               });
             }
 
-            // 2. CẬP NHẬT CỘT DANH SÁCH CHAT (Cột trái)
             setChatList((prevList) => {
-              const otherPersonId = newMsg.sender_id === String(currentUser.id) ? newMsg.receiver_id : newMsg.sender_id;
+              const otherPersonId = String(newMsg.sender_id) === String(currentUser.id) ? String(newMsg.receiver_id) : String(newMsg.sender_id);
               const timeNow = new Date(newMsg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-              const isMine = newMsg.sender_id === String(currentUser.id);
+              const isMine = String(newMsg.sender_id) === String(currentUser.id);
               const msgSnippet = isMine ? `Bạn: ${newMsg.text}` : newMsg.text;
 
-              const existingChatIndex = prevList.findIndex(c => c.id === otherPersonId);
+              // FIX: Tìm bằng String()
+              const existingChatIndex = prevList.findIndex(c => String(c.id) === otherPersonId);
               let updatedList = [...prevList];
 
               if (existingChatIndex !== -1) {
-                // Đẩy cuộc trò chuyện lên đầu
                 const updatedChat = { ...updatedList[existingChatIndex], lastMessage: msgSnippet, time: timeNow };
                 updatedList.splice(existingChatIndex, 1);
                 updatedList.unshift(updatedChat);
               } else {
-                // Nếu là người lạ nhắn tới, tạo cuộc trò chuyện mới
                 const newChat = {
                   id: otherPersonId,
-                  name: `Người dùng ${otherPersonId.substring(0, 4)}`, // Tạm hiển thị ID
+                  name: `Người dùng ${otherPersonId.substring(0, 4)}`,
                   avatar: DEFAULT_AVATAR,
                   lastMessage: msgSnippet,
                   time: timeNow
@@ -160,8 +165,9 @@ function ChatContent() {
                 updatedList.unshift(newChat);
               }
               
-              localStorage.setItem(`chat_list_${currentUser.id}`, JSON.stringify(updatedList));
-              return updatedList;
+              const cleanList = Array.from(new Map(updatedList.map((item: any) => [String(item.id), item])).values());
+              localStorage.setItem(`chat_list_${currentUser.id}`, JSON.stringify(cleanList));
+              return cleanList;
             });
           }
         }
@@ -173,20 +179,19 @@ function ChatContent() {
     };
   }, [currentUser]);
 
-  // [5] Tự động cuộn xuống dưới cùng khi có tin mới
+  // [5] Tự động cuộn xuống dưới
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // [6] XỬ LÝ GỬI TIN NHẮN (Bắt lỗi RLS)
+  // [6] XỬ LÝ GỬI TIN NHẮN 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!messageInput.trim() || !activeChat || !currentUser) return;
 
     const textToSend = messageInput.trim();
-    setMessageInput(''); // Xóa ô nhập liệu ngay lập tức cho mượt
+    setMessageInput(''); 
 
-    // Bắn tin nhắn lên Supabase VÀ BẮT LỖI
     const { error } = await supabase.from('messages').insert([
       {
         sender_id: String(currentUser.id),
@@ -195,11 +200,10 @@ function ChatContent() {
       }
     ]);
 
-    // BÁO LỖI NẾU BẢNG MESSAGES ĐANG BỊ KHÓA RLS
     if (error) {
       console.error("Lỗi gửi tin:", error);
       showToast('Gửi lỗi! Hãy kiểm tra bạn đã Disable RLS trên Supabase chưa nhé.', 'error');
-      setMessageInput(textToSend); // Trả lại đoạn text vừa gõ để người dùng không bị mất
+      setMessageInput(textToSend); 
       return;
     }
   };
