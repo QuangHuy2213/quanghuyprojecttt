@@ -11,7 +11,7 @@ datasource db {
 } 
 
 
-// --- ENUMS ---
+// --- ENUMS (Các tùy chọn cố định) ---
 enum Role {
   USER
   AGENT
@@ -31,83 +31,69 @@ enum ListingStatus {
   HIDDEN
 }
 
-// --- BẢNG USER ---
+// --- CÁC BẢNG MỚI (User, Category, Image, Favorite, Message) ---
 model User {
-  id               String         @id @default(uuid())
-  email            String         @unique
+  id               String     @id @default(uuid())
+  email            String     @unique
   password         String
   fullName         String
-  phoneNumber      String?        @unique
+  phoneNumber      String?    @unique
   avatarUrl        String?
-  role             Role           @default(USER)
+  role             Role       @default(USER)
 
-  posts            posts[]
+  posts            posts[]    // Liên kết với bảng posts cũ
   favorites        Favorite[]
 
-  // Quan hệ Chat mới
-  conversations    Conversation[] @relation("UserConversations")
-  sentMessages     Message[]      @relation("SentMessages")
+  // ---- Quan hệ với bảng Message (Chat) ----
+  sentMessages     Message[]  @relation("SentMessages")
+  receivedMessages Message[]  @relation("ReceivedMessages")
 
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 }
 
 model Category {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   name      String
-  slug      String   @unique
+  slug      String    @unique
+
   posts     posts[]
 }
 
 model Image {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   url       String
-  postId    Int
-  post      posts    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId    Int       // Khóa ngoại trỏ về posts.id
+  
+  post      posts     @relation(fields: [postId], references: [id], onDelete: Cascade)
 }
 
 model Favorite {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   userId    String
-  postId    Int
+  postId    Int       // Khóa ngoại trỏ về posts.id
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  post      posts    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      posts     @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@unique([userId, postId])
 }
 
-// --- BẢNG CONVERSATION (Tạo mới) ---
-model Conversation {
-  id             String    @id @default(uuid())
-  participantIds String[]  // Chứa array [userId_1, userId_2]
-  deletedByIds   String[]  @default([]) // Chứa ID của người đã bấm xóa chat
-
-  users          User[]    @relation("UserConversations")
-  messages       Message[]
-
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  @@map("conversations")
-}
-
-// --- BẢNG MESSAGE (Sửa lại) ---
+// --- BẢNG TIN NHẮN (CHAT) ---
 model Message {
-  id             Int          @id @default(autoincrement())
-  text           String
-  createdAt      DateTime     @default(now()) @map("created_at")
+  id         Int      @id @default(autoincrement())
+  senderId   String   @map("sender_id")
+  receiverId String   @map("receiver_id")
+  text       String
+  createdAt  DateTime @default(now()) @map("created_at")
 
-  senderId       String       @map("sender_id")
-  sender         User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
 
-  conversationId String       @map("conversation_id")
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-
-  @@map("messages")
+  @@map("messages") // Map tên bảng xuống database là "messages" để đồng bộ với Frontend
 }
 
-// --- BẢNG DỮ LIỆU CŨ ---
+// --- CÁC BẢNG CŨ (Được giữ nguyên để không mất Data) ---
 model cities {
   code           String      @id @db.VarChar(10)
   name           String      @db.VarChar(255)
@@ -131,6 +117,7 @@ model districts {
   posts          posts[]
 }
 
+// --- BẢNG POSTS CŨ (Được nâng cấp thêm tính năng) ---
 model posts {
   id              Int             @id @default(autoincrement())
   title           String          @db.VarChar(255)
@@ -141,23 +128,26 @@ model posts {
   district        String?         @db.VarChar(10)
   content         String?
 
-  ward            String?
-  addressDetail   String?
-  bedrooms        Int?
-  bathrooms       Int?
-  direction       String?
-  floors          Int?
-  length          Float?
-  width           Float?
-  legalDocument   String?
-  furnishing      String?
+  // ---- CÁC TRƯỜNG MỚI THÊM VÀO ĐỂ GIỐNG NHÀ TỐT ----
+  ward            String?         // Phường/Xã
+  addressDetail   String?         // Số nhà, tên đường chi tiết
+  bedrooms        Int?            // Số phòng ngủ
+  bathrooms       Int?            // Số phòng tắm
+  direction       String?         // Hướng nhà
+  floors          Int?            // Số tầng
+  length          Float?          // Chiều dài
+  width           Float?          // Chiều ngang
+  legalDocument   String?         // Giấy tờ pháp lý
+  furnishing      String?         // Tình trạng nội thất
 
   transactionType TransactionType @default(SALE)
   status          ListingStatus   @default(PENDING)
 
+  // Khóa ngoại mới (Cho phép rỗng để không bị lỗi với 4 bài viết cũ)
   userId          String?
   categoryId      Int?
 
+  // ---- QUAN HỆ VỚI CÁC BẢNG KHÁC ----
   cities          cities?         @relation(fields: [city], references: [code], onDelete: NoAction, onUpdate: NoAction)
   districts       districts?      @relation(fields: [district], references: [code], onDelete: NoAction, onUpdate: NoAction)
   user            User?           @relation(fields: [userId], references: [id])
