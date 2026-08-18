@@ -9,13 +9,26 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // 1. STATE QUẢN LÝ POPUP (TOAST NOTIFICATION)
+  const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({
+    show: false,
+    message: '',
+    type: 'success'
+  });
+
+  // Hàm hiển thị Popup tự động tắt sau 3 giây
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => {
+      setToast({ show: false, message: '', type: 'success' });
+    }, 3000);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError('');
 
     try {
       const res = await fetch(apiUrl('/auth/login'), {
@@ -27,23 +40,45 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.message || 'Tài khoản không đúng hoặc không tồn tại!');
+        // GỌI POPUP LỖI
+        showToast(data.message || 'Tài khoản không đúng hoặc không tồn tại!', 'error');
       } else {
         localStorage.setItem('access_token', data.access_token);
         localStorage.setItem('user', JSON.stringify(data.user));
-        alert('Đăng nhập thành công!');
-        router.push('/'); 
+        
+        // GỌI POPUP THÀNH CÔNG
+        showToast('Đăng nhập thành công! Đang chuyển hướng...', 'success');
+        
+        // Delay 1.5s để người dùng kịp đọc thông báo rồi mới chuyển trang
+        setTimeout(() => {
+          router.push('/'); 
+        }, 1500);
       }
     } catch (err) {
-      setError('Không thể kết nối đến máy chủ.');
+      showToast('Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại mạng!', 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-gray-50 to-blue-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-gray-50 to-blue-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
       
+      {/* ================= GIAO DIỆN POPUP (TOAST) TƯƠNG TÁC MƯỢT MÀ ================= */}
+      <div 
+        className={`fixed top-5 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-500 ${
+          toast.show ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-10 pointer-events-none'
+        }`}
+      >
+        <div className={`flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl text-white font-bold text-sm ${
+          toast.type === 'error' ? 'bg-red-500' : 'bg-green-500'
+        }`}>
+          <span className="text-xl">{toast.type === 'error' ? '⚠️' : '✅'}</span>
+          {toast.message}
+        </div>
+      </div>
+      {/* ============================================================================== */}
+
       <div className="sm:mx-auto sm:w-full sm:max-w-lg px-4">
         <div className="bg-white py-12 px-8 shadow-2xl rounded-3xl border border-gray-100 sm:px-12">
           
@@ -62,11 +97,6 @@ export default function LoginPage() {
 
           {/* FORM ĐĂNG NHẬP */}
           <form className="space-y-5" onSubmit={handleSubmit}>
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-600 text-sm text-center p-3.5 rounded-xl font-medium">
-                {error}
-              </div>
-            )}
             
             {/* Ô NHẬP EMAIL */}
             <div>

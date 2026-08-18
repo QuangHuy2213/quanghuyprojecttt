@@ -13,13 +13,48 @@ export default function RegisterPage() {
     phoneNumber: '',
     password: '',
   });
-  const [error, setError] = useState('');
+  
   const [isLoading, setIsLoading] = useState(false);
+
+  // 1. STATE QUẢN LÝ POPUP (TOAST NOTIFICATION)
+  const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({
+    show: false,
+    message: '',
+    type: 'success'
+  });
+
+  // Hàm hiển thị Popup tự động tắt sau 3 giây
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => {
+      setToast({ show: false, message: '', type: 'success' });
+    }, 3000);
+  };
+
+  // 2. HÀM CHẶN NHẬP KÝ TỰ LẠ VÀO SỐ ĐIỆN THOẠI
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // Dùng Regex thay thế mọi ký tự không phải là số (0-9) thành chuỗi rỗng
+    const onlyNums = value.replace(/[^0-9]/g, '');
+    setFormData({ ...formData, phoneNumber: onlyNums });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // 3. KIỂM TRA LOGIC SỐ ĐIỆN THOẠI (Bắt đầu bằng số 0 và đúng 10 số)
+    const phoneRegex = /^0[0-9]{9}$/;
+    if (!phoneRegex.test(formData.phoneNumber)) {
+      showToast('Số điện thoại không hợp lệ! Vui lòng nhập 10 số và bắt đầu bằng số 0.', 'error');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      showToast('Mật khẩu phải có ít nhất 6 ký tự!', 'error');
+      return;
+    }
+
     setIsLoading(true);
-    setError('');
 
     try {
       const res = await fetch(apiUrl('auth/register'), {
@@ -31,22 +66,45 @@ export default function RegisterPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.message || 'Đăng ký không thành công. Vui lòng kiểm tra lại!');
+        // 4. KIỂM TRA LỖI TRÙNG EMAIL TỪ BACKEND
+        if (data.message && data.message.toLowerCase().includes('email')) {
+          showToast('Email này đã được đăng ký! Vui lòng sử dụng email khác.', 'error');
+        } else {
+          showToast(data.message || 'Đăng ký không thành công. Vui lòng kiểm tra lại!', 'error');
+        }
       } else {
-        alert(data.message || 'Đăng ký thành công!');
-        router.push('/login');
+        // Thông báo thành công và delay 2s để người dùng kịp đọc trước khi chuyển trang
+        showToast(data.message || 'Đăng ký thành công! Đang chuyển hướng...', 'success');
+        setTimeout(() => {
+          router.push('/login');
+        }, 2000);
       }
     } catch (err) {
-      setError('Không thể kết nối đến máy chủ. Vui lòng thử lại sau!');
+      showToast('Không thể kết nối đến máy chủ. Vui lòng thử lại sau!', 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-gray-50 to-blue-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-gray-50 to-blue-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
       
-      {/* Khung lớn đã được mở rộng thành max-w-lg để to hơn một chút */}
+      {/* ================= GIAO DIỆN POPUP (TOAST) TƯƠNG TÁC MƯỢT MÀ ================= */}
+      <div 
+        className={`fixed top-5 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-500 ${
+          toast.show ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-10 pointer-events-none'
+        }`}
+      >
+        <div className={`flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl text-white font-bold text-sm ${
+          toast.type === 'error' ? 'bg-red-500' : 'bg-green-500'
+        }`}>
+          <span className="text-xl">{toast.type === 'error' ? '⚠️' : '✅'}</span>
+          {toast.message}
+        </div>
+      </div>
+      {/* ============================================================================== */}
+
+      {/* Khung lớn max-w-lg như thiết kế của bạn */}
       <div className="sm:mx-auto sm:w-full sm:max-w-lg px-4">
         <div className="bg-white py-12 px-8 shadow-2xl rounded-3xl border border-gray-100 sm:px-12">
           
@@ -65,12 +123,6 @@ export default function RegisterPage() {
 
           {/* FORM ĐĂNG KÝ */}
           <form className="space-y-4" onSubmit={handleSubmit}>
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-600 text-sm text-center p-3.5 rounded-xl font-medium">
-                {error}
-              </div>
-            )}
-            
             {/* HỌ VÀ TÊN */}
             <div>
               <label className="block text-xs sm:text-sm font-bold text-gray-600 uppercase mb-1.5">Họ và tên</label>
@@ -102,11 +154,12 @@ export default function RegisterPage() {
               <label className="block text-xs sm:text-sm font-bold text-gray-600 uppercase mb-1.5">Số điện thoại</label>
               <input 
                 required 
-                type="text" 
+                type="tel" // Thay type="text" bằng type="tel" để bàn phím điện thoại tối ưu hơn
+                maxLength={10} // Bắt buộc giới hạn 10 ký tự
                 placeholder="0912345678"
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 text-sm sm:text-base text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1877F2] focus:bg-white transition-all"
                 value={formData.phoneNumber} 
-                onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})}
+                onChange={handlePhoneChange} // Xử lý chặn chữ cái
               />
             </div>
 
