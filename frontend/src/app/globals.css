@@ -1,9 +1,1 @@
-/* src/app/globals.css */
-
-body {
-  margin: 0;
-  padding: 0;
-  background-color: #ffffff; /* Ép nền sáng */
-  color: #333333;            /* Ép chữ tối */
-}
-
+@import "tailwindcss";

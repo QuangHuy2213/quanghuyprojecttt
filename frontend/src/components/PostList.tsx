@@ -1,244 +1,192 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { apiUrl } from '../services/api';
-import './PostList.css';
 
-// 1. KHAI BÁO CÁC INTERFACE
-interface City {
-  code: string;
-  name: string;
-  name_with_type: string;
-}
-
-interface District {
-  code: string;
-  name: string;
-  name_with_type: string;
-  parent_code: string;
-}
-
-interface Post {
-  id?: number | string;
-  title: string;
-  price: number;
-  area: number;
-  city: string;
-  district: string;
-  thumbnail: string;
-  content: string;
-}
-
-interface DistrictLabelProps {
-  cityCode: string | number;
-  districtCode: string | number;
-}
-
-// 2. COMPONENT DISTRICT LABEL
-const DistrictLabel: React.FC<DistrictLabelProps> = ({ cityCode, districtCode }) => {
-  const [districtName, setDistrictName] = useState<string>(`Mã ${districtCode}`);
+export default function PostList({ filters }: { filters: { keyword: string; city: string; district: string; price: string; area: string } }) {
+  const [posts, setPosts] = useState<any[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [favoritedIds, setFavoritedIds] = useState<number[]>([]);
 
   useEffect(() => {
-    if (!cityCode || !districtCode) return;
-    fetch(apiUrl(`/districts/${cityCode}`))
-      .then(res => res.json())
-      .then((data) => {
-        let districts = Array.isArray(data) ? data : (data?.data || []);
-        const found = districts.find((d: District) => String(d.code) === String(districtCode));
-        if (found) setDistrictName(found.name_with_type);
-      })
-      .catch(err => console.error("Lỗi fetch DistrictLabel:", err));
-  }, [cityCode, districtCode]);
-
-  return <span>{districtName}</span>;
-};
-
-// 3. COMPONENT CHÍNH: POST LIST
-const PostList: React.FC = () => {
-  const [cities, setCities] = useState<City[]>([]);
-  const [availableDistricts, setAvailableDistricts] = useState<District[]>([]);
-  
-  // Dùng 2 mảng: 1 mảng giữ data gốc, 1 mảng để hiển thị sau khi lọc
-  const [allPosts, setAllPosts] = useState<Post[]>([]); 
-  const [filteredPosts, setFilteredPosts] = useState<Post[]>([]);
-  
-  const [keyword, setKeyword] = useState<string>(''); // Thêm State tìm kiếm
-  const [selectedCity, setSelectedCity] = useState<string>('');
-  const [selectedDistrict, setSelectedDistrict] = useState<string>('');
-  const [selectedPrice, setSelectedPrice] = useState<string>('');
-  const [selectedArea, setSelectedArea] = useState<string>('');
-
-  // 4. Lấy danh sách thành phố & TẤT CẢ bài viết khi load trang
-  useEffect(() => {
-    fetch(apiUrl('/cities'))
-      .then(res => res.json())
-      .then(data => setCities(Array.isArray(data) ? data : (data?.data || [])));
-
-    fetch(apiUrl('/posts'))
-      .then(res => res.json())
-      .then(data => {
-        const posts = Array.isArray(data) ? data : (data?.data || []);
-        setAllPosts(posts);
-        setFilteredPosts(posts);
-      });
+    const handleFavoriteRemoved = (event: any) => {
+      const removedPostId = event.detail.postId;
+      setFavoritedIds((prev) => prev.filter(id => id !== removedPostId));
+    };
+    window.addEventListener('favoriteRemoved', handleFavoriteRemoved);
+    return () => window.removeEventListener('favoriteRemoved', handleFavoriteRemoved);
   }, []);
 
-  // 5. Lấy Quận/Huyện khi Tỉnh/Thành thay đổi
   useEffect(() => {
-    if (selectedCity) {
-      fetch(apiUrl(`/districts/${selectedCity}`))
-        .then(res => res.json())
-        .then(data => setAvailableDistricts(Array.isArray(data) ? data : (data?.data || [])));
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+      setUser(parsedUser);
+      fetchUserFavorites(parsedUser.id);
+    }
+  }, []);
+
+  const fetchUserFavorites = async (userId: string) => {
+    try {
+      const res = await fetch(apiUrl(`posts/favorites/${userId}`));
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setFavoritedIds(data.map((post: any) => post.id));
+      }
+    } catch (err) {
+      console.error('Lỗi khi tải danh sách tim:', err);
+    }
+  };
+
+  const fetchPosts = async (currentPage: number) => {
+    setIsLoading(true);
+    try {
+      let url = `posts?page=${currentPage}&limit=8`;
+      if (filters.city) url += `&city=${filters.city}`;
+      if (filters.district) url += `&district=${filters.district}`;
+      if (filters.keyword) url += `&keyword=${filters.keyword}`;
+      if (filters.price) url += `&price=${filters.price}`;
+      if (filters.area) url += `&area=${filters.area}`;
+
+      const res = await fetch(apiUrl(url));
+      const result = await res.json();
+
+      const dataArray = result?.data ?? (Array.isArray(result) ? result : []);
+      setPosts(dataArray);
+      setTotalPages(result?.totalPages || 1);
+    } catch (err) {
+      console.error('Lỗi khi tải dữ liệu:', err);
+      setPosts([]);
+      setTotalPages(1);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    setPage(1);
+    fetchPosts(1);
+  }, [filters]);
+
+  useEffect(() => {
+    fetchPosts(page);
+  }, [page]);
+
+  const handleFavorite = async (e: React.MouseEvent, postId: number) => {
+    e.preventDefault(); 
+    if (!user || !user.id) {
+      alert('Vui lòng đăng nhập để lưu tin nhé!');
+      return;
+    }
+
+    const isAlreadyFavorited = favoritedIds.includes(postId);
+    if (isAlreadyFavorited) {
+      setFavoritedIds(prev => prev.filter(id => id !== postId));
     } else {
-      setAvailableDistricts([]);
-      setSelectedDistrict('');
+      setFavoritedIds(prev => [...prev, postId]);
     }
-  }, [selectedCity]);
 
-  // 6. Hàm Lọc tin (Xử lý trực tiếp trên Frontend để đảm bảo hoạt động 100%)
-  const handleFilter = () => {
-    let results = [...allPosts];
-
-    if (keyword) {
-      results = results.filter(post => 
-        post.title.toLowerCase().includes(keyword.toLowerCase()) || 
-        post.content.toLowerCase().includes(keyword.toLowerCase())
-      );
-    }
-    
-    if (selectedCity) {
-      results = results.filter(post => String(post.city) === String(selectedCity));
-    }
-    
-    if (selectedDistrict) {
-      results = results.filter(post => String(post.district) === String(selectedDistrict));
-    }
-    
-    if (selectedPrice) {
-      const [min, max] = selectedPrice.split('-');
-      results = results.filter(post => {
-        if (max) return post.price >= Number(min) && post.price <= Number(max);
-        return post.price >= Number(min);
+    try {
+      await fetch(apiUrl(`posts/${postId}/favorite`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id })
       });
+    } catch (err) {
+      console.error('Lỗi khi lưu tin:', err);
     }
-
-    if (selectedArea) {
-      const [min, max] = selectedArea.split('-');
-      results = results.filter(post => {
-        if (max) return post.area >= Number(min) && post.area <= Number(max);
-        return post.area >= Number(min);
-      });
-    }
-
-    setFilteredPosts(results);
   };
 
-  // 7. Hàm Làm mới
-  const handleReset = () => {
-    setKeyword('');
-    setSelectedCity('');
-    setSelectedDistrict('');
-    setSelectedPrice('');
-    setSelectedArea('');
-    setFilteredPosts(allPosts); // Trả lại toàn bộ data gốc
-  };
+  if ((!posts || posts.length === 0) && !isLoading) {
+    return <p className="text-center text-gray-500 py-10">Không tìm thấy bài viết phù hợp với tiêu chí lọc.</p>;
+  }
 
   return (
-    <div className="post-list-container">
-      {/* KHU VỰC TÌM KIẾM */}
-      <div className="search-bar">
-        
-        {/* Đã thêm ô tìm kiếm */}
-        <div className="form-group">
-          <label>Từ khóa</label>
-          <input 
-            type="text" 
-            placeholder="Nhập tiêu đề..." 
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            className="search-input"
-          />
-        </div>
+    <div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {posts.map((post: any) => {
+          const isFavorited = favoritedIds.includes(post.id);
 
-        <div className="form-group">
-          <label>Tỉnh thành</label>
-          <select value={selectedCity} onChange={(e) => { setSelectedCity(e.target.value); setSelectedDistrict(''); }}>
-            <option value="">---Tỉnh thành---</option>
-            {cities.map((city) => (
-              <option key={city.code} value={city.code}>{city.name}</option>
-            ))}
-          </select>
-        </div>
+          return (
+            <Link 
+              href={`/posts/${post.id}`} 
+              key={post.id} 
+              className="block bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all border border-gray-100 overflow-hidden cursor-pointer group relative"
+            >
+              <button 
+                onClick={(e) => handleFavorite(e, post.id)}
+                className={`absolute top-3 right-3 z-10 p-2.5 bg-white/90 hover:bg-white rounded-full shadow-md transition-all active:scale-90 ${isFavorited ? 'text-red-500' : 'text-gray-300 hover:text-red-400'}`}
+                title={isFavorited ? "Bỏ lưu" : "Lưu tin này"}
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                </svg>
+              </button>
 
-        <div className="form-group">
-          <label>Quận huyện</label>
-          <select value={selectedDistrict} onChange={(e) => setSelectedDistrict(e.target.value)} disabled={!selectedCity}>
-            <option value="">---Quận huyện---</option>
-            {availableDistricts.map((district) => (
-              <option key={district.code} value={district.code}>{district.name}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="form-group">
-          <label>Khoảng giá</label>
-          <select value={selectedPrice} onChange={(e) => setSelectedPrice(e.target.value)}>
-            <option value="">Chọn mức giá</option>
-            <option value="0-1000000">Dưới 1 triệu</option>
-            <option value="1000000-3000000">1 - 3 triệu</option>
-            <option value="3000000-5000000">3 - 5 triệu</option>
-            <option value="5000000-">Trên 5 triệu</option>
-          </select>
-        </div>
-
-        <div className="form-group">
-          <label>Diện tích</label>
-          <select value={selectedArea} onChange={(e) => setSelectedArea(e.target.value)}>
-            <option value="">Chọn diện tích</option>
-            <option value="0-20">Dưới 20 m²</option>
-            <option value="20-30">20 - 30 m²</option>
-            <option value="30-50">30 - 50 m²</option>
-            <option value="50-">Trên 50 m²</option>
-          </select>
-        </div>
-
-        <div className="form-group flex-bottom">
-          <button className="btn-filter" onClick={handleFilter}>Lọc tin</button>
-        </div>
-      </div>
-
-      <div className="action-row">
-        <button className="btn-reset" onClick={handleReset}>Làm mới</button>
-      </div>
-
-      {/* DANH SÁCH BÀI VIẾT */}
-      <div className="post-list">
-        {filteredPosts.length > 0 ? (
-          filteredPosts.map((post, index) => {
-            const cityObj = cities.find(c => String(c.code) === String(post.city));
-            const cityName = cityObj ? cityObj.name : `Mã tỉnh ${post.city}`;
-
-            return (
-              <div className="post-item" key={post.id || index}>
-                <img src={post.thumbnail || 'https://via.placeholder.com/200x150?text=No+Image'} alt={post.title} className="post-thumbnail" />
-                <div className="post-info">
-                  <h3 className="post-title">{post.title}</h3>
-                  <div className="post-price">{(post.price / 1000000).toLocaleString('vi-VN')} triệu/tháng</div>
-                  <div className="post-meta">
-                    <strong>Diện tích:</strong> {post.area}m² &nbsp;|&nbsp; 
-                    <strong>Khu vực:</strong> <DistrictLabel cityCode={post.city} districtCode={post.district} />, {cityName}
-                  </div>
-                  <p className="post-content">{post.content}</p>
+              <div className="relative h-48 overflow-hidden">
+                <img
+                  src={post.thumbnail || 'https://via.placeholder.com/400x300'}
+                  alt={post.title}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+              </div>
+              <div className="p-4">
+                <h3 className="font-bold text-gray-800 line-clamp-2 group-hover:text-[#1877F2] transition-colors text-sm sm:text-base">
+                  {post.title}
+                </h3>
+                <div className="text-[#1877F2] font-extrabold text-base sm:text-lg mt-2">
+                  {Number(post.price || 0).toLocaleString('vi-VN')} VNĐ
+                </div>
+                <div className="text-gray-400 text-xs sm:text-sm mt-2 flex justify-between items-center pt-2 border-t border-gray-50">
+                  <span>📐 {post.area} m²</span>
+                  <span className="truncate max-w-[150px]" title={`${post.districts?.name ? post.districts.name + ', ' : ''}${post.cities?.name || post.city || 'Đang cập nhật'}`}>
+                    📍 {post.districts?.name && post.cities?.name 
+                        ? `${post.districts.name}, ${post.cities.name}` 
+                        : post.districts?.name || post.cities?.name || post.city || 'Đang cập nhật'}
+                  </span>
                 </div>
               </div>
-            );
-          })
-        ) : (
-          <p className="no-data">Không tìm thấy bài viết nào phù hợp.</p>
-        )}
+            </Link>
+          );
+        })}
+      </div>
+
+      <div className="flex justify-center items-center gap-2 mt-10 flex-wrap">
+        <button
+          onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+          disabled={page === 1 || isLoading}
+          className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 disabled:opacity-40 hover:bg-gray-50 transition-all font-medium text-sm"
+        >
+          Trước
+        </button>
+
+        {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+          <button
+            key={pageNumber}
+            onClick={() => setPage(pageNumber)}
+            disabled={isLoading}
+            className={`px-4 py-2 rounded-xl border font-medium text-sm transition-all ${
+              pageNumber === page
+                ? 'bg-[#1877F2] text-white border-[#1877F2] shadow-md'
+                : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            {pageNumber}
+          </button>
+        ))}
+
+        <button
+          onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+          disabled={page === totalPages || isLoading}
+          className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 disabled:opacity-40 hover:bg-gray-50 transition-all font-medium text-sm"
+        >
+          Sau
+        </button>
       </div>
     </div>
   );
-};
-
-export default PostList;
+}
