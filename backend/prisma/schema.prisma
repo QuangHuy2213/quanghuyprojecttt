@@ -1,11 +1,82 @@
 generator client {
+
   provider = "prisma-client-js"
+
 }
 
 datasource db {
+
   provider = "postgresql"
+
+} 
+
+
+// --- ENUMS (Các tùy chọn cố định) ---
+enum Role {
+  USER
+  AGENT
+  ADMIN
 }
 
+enum TransactionType {
+  SALE
+  RENT
+  PROJECT
+}
+
+enum ListingStatus {
+  PENDING
+  ACTIVE
+  SOLD
+  HIDDEN
+}
+
+// --- CÁC BẢNG MỚI (User, Category, Image, Favorite) ---
+model User {
+  id            String     @id @default(uuid())
+  email         String     @unique
+  password      String
+  fullName      String
+  phoneNumber   String?    @unique
+  avatarUrl     String?
+  role          Role       @default(USER)
+
+  posts         posts[]    // Liên kết với bảng posts cũ
+  favorites     Favorite[]
+
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+model Category {
+  id          Int       @id @default(autoincrement())
+  name        String
+  slug        String    @unique
+
+  posts       posts[]
+}
+
+model Image {
+  id        String  @id @default(uuid())
+  url       String
+  postId    Int     // Khóa ngoại trỏ về posts.id
+  
+  post      posts   @relation(fields: [postId], references: [id], onDelete: Cascade)
+}
+
+model Favorite {
+  id        String  @id @default(uuid())
+  userId    String
+  postId    Int     // Khóa ngoại trỏ về posts.id
+
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      posts   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+}
+
+
+// --- CÁC BẢNG CŨ (Được giữ nguyên để không mất Data) ---
 model cities {
   code           String      @id @db.VarChar(10)
   name           String      @db.VarChar(255)
@@ -17,27 +88,56 @@ model cities {
 }
 
 model districts {
-  code           String  @id @db.VarChar(10)
-  name           String  @db.VarChar(255)
-  type           String? @db.VarChar(50)
-  slug           String? @db.VarChar(255)
-  name_with_type String? @db.VarChar(255)
-  path           String? @db.VarChar(255)
-  path_with_type String? @db.VarChar(255)
-  parent_code    String? @db.VarChar(10)
-  cities         cities? @relation(fields: [parent_code], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  code           String      @id @db.VarChar(10)
+  name           String      @db.VarChar(255)
+  type           String?     @db.VarChar(50)
+  slug           String?     @db.VarChar(255)
+  name_with_type String?     @db.VarChar(255)
+  path           String?     @db.VarChar(255)
+  path_with_type String?     @db.VarChar(255)
+  parent_code    String?     @db.VarChar(10)
+  cities         cities?     @relation(fields: [parent_code], references: [code], onDelete: NoAction, onUpdate: NoAction)
   posts          posts[]
 }
 
+// --- BẢNG POSTS CŨ (Được nâng cấp thêm tính năng) ---
 model posts {
-  id        Int        @id @default(autoincrement())
-  title     String     @db.VarChar(255)
-  thumbnail String?
-  price     Decimal    @db.Decimal
-  area      Decimal    @db.Decimal
-  city      String?    @db.VarChar(10)
-  district  String?    @db.VarChar(10)
-  content   String?
-  cities    cities?    @relation(fields: [city], references: [code], onDelete: NoAction, onUpdate: NoAction)
-  districts districts? @relation(fields: [district], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  id              Int              @id @default(autoincrement())
+  title           String           @db.VarChar(255)
+  thumbnail       String?
+  price           Decimal          @db.Decimal
+  area            Decimal          @db.Decimal
+  city            String?          @db.VarChar(10)
+  district        String?          @db.VarChar(10)
+  content         String?
+
+  // ---- CÁC TRƯỜNG MỚI THÊM VÀO ĐỂ GIỐNG NHÀ TỐT ----
+  ward            String?          // Phường/Xã
+  addressDetail   String?          // Số nhà, tên đường chi tiết
+  bedrooms        Int?             // Số phòng ngủ
+  bathrooms       Int?             // Số phòng tắm
+  direction       String?          // Hướng nhà
+  floors          Int?             // Số tầng
+  length          Float?           // Chiều dài
+  width           Float?           // Chiều ngang
+  legalDocument   String?          // Giấy tờ pháp lý
+  furnishing      String?          // Tình trạng nội thất
+
+  transactionType TransactionType  @default(SALE)
+  status          ListingStatus    @default(PENDING)
+
+  // Khóa ngoại mới (Cho phép rỗng để không bị lỗi với 4 bài viết cũ)
+  userId          String?
+  categoryId      Int?
+
+  // ---- QUAN HỆ VỚI CÁC BẢNG KHÁC ----
+  cities          cities?          @relation(fields: [city], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  districts       districts?       @relation(fields: [district], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  user            User?            @relation(fields: [userId], references: [id])
+  category        Category?        @relation(fields: [categoryId], references: [id])
+  images          Image[]
+  favorites       Favorite[]
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @default(now()) @updatedAt
 }

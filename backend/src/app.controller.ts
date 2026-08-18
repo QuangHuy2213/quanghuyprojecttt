@@ -14,12 +14,4 @@ export class AppController {
   getDistricts(@Param('cityCode') cityCode: string) {
     return this.appService.getDistricts(cityCode);
   }
-
-  @Get('posts')
-  getPosts(
-    @Query('city') city?: string,
-    @Query('district') district?: string,
-  ) {
-    return this.appService.getPosts(city, district);
-  }
 }
