@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiUrl } from '../../services/api';
 
-export default function ResetPasswordPage() {
+// 1. COMPONENT CON: CHỨA LOGIC XỬ LÝ URL VÀ GIAO DIỆN FORM
+function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token'); // Tự động lấy token từ URL trong email
@@ -122,5 +123,18 @@ export default function ResetPasswordPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// 2. COMPONENT CHÍNH: BỌC SUSPENSE ĐỂ KHÔNG BỊ LỖI KHI NPM RUN BUILD
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-gray-50 to-blue-100 flex items-center justify-center">
+        <span className="text-[#1877F2] font-bold animate-pulse text-lg">Đang tải dữ liệu...</span>
+      </div>
+    }>
+      <ResetPasswordContent />
+    </Suspense>
   );
 }
