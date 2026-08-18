@@ -38,7 +38,7 @@ function ChatContent() {
     setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3500);
   };
 
-  // [1] Kiểm tra đăng nhập và tải danh sách chat (ĐÃ FIX LỖI TRÙNG LẶP)
+  // [1] Kiểm tra đăng nhập và tải danh sách chat (FIX LỖI TRÙNG TÊN)
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     if (!storedUser) {
@@ -49,19 +49,23 @@ function ChatContent() {
     const user = JSON.parse(storedUser);
     setCurrentUser(user);
 
-    // Lấy dữ liệu từ LocalStorage
     const savedChatList = JSON.parse(localStorage.getItem(`chat_list_${user.id}`) || '[]');
     
-    // FIX TẬN GỐC: Dùng Map để lọc sạch các liên hệ bị trùng ID
-    const uniqueChats = Array.from(new Map(savedChatList.map((item: any) => [String(item.id), item])).values());
-    
+    // Lọc bỏ trùng lặp bằng Map theo ID
+    const uniqueMap = new Map();
+    savedChatList.forEach((item: any) => {
+      // Ưu tiên giữ lại item có tên thật (không bắt đầu bằng "Người dùng")
+      if (!uniqueMap.has(String(item.id)) || !item.name.startsWith('Người dùng')) {
+        uniqueMap.set(String(item.id), item);
+      }
+    });
+
+    const uniqueChats = Array.from(uniqueMap.values());
     setChatList(uniqueChats);
-    
-    // Lưu ngược lại danh sách đã làm sạch vào LocalStorage
     localStorage.setItem(`chat_list_${user.id}`, JSON.stringify(uniqueChats));
   }, [router]);
 
-  // [2] CHẶN TỰ CHAT VÀ TẠO CUỘC TRÒ CHUYỆN MỚI TỪ URL
+  // [2] XỬ LÝ TỪ URL ĐI SANG
   useEffect(() => {
     if (sellerId && sellerName && currentUser) {
       if (String(sellerId) === String(currentUser.id)) {
@@ -71,29 +75,27 @@ function ChatContent() {
       }
 
       setChatList((prevList) => {
-        // FIX: Ép kiểu chuỗi String() để so sánh ID chính xác 100%
-        const isExist = prevList.find(chat => String(chat.id) === String(sellerId));
-        if (isExist) {
-          setActiveChat(isExist);
-          return prevList;
+        const existingIndex = prevList.findIndex(chat => String(chat.id) === String(sellerId));
+        let updatedList = [...prevList];
+
+        if (existingIndex !== -1) {
+          // Nếu đã có, cập nhật lại tên chuẩn từ URL và chọn làm activeChat
+          updatedList[existingIndex] = { ...updatedList[existingIndex], name: sellerName };
+          setActiveChat(updatedList[existingIndex]);
+        } else {
+          const newChatTarget = {
+            id: String(sellerId),
+            name: sellerName,
+            avatar: DEFAULT_AVATAR, 
+            lastMessage: 'Bắt đầu cuộc trò chuyện...',
+            time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+          };
+          updatedList.unshift(newChatTarget);
+          setActiveChat(newChatTarget);
         }
 
-        const newChatTarget = {
-          id: String(sellerId),
-          name: sellerName,
-          avatar: DEFAULT_AVATAR, 
-          lastMessage: 'Bắt đầu cuộc trò chuyện...',
-          time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-        };
-
-        const updatedList = [newChatTarget, ...prevList];
-        
-        // FIX: Lọc trùng một lần nữa trước khi lưu cho chắc chắn
-        const cleanList = Array.from(new Map(updatedList.map((item: any) => [String(item.id), item])).values());
-        
-        localStorage.setItem(`chat_list_${currentUser.id}`, JSON.stringify(cleanList));
-        setActiveChat(newChatTarget);
-        return cleanList;
+        localStorage.setItem(`chat_list_${currentUser.id}`, JSON.stringify(updatedList));
+        return updatedList;
       });
     }
   }, [sellerId, sellerName, currentUser, router]);
@@ -113,62 +115,72 @@ function ChatContent() {
     fetchMessages();
   }, [activeChat, currentUser]);
 
-  // [4] LẮNG NGHE TIN NHẮN MỚI TOÀN CẦU (ĐÃ CẬP NHẬT FIX TRÙNG ID)
+  // [4] LẮNG NGHE REALTIME (INSERT & DELETE)
   useEffect(() => {
     if (!currentUser) return;
 
     const channel = supabase
       .channel(`global_messages_${currentUser.id}`)
       .on('postgres_changes', { 
-          event: 'INSERT', 
+          event: '*', 
           schema: 'public', 
           table: 'messages' 
         }, 
         (payload) => {
-          const newMsg = payload.new;
-          
-          if (newMsg.receiver_id === String(currentUser.id) || newMsg.sender_id === String(currentUser.id)) {
-            
-            const currentActiveChat = activeChatRef.current;
-            if (currentActiveChat && (
-              (newMsg.sender_id === String(currentActiveChat.id) && newMsg.receiver_id === String(currentUser.id)) ||
-              (newMsg.sender_id === String(currentUser.id) && newMsg.receiver_id === String(currentActiveChat.id))
-            )) {
-              setMessages((prev) => {
-                if (prev.find(m => m.id === newMsg.id)) return prev; 
-                return [...prev, newMsg];
+          if (payload.eventType === 'INSERT') {
+            const newMsg = payload.new;
+            if (newMsg.receiver_id === String(currentUser.id) || newMsg.sender_id === String(currentUser.id)) {
+              
+              const currentActiveChat = activeChatRef.current;
+              if (currentActiveChat && (
+                (newMsg.sender_id === String(currentActiveChat.id) && newMsg.receiver_id === String(currentUser.id)) ||
+                (newMsg.sender_id === String(currentUser.id) && newMsg.receiver_id === String(currentActiveChat.id))
+              )) {
+                setMessages((prev) => {
+                  if (prev.find(m => m.id === newMsg.id)) return prev; 
+                  return [...prev, newMsg];
+                });
+              }
+
+              setChatList((prevList) => {
+                const otherPersonId = String(newMsg.sender_id) === String(currentUser.id) ? String(newMsg.receiver_id) : String(newMsg.sender_id);
+                const timeNow = new Date(newMsg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                const isMine = String(newMsg.sender_id) === String(currentUser.id);
+                const msgSnippet = isMine ? `Bạn: ${newMsg.text}` : newMsg.text;
+
+                const existingChatIndex = prevList.findIndex(c => String(c.id) === otherPersonId);
+                let updatedList = [...prevList];
+
+                if (existingChatIndex !== -1) {
+                  const existingItem = updatedList[existingChatIndex];
+                  const updatedChat = { 
+                    ...existingItem, 
+                    lastMessage: msgSnippet, 
+                    time: timeNow,
+                    // Giữ nguyên tên cũ nếu đã có tên thật, tránh bị ghi đè thành Người dùng...
+                    name: existingItem.name.startsWith('Người dùng') ? `Người dùng ${otherPersonId.substring(0, 4)}` : existingItem.name
+                  };
+                  updatedList.splice(existingChatIndex, 1);
+                  updatedList.unshift(updatedChat);
+                } else {
+                  const newChat = {
+                    id: otherPersonId,
+                    name: `Người dùng ${otherPersonId.substring(0, 4)}`,
+                    avatar: DEFAULT_AVATAR,
+                    lastMessage: msgSnippet,
+                    time: timeNow
+                  };
+                  updatedList.unshift(newChat);
+                }
+                
+                localStorage.setItem(`chat_list_${currentUser.id}`, JSON.stringify(updatedList));
+                return updatedList;
               });
             }
-
-            setChatList((prevList) => {
-              const otherPersonId = String(newMsg.sender_id) === String(currentUser.id) ? String(newMsg.receiver_id) : String(newMsg.sender_id);
-              const timeNow = new Date(newMsg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-              const isMine = String(newMsg.sender_id) === String(currentUser.id);
-              const msgSnippet = isMine ? `Bạn: ${newMsg.text}` : newMsg.text;
-
-              // FIX: Tìm bằng String()
-              const existingChatIndex = prevList.findIndex(c => String(c.id) === otherPersonId);
-              let updatedList = [...prevList];
-
-              if (existingChatIndex !== -1) {
-                const updatedChat = { ...updatedList[existingChatIndex], lastMessage: msgSnippet, time: timeNow };
-                updatedList.splice(existingChatIndex, 1);
-                updatedList.unshift(updatedChat);
-              } else {
-                const newChat = {
-                  id: otherPersonId,
-                  name: `Người dùng ${otherPersonId.substring(0, 4)}`,
-                  avatar: DEFAULT_AVATAR,
-                  lastMessage: msgSnippet,
-                  time: timeNow
-                };
-                updatedList.unshift(newChat);
-              }
-              
-              const cleanList = Array.from(new Map(updatedList.map((item: any) => [String(item.id), item])).values());
-              localStorage.setItem(`chat_list_${currentUser.id}`, JSON.stringify(cleanList));
-              return cleanList;
-            });
+          } else if (payload.eventType === 'DELETE') {
+            // Xóa tin nhắn khỏi màn hình khi có sự kiện xóa
+            const deletedId = payload.old.id;
+            setMessages((prev) => prev.filter(m => m.id !== deletedId));
           }
         }
       )
@@ -208,13 +220,26 @@ function ChatContent() {
     }
   };
 
+  // [7] XÓA TIN NHẮN
+  const handleDeleteMessage = async (msgId: any) => {
+    const { error } = await supabase
+      .from('messages')
+      .delete()
+      .eq('id', msgId);
+
+    if (error) {
+      showToast('Không thể xóa tin nhắn này!', 'error');
+    } else {
+      setMessages((prev) => prev.filter(m => m.id !== msgId));
+    }
+  };
+
   const formatMsgTime = (timestamp: string) => {
     return new Date(timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
   };
 
   return (
     <>
-      {/* ================= GIAO DIỆN POPUP (TOAST) ================= */}
       <div 
         className={`fixed top-24 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-500 ease-out ${
           toast.show ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-10 pointer-events-none'
@@ -234,14 +259,6 @@ function ChatContent() {
         <div className="w-[340px] flex-shrink-0 border-r border-gray-200 flex flex-col bg-white">
           <div className="p-4 border-b border-gray-100">
             <h2 className="text-xl font-extrabold text-gray-800 mb-4">Chat</h2>
-            <div className="relative flex items-center gap-2 mb-4">
-              <div className="relative flex-1">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                </span>
-                <input type="text" placeholder="Tìm kiếm..." className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1877F2] transition-all" />
-              </div>
-            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-2">
@@ -302,7 +319,17 @@ function ChatContent() {
                   messages.map((msg) => {
                     const isMine = String(msg.sender_id) === String(currentUser.id);
                     return (
-                      <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+                      <div key={msg.id} className={`group flex items-center gap-2 ${isMine ? 'justify-end' : 'justify-start'}`}>
+                        {/* Nút xóa hiện ra khi rê chuột vào tin nhắn của mình */}
+                        {isMine && (
+                          <button 
+                            onClick={() => handleDeleteMessage(msg.id)}
+                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all p-1 text-xs"
+                            title="Xóa tin nhắn"
+                          >
+                            🗑️
+                          </button>
+                        )}
                         <div className="max-w-[70%] flex flex-col gap-1">
                           <div className={`px-5 py-3 text-[15px] font-medium shadow-sm ${
                             isMine 
