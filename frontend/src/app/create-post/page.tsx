@@ -11,7 +11,7 @@ export default function CreatePostPage() {
   const [districts, setDistricts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
-
+  
   // 1. STATE QUẢN LÝ POPUP (TOAST NOTIFICATION)
   const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({
     show: false,
@@ -26,13 +26,16 @@ export default function CreatePostPage() {
     }, 3000);
   };
 
-  // Form Data
+  // Form Data (Đã bổ sung thêm addressDetail, bedrooms, bathrooms)
   const [formData, setFormData] = useState({
     title: '',
     price: '',
     area: '',
     city: '',
     district: '',
+    addressDetail: '',
+    bedrooms: '',
+    bathrooms: '',
     thumbnail: '',
     content: '',
   });
@@ -72,7 +75,12 @@ export default function CreatePostPage() {
     setIsLoading(true);
 
     try {
-      const payload = { ...formData, userId: user.id };
+      // Đính kèm userId và tên người đăng (sellerName) lấy từ tài khoản đang login
+      const payload = { 
+        ...formData, 
+        userId: user.id,
+        sellerName: user.fullName || 'Người dùng' 
+      };
       
       const res = await fetch(apiUrl('/posts'), {
         method: 'POST',
@@ -95,7 +103,7 @@ export default function CreatePostPage() {
     }
   };
 
-  if (!user) return null; // Tránh render form chớp nhoáng trước khi redirect nếu chưa đăng nhập
+  if (!user) return null; 
 
   return (
     <div className="min-h-screen bg-[#f4f7f6] flex flex-col relative overflow-hidden">
@@ -143,7 +151,6 @@ export default function CreatePostPage() {
       </div>
 
       <main className="max-w-4xl mx-auto py-12 px-4 flex-grow w-full relative z-10 animate-fade-in-up">
-        {/* 🌟 MAIN CARD (Giao diện Kính Mờ) */}
         <div className="bg-white/80 backdrop-blur-2xl py-12 px-8 sm:px-12 shadow-[0_8px_30px_rgb(0,0,0,0.08)] rounded-[2.5rem] border border-white transition-all hover:shadow-[0_8px_40px_rgb(0,0,0,0.12)]">
           
           <div className="text-center mb-10">
@@ -215,7 +222,7 @@ export default function CreatePostPage() {
               </div>
             </div>
 
-            {/* Khu vực */}
+            {/* Tỉnh/Thành & Quận/Huyện */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">Tỉnh / Thành phố *</label>
@@ -251,6 +258,58 @@ export default function CreatePostPage() {
                     <option value="" disabled>-- Chọn Quận / Huyện --</option>
                     {districts.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}
                   </select>
+                </div>
+              </div>
+            </div>
+
+            {/* 🌟 TRƯỜNG MỚI: Số nhà / Tên đường */}
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">Số nhà, Tên đường</label>
+              <div className="relative group">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-gray-400 group-focus-within:text-[#1877F2] transition-colors duration-300">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                </span>
+                <input 
+                  type="text" 
+                  placeholder="VD: 123 Đường Nguyễn Huệ..." 
+                  className="w-full bg-white/60 border border-gray-200 rounded-2xl pl-12 pr-4 py-4 text-sm text-gray-800 focus:outline-none focus:ring-4 focus:ring-[#1877F2]/10 focus:border-[#1877F2] focus:bg-white transition-all duration-300 font-medium"
+                  value={formData.addressDetail} 
+                  onChange={(e) => setFormData({...formData, addressDetail: e.target.value})} 
+                />
+              </div>
+            </div>
+
+            {/* 🌟 TRƯỜNG MỚI: Số phòng ngủ & Số phòng tắm */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">Số phòng ngủ</label>
+                <div className="relative group">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-gray-400 group-focus-within:text-[#1877F2] transition-colors duration-300">
+                    <span className="text-lg">🛏️</span>
+                  </span>
+                  <input 
+                    type="number" min="0" 
+                    placeholder="VD: 2" 
+                    className="w-full bg-white/60 border border-gray-200 rounded-2xl pl-12 pr-4 py-4 text-sm text-gray-800 focus:outline-none focus:ring-4 focus:ring-[#1877F2]/10 focus:border-[#1877F2] focus:bg-white transition-all duration-300 font-medium"
+                    value={formData.bedrooms} 
+                    onChange={(e) => setFormData({...formData, bedrooms: e.target.value})} 
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">Số phòng tắm</label>
+                <div className="relative group">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-gray-400 group-focus-within:text-[#1877F2] transition-colors duration-300">
+                    <span className="text-lg">🛁</span>
+                  </span>
+                  <input 
+                    type="number" min="0" 
+                    placeholder="VD: 2" 
+                    className="w-full bg-white/60 border border-gray-200 rounded-2xl pl-12 pr-4 py-4 text-sm text-gray-800 focus:outline-none focus:ring-4 focus:ring-[#1877F2]/10 focus:border-[#1877F2] focus:bg-white transition-all duration-300 font-medium"
+                    value={formData.bathrooms} 
+                    onChange={(e) => setFormData({...formData, bathrooms: e.target.value})} 
+                  />
                 </div>
               </div>
             </div>

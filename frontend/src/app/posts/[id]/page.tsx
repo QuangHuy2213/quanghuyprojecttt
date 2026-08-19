@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Header from '../../../components/Header'; // Điều chỉnh lại đường dẫn Header nếu cần
+import Header from '../../../components/Header'; 
 import { apiUrl } from '../../../services/api';
 
 export default function PostDetailPage() {
@@ -12,6 +12,7 @@ export default function PostDetailPage() {
   
   const [post, setPost] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   // STATE QUẢN LÝ POPUP (TOAST NOTIFICATION)
   const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({
@@ -28,8 +29,12 @@ export default function PostDetailPage() {
   };
 
   useEffect(() => {
+    // Lấy user hiện tại để kiểm tra quyền sở hữu
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) setCurrentUser(JSON.parse(storedUser));
+
     if (id) {
-      // 1. Tự động ghi nhận vào lịch sử xem tin (cho trang /history)
+      // 1. Tự động ghi nhận vào lịch sử xem tin
       const viewedPosts = JSON.parse(localStorage.getItem('viewed_posts') || '[]');
       const updatedHistory = [Number(id), ...viewedPosts.filter((item: number) => item !== Number(id))].slice(0, 20);
       localStorage.setItem('viewed_posts', JSON.stringify(updatedHistory));
@@ -54,9 +59,9 @@ export default function PostDetailPage() {
     return `${(price / 1_000_000).toLocaleString('vi-VN')} triệu`;
   };
 
-  // MÀN HÌNH LOADING HIỆN ĐẠI
+  // MÀN HÌNH LOADING
   if (isLoading) return (
-    <div className="min-h-screen bg-[#f4f7f6] flex flex-col">
+    <div className="min-h-screen bg-[#f8fafc] flex flex-col">
       <Header />
       <div className="flex-grow flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -72,7 +77,7 @@ export default function PostDetailPage() {
 
   // MÀN HÌNH LỖI KHÔNG TÌM THẤY BÀI VIẾT
   if (!post) return (
-    <div className="min-h-screen bg-[#f4f7f6] flex flex-col">
+    <div className="min-h-screen bg-[#f8fafc] flex flex-col">
       <Header />
       <div className="flex-grow flex items-center justify-center">
         <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 text-center max-w-sm">
@@ -85,21 +90,25 @@ export default function PostDetailPage() {
     </div>
   );
 
+  // Biến lưu tên hiển thị thống nhất
+  const displaySellerName = post.sellerName || post.user?.fullName || 'Người bán';
+  // Kiểm tra xem người đang xem có phải chủ bài đăng không
+  const isOwner = currentUser && String(currentUser.id) === String(post.user?.id || post.userId);
+
   return (
-    <div className="min-h-screen bg-[#f4f7f6] relative overflow-hidden">
+    <div className="min-h-screen bg-[#f8fafc] relative overflow-hidden">
       
-      {/* 🌟 CSS ANIMATIONS */}
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(30px); }
+          from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        .animate-fade-in-up { animation: fadeInUp 0.8s ease-out forwards; }
+        .animate-fade-in-up { animation: fadeInUp 0.6s ease-out forwards; }
       `}} />
 
       <Header />
       
-      {/* 🌟 POPUP TOAST HIỆN ĐẠI */}
+      {/* POPUP TOAST */}
       <div 
         className={`fixed top-24 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-500 ease-out ${
           toast.show ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-10 pointer-events-none'
@@ -113,35 +122,35 @@ export default function PostDetailPage() {
         </div>
       </div>
 
-      <main className="max-w-5xl mx-auto px-4 py-8 animate-fade-in-up relative z-10">
+      <main className="max-w-6xl mx-auto px-4 py-8 animate-fade-in-up relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          {/* ================= CỘT TRÁI: HÌNH ẢNH VÀ CHI TIẾT ================= */}
-          <div className="lg:col-span-2 space-y-8">
+          {/* CỘT TRÁI: HÌNH ẢNH VÀ CHI TIẾT */}
+          <div className="lg:col-span-2 space-y-6">
             
-            {/* Ảnh cover có hiệu ứng Zoom khi Hover */}
-            <div className="bg-white rounded-[2rem] overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-gray-100 group">
+            <div className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 group">
               <img 
-                src={post.thumbnail || 'https://via.placeholder.com/800x400?text=Nha+Tot'} 
+                src={post.thumbnail || 'https://via.placeholder.com/600x400?text=No+Image'} 
                 alt={post.title} 
-                className="w-full h-[400px] object-cover transform group-hover:scale-105 transition-transform duration-700 ease-in-out"
+                className="w-full h-[420px] object-cover transform group-hover:scale-105 transition-transform duration-700 ease-in-out"
               />
             </div>
 
-            {/* Thông tin chính */}
-            <div className="bg-white rounded-[2rem] p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 transition-all hover:shadow-[0_8px_40px_rgb(0,0,0,0.08)]">
-              <h1 className="text-2xl md:text-3xl font-extrabold text-gray-800 mb-4 leading-tight">{post.title}</h1>
-              <div className="flex items-center justify-between border-b border-gray-100 pb-5 mb-5">
-                <span className="bg-clip-text text-transparent bg-gradient-to-r from-[#1877F2] to-blue-500 font-extrabold text-3xl sm:text-4xl">
+            <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100">
+              <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 mb-4 leading-tight">{post.title}</h1>
+              
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 pb-6 mb-6">
+                <span className="text-red-500 font-extrabold text-3xl sm:text-4xl tracking-tight">
                   {formatPrice(post.price)}
                 </span>
-                <span className="text-gray-600 font-bold bg-blue-50/50 border border-blue-100 px-4 py-1.5 rounded-full text-sm flex items-center gap-1.5 shadow-sm">
-                  <span className="text-[#1877F2]">📐</span> {post.area} m²
+                <span className="text-gray-700 font-bold bg-gray-100 px-4 py-2 rounded-2xl text-sm flex items-center gap-2">
+                  <span className="text-[#1877F2]">📐</span> Diện tích: <strong className="text-gray-900">{post.area} m²</strong>
                 </span>
               </div>
-              <div className="text-sm text-gray-600 flex items-start gap-2.5 font-medium bg-gray-50/50 p-4 rounded-2xl border border-gray-50">
-                <span className="text-lg">📍</span>
-                <span className="leading-relaxed">
+
+              <div className="text-sm text-gray-600 flex items-start gap-3 font-medium bg-blue-50/40 p-4 rounded-2xl border border-blue-50/60">
+                <span className="text-xl">📍</span>
+                <span className="leading-relaxed text-gray-700">
                   {post.addressDetail ? `${post.addressDetail}, ` : ''} 
                   {post.ward ? `${post.ward}, ` : ''} 
                   {post.districts?.name}, {post.cities?.name}
@@ -149,114 +158,91 @@ export default function PostDetailPage() {
               </div>
             </div>
 
-            {/* Thông số & Đặc điểm */}
-            <div className="bg-white rounded-[2rem] p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
-              <h2 className="font-extrabold text-xl text-gray-800 mb-6 flex items-center gap-2">
-                <span className="text-[#1877F2]">📋</span> Đặc điểm bất động sản
+            <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100">
+              <h2 className="font-extrabold text-lg text-gray-900 mb-5 flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-xl bg-blue-50 text-[#1877F2] flex items-center justify-center text-sm font-bold">📋</span> 
+                Đặc điểm bất động sản
               </h2>
-              <div className="grid grid-cols-2 gap-y-6 gap-x-4 text-sm">
-                <div className="flex flex-col p-3 bg-gray-50/50 rounded-xl border border-gray-50">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                <div className="flex flex-col p-4 bg-gray-50 rounded-2xl border border-gray-100/80">
                   <span className="text-gray-400 font-semibold text-[11px] uppercase tracking-wider mb-1">Diện tích</span>
-                  <span className="font-extrabold text-gray-800 text-base">{post.area} m²</span>
+                  <span className="font-bold text-gray-900 text-base">{post.area} m²</span>
                 </div>
-                <div className="flex flex-col p-3 bg-gray-50/50 rounded-xl border border-gray-50">
-                  <span className="text-gray-400 font-semibold text-[11px] uppercase tracking-wider mb-1">Số phòng ngủ</span>
-                  <span className="font-extrabold text-gray-800 text-base">{post.bedrooms || '--'} phòng</span>
+                <div className="flex flex-col p-4 bg-gray-50 rounded-2xl border border-gray-100/80">
+                  <span className="text-gray-400 font-semibold text-[11px] uppercase tracking-wider mb-1">Phòng ngủ</span>
+                  <span className="font-bold text-gray-900 text-base">{post.bedrooms || '--'} phòng</span>
                 </div>
-                <div className="flex flex-col p-3 bg-gray-50/50 rounded-xl border border-gray-50">
-                  <span className="text-gray-400 font-semibold text-[11px] uppercase tracking-wider mb-1">Số phòng tắm</span>
-                  <span className="font-extrabold text-gray-800 text-base">{post.bathrooms || '--'} phòng</span>
+                <div className="flex flex-col p-4 bg-gray-50 rounded-2xl border border-gray-100/80">
+                  <span className="text-gray-400 font-semibold text-[11px] uppercase tracking-wider mb-1">Phòng tắm</span>
+                  <span className="font-bold text-gray-900 text-base">{post.bathrooms || '--'} phòng</span>
                 </div>
-                <div className="flex flex-col p-3 bg-gray-50/50 rounded-xl border border-gray-50">
+                <div className="flex flex-col p-4 bg-gray-50 rounded-2xl border border-gray-100/80">
                   <span className="text-gray-400 font-semibold text-[11px] uppercase tracking-wider mb-1">Pháp lý</span>
-                  <span className="font-extrabold text-[#1877F2] text-base">{post.legalDocument || 'Đang cập nhật'}</span>
+                  <span className="font-bold text-[#1877F2] text-sm truncate">{post.legalDocument || 'Đang cập nhật'}</span>
                 </div>
               </div>
             </div>
 
-            {/* Mô tả chi tiết */}
-            <div className="bg-white rounded-[2rem] p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
-              <h2 className="font-extrabold text-xl text-gray-800 mb-6 flex items-center gap-2">
-                <span className="text-[#1877F2]">📝</span> Mô tả chi tiết
+            <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100">
+              <h2 className="font-extrabold text-lg text-gray-900 mb-5 flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-xl bg-blue-50 text-[#1877F2] flex items-center justify-center text-sm font-bold">📝</span> 
+                Mô tả chi tiết
               </h2>
-              <div className="text-[15px] text-gray-700 whitespace-pre-wrap leading-relaxed font-medium bg-gray-50/30 p-5 rounded-2xl">
+              <div className="text-[15px] text-gray-700 whitespace-pre-wrap leading-relaxed font-normal bg-gray-50/50 p-6 rounded-2xl border border-gray-100">
                 {post.content}
               </div>
             </div>
           </div>
 
-          {/* ================= CỘT PHẢI: THÔNG TIN NGƯỜI BÁN ================= */}
+          {/* CỘT PHẢI: THÔNG TIN NGƯỜI BÁN */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-[2rem] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-gray-100 sticky top-28">
-              
-              <div className="flex items-center gap-4 mb-6 pb-6 border-b border-gray-100">
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 sticky top-28 space-y-6">
+              <div className="flex items-center gap-4 pb-6 border-b border-gray-100">
                 <div className="relative">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-[#1877F2] to-blue-400 text-white flex items-center justify-center font-extrabold text-2xl shadow-md">
-                    {post.user?.fullName?.charAt(0) || 'U'}
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#1877F2] to-blue-400 text-white flex items-center justify-center font-bold text-xl shadow-md">
+                    {displaySellerName.charAt(0).toUpperCase()}
                   </div>
-                  <span className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></span>
+                  <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full"></span>
                 </div>
-                <div>
-                  <h3 className="font-extrabold text-gray-800 text-lg tracking-tight">{post.user?.fullName || 'Người dùng'}</h3>
-                  <span className="inline-block text-[11px] text-[#1877F2] bg-blue-50 font-bold px-3 py-1 rounded-full mt-1 border border-blue-100">
-                    {post.user?.role === 'AGENT' ? 'BẠN MÔI GIỚI' : 'NGƯỜI BÁN CÁ NHÂN'}
+                <div className="overflow-hidden">
+                  <h3 className="font-bold text-gray-900 text-base truncate">{displaySellerName}</h3>
+                  <span className="inline-flex items-center gap-1 text-[11px] text-[#1877F2] bg-blue-50 font-semibold px-2.5 py-0.5 rounded-full mt-1">
+                    🟢 {post.user?.role === 'AGENT' ? 'Môi giới' : 'Người bán'}
                   </span>
                 </div>
               </div>
               
-              <div className="space-y-4">
-                {/* 1. NÚT GỌI ĐIỆN */}
-                <a 
-                  href={`tel:${post.user?.phoneNumber || '0901234567'}`}
-                  className="w-full bg-[#10b981] hover:bg-[#059669] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/30 active:scale-[0.98] transform hover:-translate-y-0.5"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                  <span className="tracking-wide">{post.user?.phoneNumber || '0901234567'}</span>
-                </a>
-                
-                {/* 2. NÚT CHAT */}
-                <button 
-                  onClick={() => {
-                    const currentUserStr = localStorage.getItem('user');
-                    if (!currentUserStr) {
-                      showToast('Vui lòng đăng nhập để chat với người bán!', 'error');
-                      setTimeout(() => {
-                        router.push('/login');
-                      }, 2000);
-                      return;
-                    }
-                    
-                    const currentUser = JSON.parse(currentUserStr);
-                    
-                    // 1. Sửa lỗi "unknown": Lấy đúng ID từ object user hoặc từ trường userId
-                    const sellerId = post.user?.id || post.userId;
-                    
-                    if (!sellerId) {
-                      showToast('Dữ liệu người bán đang bị lỗi, không thể chat!', 'error');
-                      return;
-                    }
-
-                    // 2. CHẶN TỰ CHAT VỚI CHÍNH MÌNH
-                    if (String(currentUser.id) === String(sellerId)) {
-                      showToast('Bạn không thể tự chat trong bài đăng của chính mình!', 'error');
-                      return;
-                    }
-
-                    const sellerName = encodeURIComponent(post.user?.fullName || 'Người bán');
-                    
-                    // Chuyển hướng sang trang chat với ID chính xác
-                    router.push(`/chat?sellerId=${sellerId}&sellerName=${sellerName}&postId=${post.id}`);
-                  }} 
-                  className="w-full bg-white border-2 border-[#1877F2] text-[#1877F2] hover:bg-blue-50 font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-sm active:scale-[0.98] transform hover:-translate-y-0.5"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                  Chat với người bán
-                </button>
+              <div className="space-y-3">
+                {!isOwner ? (
+                  <>
+                    <a 
+                      href={`tel:${post.phone || post.user?.phoneNumber || '0901234567'}`}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2.5 transition-all shadow-sm active:scale-[0.98]"
+                    >
+                      <span>{post.phone || post.user?.phoneNumber || '0901234567'}</span>
+                    </a>
+                    <button 
+                      onClick={() => {
+                        if (!currentUser) {
+                          showToast('Vui lòng đăng nhập để chat!', 'error');
+                          return router.push('/login');
+                        }
+                        const sellerId = post.user?.id || post.userId;
+                        router.push(`/chat?sellerId=${sellerId}&sellerName=${encodeURIComponent(displaySellerName)}&postId=${post.id}`);
+                      }} 
+                      className="w-full bg-white border border-gray-200 text-[#1877F2] hover:bg-blue-50/50 font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2.5 transition-all shadow-sm active:scale-[0.98]"
+                    >
+                      Chat với {displaySellerName}
+                    </button>
+                  </>
+                ) : (
+                  <div className="text-center text-gray-500 italic py-4 bg-gray-50 rounded-2xl">
+                    Đây là tin đăng của bạn
+                  </div>
+                )}
               </div>
-
             </div>
           </div>
-
         </div>
       </main>
     </div>

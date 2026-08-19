@@ -18,7 +18,16 @@ export default function Header() {
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
+      const parsedUser = JSON.parse(storedUser);
+      setUser(parsedUser);
+
+      // 🌟 Lấy danh sách yêu thích ngay khi load trang để lấy số lượng (Badge)
+      fetch(apiUrl(`posts/favorites/${parsedUser.id}`))
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) setFavoritePosts(data);
+        })
+        .catch(err => console.error('Lỗi tải danh sách yêu thích', err));
     }
   }, []);
 
@@ -27,6 +36,7 @@ export default function Header() {
     localStorage.removeItem('user');
     setUser(null);
     setShowUserMenu(false);
+    setFavoritePosts([]); // Xóa list yêu thích khi đăng xuất
     router.push('/');
   };
 
@@ -46,12 +56,13 @@ export default function Header() {
     const willShow = !showFavorites;
     setShowFavorites(willShow);
 
+    // Vẫn gọi lại API khi mở dropdown để cập nhật dữ liệu mới nhất (đề phòng user vừa thả tim ở trang khác)
     if (willShow) {
       setIsLoadingFavs(true);
       try {
         const res = await fetch(apiUrl(`posts/favorites/${user.id}`));
         const data = await res.json();
-        setFavoritePosts(data);
+        if (Array.isArray(data)) setFavoritePosts(data);
       } catch (error) {
         console.error('Lỗi tải danh sách yêu thích', error);
       } finally {
@@ -102,7 +113,8 @@ export default function Header() {
           <div className="relative">
             <button 
               onClick={toggleFavorites}
-              className={`flex items-center justify-center w-10 h-10 rounded-full shadow-sm transition-all ${
+              // Thêm class "relative" vào đây để cục đỏ bám sát góc nút
+              className={`relative flex items-center justify-center w-10 h-10 rounded-full shadow-sm transition-all ${
                 showFavorites ? 'bg-white text-[#1877F2] ring-2 ring-white/50' : 'bg-white text-gray-700 hover:bg-gray-100'
               }`} 
               title="Tin đã lưu"
@@ -110,6 +122,13 @@ export default function Header() {
               <svg className="w-5 h-5" fill={showFavorites ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
               </svg>
+
+              {/* 🌟 CỤC BADGE THÔNG BÁO SỐ LƯỢNG 🌟 */}
+              {user && favoritePosts.length > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold px-1.5 min-w-[20px] h-5 rounded-full flex items-center justify-center border-2 border-[#1877F2] shadow-sm">
+                  {favoritePosts.length > 99 ? '99+' : favoritePosts.length}
+                </span>
+              )}
             </button>
 
             {showFavorites && (
