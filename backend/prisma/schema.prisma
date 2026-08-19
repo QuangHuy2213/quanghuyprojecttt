@@ -120,6 +120,7 @@ model districts {
 // --- BẢNG POSTS CŨ (Được nâng cấp thêm tính năng) ---
 model posts {
   id              Int             @id @default(autoincrement())
+  sourceId        String?         @unique
   title           String          @db.VarChar(255)
   thumbnail       String?
   price           Decimal         @db.Decimal
@@ -128,22 +129,23 @@ model posts {
   district        String?         @db.VarChar(10)
   content         String?
 
-  // ---- CÁC TRƯỜNG MỚI THÊM VÀO ĐỂ GIỐNG NHÀ TỐT ----
-  ward            String?         // Phường/Xã
-  addressDetail   String?         // Số nhà, tên đường chi tiết
-  bedrooms        Int?            // Số phòng ngủ
-  bathrooms       Int?            // Số phòng tắm
-  direction       String?         // Hướng nhà
-  floors          Int?            // Số tầng
-  length          Float?          // Chiều dài
-  width           Float?          // Chiều ngang
-  legalDocument   String?         // Giấy tờ pháp lý
-  furnishing      String?         // Tình trạng nội thất
+  ward            String?         
+  addressDetail   String?         
+  bedrooms        Int?            
+  bathrooms       Int?            
+  direction       String?         
+  floors          Int?            
+  length          Float?          
+  width           Float?          
+  legalDocument   String?         
+  furnishing      String?         
+
+  sellerName      String?       // <--- THÊM CỘT NÀY VÀO ĐỂ LƯU TÊN NGƯỜI ĐĂNG
 
   transactionType TransactionType @default(SALE)
   status          ListingStatus   @default(PENDING)
 
-  // Khóa ngoại mới (Cho phép rỗng để không bị lỗi với 4 bài viết cũ)
+  // ... (các quan hệ bên dưới giữ nguyên không đổi)
   userId          String?
   categoryId      Int?
 

@@ -5,7 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class PostsService {
   constructor(private prisma: PrismaService) {}
 
- async findAllPosts(
+  async findAllPosts(
     page: number = 1, 
     limit: number = 8, 
     city?: string, 
@@ -54,7 +54,18 @@ export class PostsService {
         take: limit,
         where: whereClause,
         orderBy: { id: 'desc' },
-        include: { cities: true, districts: true },
+        include: { 
+          cities: true, 
+          districts: true,
+          // 🌟 KÉO THÔNG TIN TÊN NGƯỜI ĐĂNG RA TRANG CHỦ
+          user: {
+            select: { fullName: true, role: true, phoneNumber: true }
+          },
+          // 🌟 KÈM THEO SỐ LƯỢNG TIM BAN ĐẦU
+          _count: {
+            select: { favorites: true }
+          }
+        },
       }),
       this.prisma.posts.count({ where: whereClause }),
     ]);
@@ -65,7 +76,7 @@ export class PostsService {
       currentPage: page,
       totalPages: Math.ceil(total / limit),
     };
-  }
+  } 
 
   async findOnePost(id: number) {
     return this.prisma.posts.findUnique({
@@ -75,6 +86,10 @@ export class PostsService {
         districts: true,
         user: {
           select: { fullName: true, phoneNumber: true, role: true }
+        },
+        // 🌟 KÈM THEO SỐ LƯỢNG TIM TRONG TRANG CHI TIẾT
+        _count: {
+          select: { favorites: true }
         }
       }
     });
@@ -91,12 +106,18 @@ export class PostsService {
         content: data.content,
         thumbnail: data.thumbnail,
         userId: data.userId ? String(data.userId) : null,
+        // 🌟 LƯU TÊN NGƯỜI BÁN KHI TỰ ĐĂNG TIN MỚI
+        sellerName: data.sellerName || null,
+        addressDetail: data.addressDetail || null,
+        bedrooms: data.bedrooms ? Number(data.bedrooms) : null,
+        bathrooms: data.bathrooms ? Number(data.bathrooms) : null,
       },
     });
   }
+
   // HÀM XỬ LÝ LƯU TIN / BỎ LƯU TIN (THẢ TIM)
   async toggleFavorite(userId: string, postId: number) {
-    // 1. Kiểm tra xem user này đã lưu bài viết này chưa (Dựa vào index unique bạn đã tạo)
+    // 1. Kiểm tra xem user này đã lưu bài viết này chưa
     const existingFavorite = await this.prisma.favorite.findUnique({
       where: {
         userId_postId: {
@@ -111,7 +132,11 @@ export class PostsService {
       await this.prisma.favorite.delete({
         where: { id: existingFavorite.id },
       });
-      return { message: 'Đã bỏ lưu tin', isFavorited: false };
+      
+      // Đếm lại tổng số tim sau khi giảm
+      const totalFavorites = await this.prisma.favorite.count({ where: { postId } });
+      
+      return { message: 'Đã bỏ lưu tin', isFavorited: false, totalFavorites };
     } else {
       // 3. Nếu chưa lưu -> Thêm vào bảng Favorite (Thả tim)
       await this.prisma.favorite.create({
@@ -120,19 +145,31 @@ export class PostsService {
           postId: postId,
         },
       });
-      return { message: 'Đã lưu tin thành công', isFavorited: true };
+      
+      // Đếm lại tổng số tim sau khi tăng
+      const totalFavorites = await this.prisma.favorite.count({ where: { postId } });
+      
+      return { message: 'Đã lưu tin thành công', isFavorited: true, totalFavorites };
     }
   }
+
   // HÀM LẤY DANH SÁCH BÀI VIẾT ĐÃ THẢ TIM CỦA 1 USER
   async getUserFavorites(userId: string) {
     const favorites = await this.prisma.favorite.findMany({
       where: { userId: userId },
-      orderBy: { id: 'desc' }, // Lấy tin mới lưu lên đầu
+      orderBy: { id: 'desc' },
       include: {
         post: {
           include: {
             cities: true,
             districts: true,
+            // 🌟 Lấy cả thông tin user và số lượng tim cho trang yêu thích
+            user: {
+              select: { fullName: true, role: true }
+            },
+            _count: {
+              select: { favorites: true }
+            }
           }
         }
       }
@@ -141,6 +178,7 @@ export class PostsService {
     // Bóc tách dữ liệu: Chỉ lấy phần thông tin bài viết (post) để Frontend dễ dùng
     return favorites.map(fav => fav.post);
   }
+
   // LẤY DANH SÁCH BÀI VIẾT DO USER ĐÃ ĐĂNG
   async findPostsByUser(userId: string) {
     return this.prisma.posts.findMany({
@@ -149,13 +187,19 @@ export class PostsService {
       include: {
         cities: true,
         districts: true,
+        // 🌟 Lấy cả thông tin user và số lượng tim cho trang quản lý tin
+        user: {
+            select: { fullName: true, role: true }
+        },
+        _count: {
+          select: { favorites: true }
+        }
       },
     });
   }
 
   // XÓA BÀI VIẾT (Có kiểm tra bảo mật)
   async deletePost(id: number, userId: string) {
-    // 1. Tìm xem bài viết có tồn tại và có đúng là của user này không
     const post = await this.prisma.posts.findUnique({
       where: { id },
     });
@@ -163,25 +207,35 @@ export class PostsService {
     if (!post) throw new Error('Không tìm thấy bài viết');
     if (post.userId !== userId) throw new Error('Bạn không có quyền xóa bài viết này!');
 
-    // 2. Tiến hành xóa
     return this.prisma.posts.delete({
       where: { id },
     });
   }
+
+  
+ // CẬP NHẬT BÀI VIẾT
   async updatePost(id: number, userId: string, data: any) {
     // 1. Kiểm tra quyền sở hữu
     const post = await this.prisma.posts.findUnique({ where: { id } });
     if (!post) throw new Error('Bài viết không tồn tại');
     if (post.userId !== userId) throw new Error('Bạn không có quyền chỉnh sửa bài này!');
 
-    // 2. Tự động gom những dữ liệu người dùng muốn cập nhật
+    // 2. Gom tất cả dữ liệu người dùng muốn cập nhật
     const updateData: any = {};
     if (data.title !== undefined) updateData.title = data.title;
     if (data.price !== undefined) updateData.price = Number(data.price);
     if (data.area !== undefined) updateData.area = Number(data.area);
     if (data.content !== undefined) updateData.content = data.content;
     if (data.thumbnail !== undefined) updateData.thumbnail = data.thumbnail;
-    if (data.status !== undefined) updateData.status = data.status; // Thêm cho phép cập nhật trạng thái
+    if (data.status !== undefined) updateData.status = data.status; 
+    if (data.sellerName !== undefined) updateData.sellerName = data.sellerName;
+    
+    // 🌟 BỔ SUNG CÁC TRƯỜNG CÒN THIẾU Ở ĐÂY
+    if (data.city !== undefined) updateData.city = data.city;
+    if (data.district !== undefined) updateData.district = data.district;
+    if (data.addressDetail !== undefined) updateData.addressDetail = data.addressDetail;
+    if (data.bedrooms !== undefined) updateData.bedrooms = data.bedrooms ? Number(data.bedrooms) : null;
+    if (data.bathrooms !== undefined) updateData.bathrooms = data.bathrooms ? Number(data.bathrooms) : null;
 
     // 3. Tiến hành cập nhật
     return this.prisma.posts.update({
