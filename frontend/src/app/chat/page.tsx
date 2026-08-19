@@ -38,7 +38,7 @@ function ChatContent() {
     setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3500);
   };
 
-  // [1] Kiểm tra đăng nhập và tải danh sách chat (ĐÃ FIX LỖI TRÙNG LẶP)
+  // [1] Kiểm tra đăng nhập và tải danh sách chat
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     if (!storedUser) {
@@ -49,15 +49,10 @@ function ChatContent() {
     const user = JSON.parse(storedUser);
     setCurrentUser(user);
 
-    // Lấy dữ liệu từ LocalStorage
     const savedChatList = JSON.parse(localStorage.getItem(`chat_list_${user.id}`) || '[]');
-    
-    // FIX TẬN GỐC: Dùng Map để lọc sạch các liên hệ bị trùng ID
     const uniqueChats = Array.from(new Map(savedChatList.map((item: any) => [String(item.id), item])).values());
     
     setChatList(uniqueChats);
-    
-    // Lưu ngược lại danh sách đã làm sạch vào LocalStorage
     localStorage.setItem(`chat_list_${user.id}`, JSON.stringify(uniqueChats));
   }, [router]);
 
@@ -71,7 +66,6 @@ function ChatContent() {
       }
 
       setChatList((prevList) => {
-        // FIX: Ép kiểu chuỗi String() để so sánh ID chính xác 100%
         const isExist = prevList.find(chat => String(chat.id) === String(sellerId));
         if (isExist) {
           setActiveChat(isExist);
@@ -87,8 +81,6 @@ function ChatContent() {
         };
 
         const updatedList = [newChatTarget, ...prevList];
-        
-        // FIX: Lọc trùng một lần nữa trước khi lưu cho chắc chắn
         const cleanList = Array.from(new Map(updatedList.map((item: any) => [String(item.id), item])).values());
         
         localStorage.setItem(`chat_list_${currentUser.id}`, JSON.stringify(cleanList));
@@ -113,7 +105,7 @@ function ChatContent() {
     fetchMessages();
   }, [activeChat, currentUser]);
 
-  // [4] LẮNG NGHE TIN NHẮN MỚI TOÀN CẦU (ĐÃ CẬP NHẬT FIX TRÙNG ID)
+  // [4] LẮNG NGHE TIN NHẮN MỚI TOÀN CẦU & TỰ ĐỘNG LẤY TÊN THẬT TỪ DB
   useEffect(() => {
     if (!currentUser) return;
 
@@ -124,11 +116,12 @@ function ChatContent() {
           schema: 'public', 
           table: 'messages' 
         }, 
-        (payload) => {
+        async (payload) => {
           const newMsg = payload.new;
           
           if (newMsg.receiver_id === String(currentUser.id) || newMsg.sender_id === String(currentUser.id)) {
             
+            // 1. Cập nhật tin nhắn vào khung chat nếu đang mở đúng người
             const currentActiveChat = activeChatRef.current;
             if (currentActiveChat && (
               (newMsg.sender_id === String(currentActiveChat.id) && newMsg.receiver_id === String(currentUser.id)) ||
@@ -140,25 +133,48 @@ function ChatContent() {
               });
             }
 
-            setChatList((prevList) => {
-              const otherPersonId = String(newMsg.sender_id) === String(currentUser.id) ? String(newMsg.receiver_id) : String(newMsg.sender_id);
-              const timeNow = new Date(newMsg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-              const isMine = String(newMsg.sender_id) === String(currentUser.id);
-              const msgSnippet = isMine ? `Bạn: ${newMsg.text}` : newMsg.text;
+            // 2. Xác định ID người kia và trích xuất thông tin
+            const otherPersonId = String(newMsg.sender_id) === String(currentUser.id) ? String(newMsg.receiver_id) : String(newMsg.sender_id);
+            const timeNow = new Date(newMsg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+            const isMine = String(newMsg.sender_id) === String(currentUser.id);
+            const msgSnippet = isMine ? `Bạn: ${newMsg.text}` : newMsg.text;
 
-              // FIX: Tìm bằng String()
+            // 3. Tự động gọi Database (bảng User) để bốc Tên thật & Avatar
+            let realName = `Người dùng ${otherPersonId.substring(0, 4)}`;
+            let realAvatar = DEFAULT_AVATAR;
+
+            try {
+              // Lấy toàn bộ thông tin từ bảng User dựa vào ID
+              const { data: userData } = await supabase.from('User').select('*').eq('id', otherPersonId).single();
+              if (userData) {
+                realName = userData.fullName || realName;
+                realAvatar = userData.avatarUrl || realAvatar;
+              }
+            } catch (err) {
+              console.log("Không thể lấy thông tin user", err);
+            }
+
+            // 4. Cập nhật danh sách ChatList bên trái
+            setChatList((prevList) => {
               const existingChatIndex = prevList.findIndex(c => String(c.id) === otherPersonId);
               let updatedList = [...prevList];
 
               if (existingChatIndex !== -1) {
-                const updatedChat = { ...updatedList[existingChatIndex], lastMessage: msgSnippet, time: timeNow };
-                updatedList.splice(existingChatIndex, 1);
-                updatedList.unshift(updatedChat);
+                const existingChat = updatedList[existingChatIndex];
+                // Nếu tên cũ đang bị lỗi "Người dùng...", thì ghi đè bằng tên thật
+                const finalName = existingChat.name.startsWith('Người dùng') ? realName : existingChat.name;
+                
+                updatedList[existingChatIndex] = { ...existingChat, name: finalName, avatar: realAvatar, lastMessage: msgSnippet, time: timeNow };
+                
+                // Kéo người chat mới nhất lên đầu tiên
+                const [item] = updatedList.splice(existingChatIndex, 1);
+                updatedList.unshift(item);
               } else {
+                // Tạo người mới tinh
                 const newChat = {
                   id: otherPersonId,
-                  name: `Người dùng ${otherPersonId.substring(0, 4)}`,
-                  avatar: DEFAULT_AVATAR,
+                  name: realName,
+                  avatar: realAvatar,
                   lastMessage: msgSnippet,
                   time: timeNow
                 };
@@ -202,9 +218,29 @@ function ChatContent() {
 
     if (error) {
       console.error("Lỗi gửi tin:", error);
-      showToast('Gửi lỗi! Hãy kiểm tra bạn đã Disable RLS trên Supabase chưa nhé.', 'error');
+      showToast('Gửi lỗi! Hãy kiểm tra lại kết nối.', 'error');
       setMessageInput(textToSend); 
       return;
+    }
+  };
+  
+  // [7] XÓA CUỘC TRÒ CHUYỆN
+  const handleDeleteChat = async () => {
+    if (!activeChat || !confirm("Bạn có chắc chắn muốn xóa toàn bộ cuộc trò chuyện này?")) return;
+
+    const { error } = await supabase.from('messages').delete().or(
+      `and(sender_id.eq.${currentUser.id},receiver_id.eq.${activeChat.id}),and(sender_id.eq.${activeChat.id},receiver_id.eq.${currentUser.id})`
+    );
+
+    if (error) {
+      showToast('Lỗi khi xóa cuộc trò chuyện', 'error');
+    } else {
+      const newList = chatList.filter(c => String(c.id) !== String(activeChat.id));
+      setChatList(newList);
+      localStorage.setItem(`chat_list_${currentUser.id}`, JSON.stringify(newList));
+      setActiveChat(null);
+      setMessages([]);
+      showToast('Đã xóa cuộc trò chuyện', 'success');
     }
   };
 
@@ -228,7 +264,7 @@ function ChatContent() {
         </div>
       </div>
 
-      <main className="flex-grow flex max-w-[1400px] mx-auto w-full bg-white shadow-sm border-x border-gray-200 overflow-hidden">
+      <main className="flex-grow flex max-w-[1400px] mx-auto w-full bg-white shadow-sm border-x border-gray-200 overflow-hidden h-screen">
         
         {/* ============ CỘT TRÁI: DANH SÁCH CHAT ============ */}
         <div className="w-[340px] flex-shrink-0 border-r border-gray-200 flex flex-col bg-white">
@@ -293,6 +329,11 @@ function ChatContent() {
                     <span className="text-xs text-green-500 font-bold flex items-center gap-1">Đang hoạt động</span>
                   </div>
                 </div>
+                
+                {/* NÚT XÓA TRÒ CHUYỆN */}
+                <button onClick={handleDeleteChat} className="text-red-500 hover:text-red-700 hover:bg-red-50 font-bold px-3 py-1.5 rounded-lg text-sm transition-all border border-transparent hover:border-red-100">
+                  Xóa cuộc trò chuyện
+                </button>
               </div>
 
               <div className="flex-1 overflow-y-auto p-6 space-y-4">
