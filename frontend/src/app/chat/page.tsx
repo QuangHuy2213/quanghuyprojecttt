@@ -24,6 +24,9 @@ function ChatContent() {
   const [chatList, setChatList] = useState<any[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
   
+  // STATE HIỂN THỊ MODAL YÊU CẦU ĐĂNG NHẬP
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const activeChatRef = useRef(activeChat);
@@ -42,10 +45,11 @@ function ChatContent() {
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     if (!storedUser) {
-      alert('Vui lòng đăng nhập để sử dụng tính năng chat!');
-      router.push('/login');
+      // THAY THẾ ALERT BẰNG MODAL
+      setShowAuthModal(true);
       return;
     }
+    
     const user = JSON.parse(storedUser);
     setCurrentUser(user);
 
@@ -144,7 +148,6 @@ function ChatContent() {
             let realAvatar = DEFAULT_AVATAR;
 
             try {
-              // Lấy toàn bộ thông tin từ bảng User dựa vào ID
               const { data: userData } = await supabase.from('User').select('*').eq('id', otherPersonId).single();
               if (userData) {
                 realName = userData.fullName || realName;
@@ -161,16 +164,13 @@ function ChatContent() {
 
               if (existingChatIndex !== -1) {
                 const existingChat = updatedList[existingChatIndex];
-                // Nếu tên cũ đang bị lỗi "Người dùng...", thì ghi đè bằng tên thật
                 const finalName = existingChat.name.startsWith('Người dùng') ? realName : existingChat.name;
                 
                 updatedList[existingChatIndex] = { ...existingChat, name: finalName, avatar: realAvatar, lastMessage: msgSnippet, time: timeNow };
                 
-                // Kéo người chat mới nhất lên đầu tiên
                 const [item] = updatedList.splice(existingChatIndex, 1);
                 updatedList.unshift(item);
               } else {
-                // Tạo người mới tinh
                 const newChat = {
                   id: otherPersonId,
                   name: realName,
@@ -250,6 +250,44 @@ function ChatContent() {
 
   return (
     <>
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(20px) scale(0.95); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .animate-fade-up { animation: fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+      `}} />
+
+      {/* ================= MODAL YÊU CẦU ĐĂNG NHẬP ================= */}
+      {showAuthModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+          <div className="bg-white rounded-[2rem] shadow-2xl p-8 max-w-sm w-full text-center animate-fade-up border border-white/50">
+            <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+              <span className="text-4xl">🔒</span>
+            </div>
+            <h3 className="text-2xl font-extrabold text-gray-800 mb-2 tracking-tight">Yêu cầu đăng nhập</h3>
+            <p className="text-gray-500 text-sm font-medium mb-8 leading-relaxed">
+              Bạn cần đăng nhập vào tài khoản Nhà Tốt để xem tin nhắn và trò chuyện với người bán.
+            </p>
+            
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={() => router.push('/login')}
+                className="w-full py-3.5 bg-gradient-to-r from-[#1877F2] to-blue-600 text-white font-bold rounded-2xl shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 hover:-translate-y-0.5 transition-all active:scale-[0.98]"
+              >
+                Đăng nhập ngay
+              </button>
+              <button 
+                onClick={() => router.push('/')}
+                className="w-full py-3.5 bg-gray-50 text-gray-500 font-bold rounded-2xl hover:bg-gray-100 hover:text-gray-700 transition-all active:scale-[0.98]"
+              >
+                Quay lại trang chủ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ================= GIAO DIỆN POPUP (TOAST) ================= */}
       <div 
         className={`fixed top-24 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-500 ease-out ${
@@ -341,7 +379,7 @@ function ChatContent() {
                   <div className="text-center text-gray-400 font-medium text-sm mt-10">Hãy gửi lời chào đến {activeChat.name}!</div>
                 ) : (
                   messages.map((msg) => {
-                    const isMine = String(msg.sender_id) === String(currentUser.id);
+                    const isMine = String(msg.sender_id) === String(currentUser?.id);
                     return (
                       <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
                         <div className="max-w-[70%] flex flex-col gap-1">
