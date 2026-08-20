@@ -43,7 +43,8 @@ export class AuthController {
     const loginData = await this.authService.validateGoogleUser(req.user);
 
     // Chuyển hướng về Frontend kèm theo token và thông tin user
-    const frontendUrl = `http://localhost:3000/auth/callback?token=${loginData.access_token}&user=${encodeURIComponent(JSON.stringify(loginData.user))}`;
+    // Thay link bằng tên miền thật Vercel của bạn
+  const frontendUrl = `https://nguyenducquanghuy.vercel.app/auth/callback?token=${loginData.access_token}&user=${encodeURIComponent(JSON.stringify(loginData.user))}`;
     
     return res.redirect(frontendUrl);
   }

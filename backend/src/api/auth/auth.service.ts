@@ -89,7 +89,7 @@ export class AuthService {
     }
 
     const resetToken = this.jwtService.sign({ email: user.email }, { expiresIn: '15m' });
-    const resetLink = `http://localhost:3000/reset-password?token=${resetToken}`;
+    const resetLink = `https://nguyenducquanghuy.vercel.app/reset-password?token=${resetToken}`;
 
     await this.transporter.sendMail({
       from: '"Nhà Tốt Support" <no-reply@nhatot.com>',
