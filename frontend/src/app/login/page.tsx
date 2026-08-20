@@ -199,7 +199,7 @@ export default function LoginPage() {
 
             <div className="mt-6">
               <a
-                href="http://localhost:3001/auth/google"
+                href="https://nguyenducquanghuy.vercel.app/auth/google"
                 className="w-full flex items-center justify-center gap-3 py-3.5 px-4 rounded-2xl shadow-sm border border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300 text-sm font-bold text-gray-700 transition-all duration-300 active:scale-[0.98]"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
