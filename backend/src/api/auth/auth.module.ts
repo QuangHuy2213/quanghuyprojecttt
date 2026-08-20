@@ -3,6 +3,7 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtModule } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
+import { GoogleStrategy } from './google.strategy'; // <-- THÊM DÒNG NÀY
 
 @Module({
   imports: [
@@ -11,7 +12,7 @@ import { PrismaService } from '../../prisma/prisma.service';
       signOptions: { expiresIn: '1d' },
     }),
   ],
-  controllers: [AuthController], // Bắt buộc phải có dòng này
-  providers: [AuthService, PrismaService],
+  controllers: [AuthController],
+  providers: [AuthService, PrismaService, GoogleStrategy], // <-- THÊM GOOGLE STRATEGY VÀO ĐÂY
 })
 export class AuthModule {}

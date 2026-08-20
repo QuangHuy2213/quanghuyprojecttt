@@ -35,10 +35,11 @@ enum ListingStatus {
 model User {
   id               String     @id @default(uuid())
   email            String     @unique
-  password         String
+  password         String?    // 🌟 ĐÃ SỬA: Thêm dấu ? để cho phép Null (Tài khoản Google không cần mật khẩu)
   fullName         String
   phoneNumber      String?    @unique
   avatarUrl        String?
+  googleId         String?    @unique // 🌟 ĐÃ THÊM: Lưu ID của Google để nhận diện người dùng
   role             Role       @default(USER)
 
   posts            posts[]    // Liên kết với bảng posts cũ
@@ -140,12 +141,11 @@ model posts {
   legalDocument   String?         
   furnishing      String?         
 
-  sellerName      String?       // <--- THÊM CỘT NÀY VÀO ĐỂ LƯU TÊN NGƯỜI ĐĂNG
+  sellerName      String?       // <--- LƯU TÊN NGƯỜI ĐĂNG
 
   transactionType TransactionType @default(SALE)
   status          ListingStatus   @default(PENDING)
 
-  // ... (các quan hệ bên dưới giữ nguyên không đổi)
   userId          String?
   categoryId      Int?
 

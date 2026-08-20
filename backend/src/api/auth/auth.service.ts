@@ -15,8 +15,8 @@ export class AuthService {
   private transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-      user: 'quanghuy22130504@gmail.com', // Thay bằng email Gmail của bạn
-      pass: 'mqlb onvn mwhm gdab', // Thay bằng App Password (Mật khẩu ứng dụng 16 ký tự) của Gmail
+      user: 'quanghuy22130504@gmail.com', 
+      pass: 'mqlbonvnmwhmgdab', // ĐÃ SỬA: Viết liền 16 ký tự để không bị lỗi gửi mail
     },
   });
 
@@ -26,7 +26,6 @@ export class AuthService {
       where: { email: data.email }
     });
     
-    // NẾU TRÙNG TÀI KHOẢN SẼ BÁO LỖI NÀY
     if (userExists) {
       throw new BadRequestException('Email này đã bị trùng. Vui lòng tạo lại với một email khác!');
     }
@@ -43,7 +42,6 @@ export class AuthService {
       }
     });
 
-    // NẾU THÀNH CÔNG SẼ TRẢ VỀ CÂU NÀY
     return { message: 'Tuyệt vời! Bạn đã đăng ký tài khoản thành công.' };
   }
 
@@ -53,14 +51,17 @@ export class AuthService {
       where: { email: data.email }
     });
     
-    // NẾU CHƯA CÓ TÀI KHOẢN
     if (!user) {
       throw new UnauthorizedException('Tài khoản không đúng hoặc không tồn tại!');
     }
 
+    // ĐÃ THÊM: Ngăn lỗi crash app nếu user đăng nhập bằng form thường nhưng tài khoản tạo bằng Google (không có password)
+    if (!user.password) {
+      throw new UnauthorizedException('Tài khoản này được đăng ký bằng Google. Vui lòng chọn "Đăng nhập bằng Google"!');
+    }
+
     const isMatch = await bcrypt.compare(data.password, user.password);
     
-    // NẾU SAI MẬT KHẨU CŨNG BÁO CHUNG 1 CÂU CHO BẢO MẬT
     if (!isMatch) {
       throw new UnauthorizedException('Tài khoản không đúng hoặc không tồn tại!');
     }
@@ -75,24 +76,21 @@ export class AuthService {
         id: user.id,
         email: user.email,
         fullName: user.fullName,
+        avatarUrl: user.avatarUrl,
       }
     };
   }
 
-  // 3. CHỨC NĂNG QUÊN MẬT KHẨU (GỬI LINK KÍCH HOẠT QUA GMAIL)
+  // 3. CHỨC NĂNG QUÊN MẬT KHẨU
   async forgotPassword(email: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) {
       throw new BadRequestException('Email này chưa được đăng ký trong hệ thống!');
     }
 
-    // Tạo token chứa email, thời hạn 15 phút
     const resetToken = this.jwtService.sign({ email: user.email }, { expiresIn: '15m' });
-
-    // Đường dẫn trỏ về trang đặt lại mật khẩu ở Frontend
     const resetLink = `http://localhost:3000/reset-password?token=${resetToken}`;
 
-    // Gửi email qua Nodemailer
     await this.transporter.sendMail({
       from: '"Nhà Tốt Support" <no-reply@nhatot.com>',
       to: user.email,
@@ -115,7 +113,6 @@ export class AuthService {
   // 4. CHỨC NĂNG ĐẶT LẠI MẬT KHẨU MỚI
   async resetPassword(token: string, newPassword: string) {
     try {
-      // Giải mã token xem có hợp lệ và hết hạn chưa
       const payload = this.jwtService.verify(token);
       const email = payload.email;
 
@@ -124,7 +121,6 @@ export class AuthService {
         throw new BadRequestException('Tài khoản không tồn tại!');
       }
 
-      // Mã hóa mật khẩu mới trước khi lưu vào cơ sở dữ liệu
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(newPassword, salt);
 
@@ -137,5 +133,47 @@ export class AuthService {
     } catch (err) {
       throw new BadRequestException('Đường dẫn khôi phục không hợp lệ hoặc đã hết hạn!');
     }
+  }
+
+  // 5. CHỨC NĂNG ĐĂNG NHẬP GOOGLE (MỚI THÊM)
+  async validateGoogleUser(googleUser: any) {
+    let user = await this.prisma.user.findUnique({ 
+      where: { email: googleUser.email } 
+    });
+
+    if (!user) {
+      // Nếu chưa có, tự động tạo tài khoản mới (Không cần password)
+      user = await this.prisma.user.create({
+        data: {
+          email: googleUser.email,
+          fullName: googleUser.fullName,
+          googleId: googleUser.googleId,
+          avatarUrl: googleUser.avatarUrl,
+        },
+      });
+    } else if (!user.googleId) {
+      // Nếu user đã đăng ký bằng mật khẩu, giờ login bằng Google thì cập nhật thêm mã Google
+      user = await this.prisma.user.update({
+        where: { email: user.email },
+        data: { 
+          googleId: googleUser.googleId, 
+          avatarUrl: googleUser.avatarUrl 
+        },
+      });
+    }
+
+    // Tạo Token
+    const payload = { sub: user.id, email: user.email, role: user.role };
+    const token = this.jwtService.sign(payload);
+
+    return {
+      access_token: token,
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        avatarUrl: user.avatarUrl,
+      },
+    };
   }
 }
