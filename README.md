@@ -11,7 +11,7 @@
 cd backend
 npm install
 npx prisma generate
-npm run dev
+npm run start:dev
 
 cd frontend
 npm install
