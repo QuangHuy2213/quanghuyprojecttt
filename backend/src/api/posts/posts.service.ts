@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CreatePostDto, UpdatePostDto } from './dto/posts.dto';
 
 @Injectable()
 export class PostsService {
@@ -97,12 +98,25 @@ export class PostsService {
     });
   }
 
-  async createPost(data: any) {
+  async createPost(data: CreatePostDto) {
+    await this.validateLocation(data.city, data.district);
+
+    if (data.userId) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: data.userId },
+        select: { id: true },
+      });
+
+      if (!user) {
+        throw new BadRequestException('Người dùng không tồn tại hoặc phiên đăng nhập đã hết hạn.');
+      }
+    }
+
     return this.prisma.posts.create({
       data: {
         title: data.title,
-        price: Number(data.price),
-        area: Number(data.area),
+        price: data.price,
+        area: data.area,
         city: data.city,
         district: data.district,
         content: data.content,
@@ -115,8 +129,8 @@ export class PostsService {
         // 🌟 LƯU TÊN NGƯỜI BÁN KHI TỰ ĐĂNG TIN MỚI
         sellerName: data.sellerName || null,
         addressDetail: data.addressDetail || null,
-        bedrooms: data.bedrooms ? Number(data.bedrooms) : null,
-        bathrooms: data.bathrooms ? Number(data.bathrooms) : null,
+        bedrooms: data.bedrooms ?? null,
+        bathrooms: data.bathrooms ?? null,
       },
     });
   }
@@ -219,17 +233,21 @@ export class PostsService {
   }
 
   // CẬP NHẬT BÀI VIẾT
-  async updatePost(id: number, userId: string, data: any) {
+  async updatePost(id: number, userId: string, data: UpdatePostDto) {
     // 1. Kiểm tra quyền sở hữu
     const post = await this.prisma.posts.findUnique({ where: { id } });
     if (!post) throw new Error('Bài viết không tồn tại');
     if (post.userId !== userId) throw new Error('Bạn không có quyền chỉnh sửa bài này!');
 
+    if (data.city !== undefined || data.district !== undefined) {
+      await this.validateLocation(data.city ?? post.city ?? undefined, data.district ?? post.district ?? undefined);
+    }
+
     // 2. Gom tất cả dữ liệu người dùng muốn cập nhật
     const updateData: any = {};
     if (data.title !== undefined) updateData.title = data.title;
-    if (data.price !== undefined) updateData.price = Number(data.price);
-    if (data.area !== undefined) updateData.area = Number(data.area);
+    if (data.price !== undefined) updateData.price = data.price;
+    if (data.area !== undefined) updateData.area = data.area;
     if (data.content !== undefined) updateData.content = data.content;
     if (data.thumbnail !== undefined) updateData.thumbnail = data.thumbnail;
     if (data.status !== undefined) updateData.status = data.status; 
@@ -238,13 +256,35 @@ export class PostsService {
     if (data.city !== undefined) updateData.city = data.city;
     if (data.district !== undefined) updateData.district = data.district;
     if (data.addressDetail !== undefined) updateData.addressDetail = data.addressDetail;
-    if (data.bedrooms !== undefined) updateData.bedrooms = data.bedrooms ? Number(data.bedrooms) : null;
-    if (data.bathrooms !== undefined) updateData.bathrooms = data.bathrooms ? Number(data.bathrooms) : null;
+    if (data.bedrooms !== undefined) updateData.bedrooms = data.bedrooms;
+    if (data.bathrooms !== undefined) updateData.bathrooms = data.bathrooms;
 
     // 3. Tiến hành cập nhật
     return this.prisma.posts.update({
       where: { id },
       data: updateData,
     });
+  }
+
+  private async validateLocation(cityCode?: string, districtCode?: string) {
+    if (!cityCode || !districtCode) {
+      throw new BadRequestException('Vui lòng chọn tỉnh/thành phố và quận/huyện hợp lệ.');
+    }
+
+    const [city, district] = await Promise.all([
+      this.prisma.cities.findUnique({ where: { code: cityCode }, select: { code: true } }),
+      this.prisma.districts.findUnique({
+        where: { code: districtCode },
+        select: { code: true, parent_code: true },
+      }),
+    ]);
+
+    if (!city) {
+      throw new BadRequestException('Tỉnh/thành phố không tồn tại. Hãy chọn mã từ API /cities.');
+    }
+
+    if (!district || district.parent_code !== city.code) {
+      throw new BadRequestException('Quận/huyện không tồn tại hoặc không thuộc tỉnh/thành phố đã chọn.');
+    }
   }
 }

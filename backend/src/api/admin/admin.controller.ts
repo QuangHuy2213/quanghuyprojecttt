@@ -1,23 +1,31 @@
-import { Controller, Get, Patch, Post, Delete, Param, Body } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
+import { CreateUserDto, ReplyContactEmailDto, ReviewPostDto, UpdateContactStatusDto, UpdateReportStatusDto, UpdateUserDetailsDto, UpdateUserRoleDto } from './dto/admin.dto';
 
+@ApiTags('Admin')
 @Controller('admin')
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
   // --- API DASHBOARD ---
   @Get('stats')
+  @ApiOperation({ summary: 'Lấy thống kê dashboard' })
   async getStats() {
     return this.adminService.getDashboardStats();
   }
 
   // --- API QUẢN LÝ NGƯỜI DÙNG ---
   @Get('users')
+  @ApiOperation({ summary: 'Lấy danh sách người dùng' })
   async getAllUsers() {
     return this.adminService.getAllUsers();
   }
 
   @Patch('users/:id/role')
+  @ApiOperation({ summary: 'Cập nhật vai trò người dùng' })
+  @ApiParam({ name: 'id', example: '8b4d5f7c-1234-4567-8901-abcdef123456' })
+  @ApiBody({ type: UpdateUserRoleDto })
   async updateUserRole(
     @Param('id') id: string, 
     @Body('role') role: 'USER' | 'AGENT' | 'ADMIN'
@@ -27,40 +35,55 @@ export class AdminController {
   }
 
   @Post('users')
-  async createUser(@Body() body: any) {
+  @ApiOperation({ summary: 'Tạo người dùng mới' })
+  @ApiBody({ type: CreateUserDto })
+  async createUser(@Body() body: CreateUserDto) {
     return this.adminService.createUser(body);
   }
 
   @Patch('users/:id')
-  async updateUser(@Param('id') id: string, @Body() body: any) {
+  @ApiOperation({ summary: 'Cập nhật thông tin người dùng' })
+  @ApiParam({ name: 'id', example: '8b4d5f7c-1234-4567-8901-abcdef123456' })
+  @ApiBody({ type: UpdateUserDetailsDto })
+  async updateUser(@Param('id') id: string, @Body() body: UpdateUserDetailsDto) {
     return this.adminService.updateUserDetails(id, body);
   }
 
   @Delete('users/:id')
+  @ApiOperation({ summary: 'Xóa người dùng' })
+  @ApiParam({ name: 'id', example: '8b4d5f7c-1234-4567-8901-abcdef123456' })
   async deleteUser(@Param('id') id: string) {
     await this.adminService.deleteUser(id);
     return { message: 'Xóa người dùng thành công!' };
   }
 
   @Get('posts/pending')
+  @ApiOperation({ summary: 'Lấy các bài đăng chờ duyệt' })
   async getPendingPosts() {
     return this.adminService.getPendingPosts();
   }
 
   @Patch('posts/:id/review')
+  @ApiOperation({ summary: 'Duyệt hoặc ẩn bài đăng' })
+  @ApiParam({ name: 'id', example: 123 })
+  @ApiBody({ type: ReviewPostDto })
   async reviewPost(
     @Param('id') id: string, 
-    @Body() body: { status: 'ACTIVE' | 'HIDDEN', reason?: string }
+    @Body() body: ReviewPostDto
   ) {
     return this.adminService.reviewPost(Number(id), body.status, body.reason);
   }
   // --- API LIÊN HỆ ---
   @Get('contacts')
+  @ApiOperation({ summary: 'Lấy danh sách liên hệ' })
   async getAllContacts() {
     return this.adminService.getAllContacts();
   }
 
   @Patch('contacts/:id/status')
+  @ApiOperation({ summary: 'Cập nhật trạng thái liên hệ' })
+  @ApiParam({ name: 'id', example: 12 })
+  @ApiBody({ type: UpdateContactStatusDto })
   async updateContactStatus(
     @Param('id') id: string,
     @Body('status') status: string
@@ -70,11 +93,15 @@ export class AdminController {
   }
   // --- API BÁO CÁO VI PHẠM ---
   @Get('reports')
+  @ApiOperation({ summary: 'Lấy danh sách báo cáo vi phạm' })
   async getAllReports() {
     return this.adminService.getAllReports();
   }
 
   @Patch('reports/:id/status')
+  @ApiOperation({ summary: 'Cập nhật trạng thái báo cáo' })
+  @ApiParam({ name: 'id', example: 12 })
+  @ApiBody({ type: UpdateReportStatusDto })
   async updateReportStatus(
     @Param('id') id: string,
     @Body('status') status: 'RESOLVED' | 'IGNORED'
@@ -85,16 +112,23 @@ export class AdminController {
 
   // 🌟 THÊM API GỬI EMAIL NÀY VÀO TRONG AdminController
   @Post('contacts/reply')
-  async replyContactEmail(@Body() body: { contactId: number, email: string, subject: string, message: string }) {
+  @ApiOperation({ summary: 'Gửi email phản hồi liên hệ' })
+  @ApiBody({ type: ReplyContactEmailDto })
+  async replyContactEmail(@Body() body: ReplyContactEmailDto) {
     await this.adminService.replyContactEmail(body.contactId, body.email, body.subject, body.message);
     return { message: 'Đã gửi email phản hồi thành công!' };
   }
   @Delete('contacts/:id')
+  @ApiOperation({ summary: 'Xóa liên hệ' })
+  @ApiParam({ name: 'id', example: 12 })
   async deleteContact(@Param('id') id: string) {
     await this.adminService.deleteContact(Number(id));
     return { message: 'Đã xóa thành công!' };
   }
   @Delete('reports/:reportId/post/:postId')
+  @ApiOperation({ summary: 'Xóa bài đăng bị báo cáo' })
+  @ApiParam({ name: 'reportId', example: 12 })
+  @ApiParam({ name: 'postId', example: 123 })
   async deleteReportedPost(
     @Param('reportId') reportId: string,
     @Param('postId') postId: string
@@ -102,6 +136,8 @@ export class AdminController {
     return this.adminService.deletePostByAdmin(Number(postId), Number(reportId));
   }
   @Delete('reports/:id')
+  @ApiOperation({ summary: 'Xóa báo cáo' })
+  @ApiParam({ name: 'id', example: 12 })
   async deleteReport(@Param('id') id: string) {
     await this.adminService.deleteReport(Number(id));
     return { message: 'Đã xóa báo cáo thành công!' };

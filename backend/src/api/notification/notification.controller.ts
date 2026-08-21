@@ -1,7 +1,10 @@
 import { Controller, Get, Patch, Param, Headers, UnauthorizedException } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { NotificationService } from './notification.service';
 import { JwtService } from '@nestjs/jwt';
 
+@ApiTags('Notifications')
+@ApiBearerAuth()
 @Controller('notifications')
 export class NotificationController {
   constructor(
@@ -25,6 +28,7 @@ export class NotificationController {
 
   // API 1: Lấy danh sách thông báo
   @Get()
+  @ApiOperation({ summary: 'Lấy thông báo của người dùng hiện tại' })
   async getNotifications(@Headers('authorization') authHeader: string) {
     const userId = this.getUserIdFromToken(authHeader);
     return this.notificationService.getUserNotifications(userId);
@@ -32,6 +36,7 @@ export class NotificationController {
 
   // API 2: Đánh dấu tất cả là đã đọc
   @Patch('read-all')
+  @ApiOperation({ summary: 'Đánh dấu tất cả thông báo đã đọc' })
   async markAllAsRead(@Headers('authorization') authHeader: string) {
     const userId = this.getUserIdFromToken(authHeader);
     await this.notificationService.markAllAsRead(userId);
@@ -40,6 +45,8 @@ export class NotificationController {
 
   // API 3: Đánh dấu 1 thông báo cụ thể là đã đọc
   @Patch(':id/read')
+  @ApiOperation({ summary: 'Đánh dấu một thông báo đã đọc' })
+  @ApiParam({ name: 'id', example: 12 })
   async markAsRead(
     @Param('id') id: string,
     @Headers('authorization') authHeader: string

@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from './prisma/prisma.service';
+import { SubmitContactDto, SubmitReportDto } from './dto/app.dto';
 
 @Injectable()
 export class AppService {
@@ -28,7 +29,7 @@ export class AppService {
     });
   }
   // 🌟 THÊM HÀM LƯU LIÊN HỆ
-  async submitContact(data: any) {
+  async submitContact(data: SubmitContactDto) {
     return this.prisma.contact.create({
       data: {
         fullName: data.fullName,
@@ -39,13 +40,35 @@ export class AppService {
     });
   }
   // 🌟 THÊM HÀM LƯU BÁO CÁO VI PHẠM
-  async submitReport(data: any) {
+  async submitReport(data: SubmitReportDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: data.userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      throw new BadRequestException(
+        'Tài khoản báo cáo không tồn tại hoặc phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+      );
+    }
+
+    if (data.postId !== undefined) {
+      const post = await this.prisma.posts.findUnique({
+        where: { id: data.postId },
+        select: { id: true },
+      });
+
+      if (!post) {
+        throw new BadRequestException('Bài đăng cần báo cáo không tồn tại.');
+      }
+    }
+
     return this.prisma.report.create({
       data: {
-        userId: data.userId,                 // Người gửi báo cáo
-        postId: data.postId ? Number(data.postId) : null, // ID bài viết bị báo cáo (nếu có)
-        reason: data.reason,                 // Lý do báo cáo
-        status: 'PENDING',                   // Trạng thái mặc định là Chờ xử lý
+        userId: data.userId,
+        postId: data.postId ?? null,
+        reason: data.reason,
+        status: 'PENDING',
       }
     });
   }
