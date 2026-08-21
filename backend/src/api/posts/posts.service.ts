@@ -15,7 +15,9 @@ export class PostsService {
     area?: string
   ) {
     const skip = (page - 1) * limit;
-    const whereClause: any = { status: { not: 'HIDDEN' } };
+    
+    // 🌟 ĐÃ SỬA: Chỉ lấy các bài viết đã được Admin duyệt (ACTIVE)
+    const whereClause: any = { status: 'ACTIVE' }; 
 
     // 1. Lọc theo khu vực
     if (city) whereClause.city = city;
@@ -106,6 +108,10 @@ export class PostsService {
         content: data.content,
         thumbnail: data.thumbnail,
         userId: data.userId ? String(data.userId) : null,
+        
+        // 🌟 THÊM MỚI: Bắt buộc bài đăng mới phải ở trạng thái PENDING chờ duyệt
+        status: 'PENDING',
+
         // 🌟 LƯU TÊN NGƯỜI BÁN KHI TỰ ĐĂNG TIN MỚI
         sellerName: data.sellerName || null,
         addressDetail: data.addressDetail || null,
@@ -212,8 +218,7 @@ export class PostsService {
     });
   }
 
-  
- // CẬP NHẬT BÀI VIẾT
+  // CẬP NHẬT BÀI VIẾT
   async updatePost(id: number, userId: string, data: any) {
     // 1. Kiểm tra quyền sở hữu
     const post = await this.prisma.posts.findUnique({ where: { id } });
@@ -230,7 +235,6 @@ export class PostsService {
     if (data.status !== undefined) updateData.status = data.status; 
     if (data.sellerName !== undefined) updateData.sellerName = data.sellerName;
     
-    // 🌟 BỔ SUNG CÁC TRƯỜNG CÒN THIẾU Ở ĐÂY
     if (data.city !== undefined) updateData.city = data.city;
     if (data.district !== undefined) updateData.district = data.district;
     if (data.addressDetail !== undefined) updateData.addressDetail = data.addressDetail;

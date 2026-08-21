@@ -27,4 +27,26 @@ export class AppService {
       where: filter,
     });
   }
+  // 🌟 THÊM HÀM LƯU LIÊN HỆ
+  async submitContact(data: any) {
+    return this.prisma.contact.create({
+      data: {
+        fullName: data.fullName,
+        email: data.email,
+        subject: data.subject,
+        message: data.message,
+      }
+    });
+  }
+  // 🌟 THÊM HÀM LƯU BÁO CÁO VI PHẠM
+  async submitReport(data: any) {
+    return this.prisma.report.create({
+      data: {
+        userId: data.userId,                 // Người gửi báo cáo
+        postId: data.postId ? Number(data.postId) : null, // ID bài viết bị báo cáo (nếu có)
+        reason: data.reason,                 // Lý do báo cáo
+        status: 'PENDING',                   // Trạng thái mặc định là Chờ xử lý
+      }
+    });
+  }
 }
