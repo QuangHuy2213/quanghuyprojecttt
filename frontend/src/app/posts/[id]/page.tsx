@@ -14,12 +14,10 @@ export default function PostDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
 
-  // 🌟 THÊM STATE CHO TÍNH NĂNG BÁO CÁO VI PHẠM
   const [reportModal, setReportModal] = useState(false);
   const [reportReason, setReportReason] = useState('');
   const [isReporting, setIsReporting] = useState(false);
 
-  // STATE QUẢN LÝ POPUP (TOAST NOTIFICATION)
   const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({
     show: false,
     message: '',
@@ -61,7 +59,6 @@ export default function PostDetailPage() {
     return `${(price / 1_000_000).toLocaleString('vi-VN')} triệu`;
   };
 
-  // 🌟 HÀM XỬ LÝ GỬI BÁO CÁO VI PHẠM TỚI BACKEND
   const submitReport = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -76,7 +73,7 @@ export default function PostDetailPage() {
 
     setIsReporting(true);
     try {
-      const res = await fetch(apiUrl('reports'), { // 👈 Gọi API backend bạn vừa tạo
+      const res = await fetch(apiUrl('reports'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -89,7 +86,7 @@ export default function PostDetailPage() {
       if (res.ok) {
         showToast('Báo cáo thành công. Cảm ơn bạn!', 'success');
         setReportModal(false);
-        setReportReason(''); // Reset form
+        setReportReason('');
       } else {
         showToast('Có lỗi xảy ra, không thể gửi báo cáo.', 'error');
       }
@@ -104,12 +101,9 @@ export default function PostDetailPage() {
     <div className="min-h-screen bg-[#f8fafc] flex flex-col">
       <Header />
       <div className="flex-grow flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <svg className="animate-spin h-10 w-10 text-[#1877F2]" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          <span className="text-[#1877F2] font-bold animate-pulse text-lg tracking-wide">Đang tải thông tin...</span>
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-blue-200 border-t-[#1877F2] rounded-full animate-spin"></div>
+          <span className="text-[#1877F2] font-semibold animate-pulse text-sm">Đang tải thông tin...</span>
         </div>
       </div>
     </div>
@@ -118,12 +112,16 @@ export default function PostDetailPage() {
   if (!post) return (
     <div className="min-h-screen bg-[#f8fafc] flex flex-col">
       <Header />
-      <div className="flex-grow flex items-center justify-center">
-        <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100 text-center max-w-sm">
-          <span className="text-6xl block mb-4">🔍</span>
-          <h2 className="text-xl font-bold text-gray-800 mb-2">Không tìm thấy bài viết!</h2>
-          <p className="text-gray-500 text-sm mb-6">Bài viết này có thể đã bị xóa hoặc không tồn tại.</p>
-          <button onClick={() => router.push('/')} className="bg-[#1877F2] text-white font-bold py-2.5 px-6 rounded-xl hover:bg-blue-600 transition-colors">Về trang chủ</button>
+      <div className="flex-grow flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-center max-w-sm w-full">
+          <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-4xl">🔍</span>
+          </div>
+          <h2 className="text-lg font-bold text-gray-900 mb-2">Không tìm thấy tin đăng!</h2>
+          <p className="text-gray-500 mb-6 text-sm">Tin đăng này có thể đã được chủ nhà gỡ bỏ hoặc không còn tồn tại.</p>
+          <button onClick={() => router.push('/')} className="w-full bg-[#1877F2] text-white font-bold py-2.5 px-6 rounded-xl hover:bg-blue-600 transition-all">
+            Quay về trang chủ
+          </button>
         </div>
       </div>
     </div>
@@ -132,7 +130,6 @@ export default function PostDetailPage() {
   const displaySellerName = post.sellerName || post.user?.fullName || 'Người bán';
   const isOwner = currentUser && String(currentUser.id) === String(post.user?.id || post.userId);
 
-  // Danh sách các lý do báo cáo phổ biến
   const REPORT_REASONS = [
     "Tin giả mạo, lừa đảo",
     "Thông tin không chính xác (giá, diện tích...)",
@@ -143,119 +140,118 @@ export default function PostDetailPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] relative overflow-hidden">
+    <div className="min-h-screen bg-[#f8fafc] relative overflow-hidden pb-12">
       
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(20px); }
+          from { opacity: 0; transform: translateY(15px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        .animate-fade-in-up { animation: fadeInUp 0.6s ease-out forwards; }
+        .animate-fade-in-up { animation: fadeInUp 0.4s ease-out forwards; }
       `}} />
 
       <Header />
       
       {/* POPUP TOAST */}
-      <div 
-        className={`fixed top-24 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-500 ease-out ${
-          toast.show ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-10 pointer-events-none'
-        }`}
-      >
-        <div className={`flex items-center gap-3 px-6 py-3.5 rounded-full shadow-lg backdrop-blur-md text-white font-semibold text-sm border border-white/20 ${
-          toast.type === 'error' ? 'bg-red-500/90' : 'bg-[#1877F2]/90'
-        }`}>
-          <span className="text-lg">{toast.type === 'error' ? '⚠️' : '✨'}</span>
+      <div className={`fixed top-24 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-300 ease-out ${toast.show ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-5 pointer-events-none'}`}>
+        <div className={`flex items-center gap-2.5 px-5 py-3 rounded-xl shadow-lg text-white font-medium text-sm ${toast.type === 'error' ? 'bg-red-500' : 'bg-[#1877F2]'}`}>
+          <span className="text-lg">{toast.type === 'error' ? '⚠️' : '✓'}</span>
           {toast.message}
         </div>
       </div>
 
-      <main className="max-w-6xl mx-auto px-4 py-8 animate-fade-in-up relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <main className="max-w-6xl mx-auto px-4 py-6 animate-fade-in-up">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
-          {/* CỘT TRÁI: HÌNH ẢNH VÀ CHI TIẾT */}
-          <div className="lg:col-span-2 space-y-6">
+          {/* CỘT TRÁI: HÌNH ẢNH VÀ CHI TIẾT (Chiếm 8 cột) */}
+          <div className="lg:col-span-8 space-y-6">
             
-            <div className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 group">
+            {/* Khung Hình Ảnh */}
+            <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 group">
               <img 
-                src={post.thumbnail || 'https://via.placeholder.com/600x400?text=No+Image'} 
+                src={post.thumbnail || 'https://via.placeholder.com/1000x600?text=No+Image'} 
                 alt={post.title} 
-                className="w-full h-[420px] object-cover transform group-hover:scale-105 transition-transform duration-700 ease-in-out"
+                className="w-full h-[400px] object-cover"
               />
             </div>
 
-            <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100">
-              <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 mb-4 leading-tight">{post.title}</h1>
+            {/* Khung Thông Tin Chính */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <h1 className="text-xl md:text-2xl font-bold text-gray-900 mb-4 leading-snug">
+                {post.title}
+              </h1>
               
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 pb-6 mb-6">
-                <span className="text-red-500 font-extrabold text-3xl sm:text-4xl tracking-tight">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 pb-5 mb-5">
+                <span className="font-bold text-3xl text-red-500 tracking-tight">
                   {formatPrice(post.price)}
                 </span>
-                <span className="text-gray-700 font-bold bg-gray-100 px-4 py-2 rounded-2xl text-sm flex items-center gap-2">
-                  <span className="text-[#1877F2]">📐</span> Diện tích: <strong className="text-gray-900">{post.area} m²</strong>
-                </span>
+                
+                <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
+                  <span className="text-gray-400 text-sm">📐</span> 
+                  <span className="text-gray-600 text-sm">Diện tích:</span>
+                  <strong className="text-gray-900 text-sm">{post.area} m²</strong>
+                </div>
               </div>
 
-              <div className="text-sm text-gray-600 flex items-start gap-3 font-medium bg-blue-50/40 p-4 rounded-2xl border border-blue-50/60">
-                <span className="text-xl">📍</span>
-                <span className="leading-relaxed text-gray-700">
-                  {post.addressDetail ? `${post.addressDetail}, ` : ''} 
-                  {post.ward ? `${post.ward}, ` : ''} 
-                  {post.districts?.name}, {post.cities?.name}
-                </span>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100">
-              <h2 className="font-extrabold text-lg text-gray-900 mb-5 flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-xl bg-blue-50 text-[#1877F2] flex items-center justify-center text-sm font-bold">📋</span> 
-                Đặc điểm bất động sản
-              </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-                <div className="flex flex-col p-4 bg-gray-50 rounded-2xl border border-gray-100/80">
-                  <span className="text-gray-400 font-semibold text-[11px] uppercase tracking-wider mb-1">Diện tích</span>
-                  <span className="font-bold text-gray-900 text-base">{post.area} m²</span>
-                </div>
-                <div className="flex flex-col p-4 bg-gray-50 rounded-2xl border border-gray-100/80">
-                  <span className="text-gray-400 font-semibold text-[11px] uppercase tracking-wider mb-1">Phòng ngủ</span>
-                  <span className="font-bold text-gray-900 text-base">{post.bedrooms || '--'} phòng</span>
-                </div>
-                <div className="flex flex-col p-4 bg-gray-50 rounded-2xl border border-gray-100/80">
-                  <span className="text-gray-400 font-semibold text-[11px] uppercase tracking-wider mb-1">Phòng tắm</span>
-                  <span className="font-bold text-gray-900 text-base">{post.bathrooms || '--'} phòng</span>
-                </div>
-                <div className="flex flex-col p-4 bg-gray-50 rounded-2xl border border-gray-100/80">
-                  <span className="text-gray-400 font-semibold text-[11px] uppercase tracking-wider mb-1">Pháp lý</span>
-                  <span className="font-bold text-[#1877F2] text-sm truncate">{post.legalDocument || 'Đang cập nhật'}</span>
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-gray-50 border border-gray-100">
+                <span className="text-red-500 text-lg mt-0.5">📍</span>
+                <div className="flex flex-col">
+                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Địa chỉ</span>
+                  <span className="text-gray-700 text-sm font-medium">
+                    {post.addressDetail ? `${post.addressDetail}, ` : ''} 
+                    {post.ward ? `${post.ward}, ` : ''} 
+                    {post.districts?.name}, {post.cities?.name}
+                  </span>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100">
-              <h2 className="font-extrabold text-lg text-gray-900 mb-5 flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-xl bg-blue-50 text-[#1877F2] flex items-center justify-center text-sm font-bold">📝</span> 
-                Mô tả chi tiết
+            {/* Khung Đặc Điểm */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <h2 className="font-bold text-lg text-gray-900 mb-4 flex items-center gap-2">
+                <span className="text-[#1877F2]">📋</span> Tổng quan bất động sản
               </h2>
-              <div className="text-[15px] text-gray-700 whitespace-pre-wrap leading-relaxed font-normal bg-gray-50/50 p-6 rounded-2xl border border-gray-100">
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: 'Diện tích', value: `${post.area} m²`, icon: '📐' },
+                  { label: 'Phòng ngủ', value: `${post.bedrooms || '--'} PN`, icon: '🛏️' },
+                  { label: 'Phòng tắm', value: `${post.bathrooms || '--'} WC`, icon: '🛁' },
+                  { label: 'Pháp lý', value: post.legalDocument || 'Đang cập nhật', icon: '📄', highlight: true }
+                ].map((item, idx) => (
+                  <div key={idx} className="flex flex-col p-4 bg-gray-50 rounded-xl border border-gray-100">
+                    <div className="text-gray-400 mb-1.5 text-base">{item.icon}</div>
+                    <span className="text-gray-500 text-[11px] uppercase tracking-wider mb-0.5">{item.label}</span>
+                    <span className={`font-semibold text-sm ${item.highlight ? 'text-[#1877F2] truncate' : 'text-gray-900'}`}>{item.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Khung Mô Tả */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <h2 className="font-bold text-lg text-gray-900 mb-4 flex items-center gap-2">
+                <span className="text-[#1877F2]">📝</span> Thông tin chi tiết
+              </h2>
+              <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
                 {post.content}
               </div>
             </div>
           </div>
 
-          {/* CỘT PHẢI: THÔNG TIN NGƯỜI BÁN */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 sticky top-28 space-y-6">
+          {/* CỘT PHẢI: THÔNG TIN NGƯỜI BÁN (Chiếm 4 cột) */}
+          <div className="lg:col-span-4">
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 sticky top-24">
               
-              <div className="flex items-center gap-4 pb-6 border-b border-gray-100">
-                <div className="relative">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#1877F2] to-blue-400 text-white flex items-center justify-center font-bold text-xl shadow-md">
-                    {displaySellerName.charAt(0).toUpperCase()}
-                  </div>
-                  <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full"></span>
+              {/* Thẻ Người Bán */}
+              <div className="flex items-center gap-4 pb-6 border-b border-gray-100 mb-6">
+                <div className="w-12 h-12 rounded-full bg-[#1877F2] text-white flex items-center justify-center font-bold text-xl flex-shrink-0">
+                  {displaySellerName.charAt(0).toUpperCase()}
                 </div>
-                <div className="overflow-hidden">
-                  <h3 className="font-bold text-gray-900 text-base truncate">{displaySellerName}</h3>
-                  <span className="inline-flex items-center gap-1 text-[11px] text-[#1877F2] bg-blue-50 font-semibold px-2.5 py-0.5 rounded-full mt-1">
-                    🟢 {post.user?.role === 'AGENT' ? 'Môi giới' : 'Người bán'}
+                <div className="overflow-hidden flex-1">
+                  <h3 className="font-bold text-gray-900 text-base truncate mb-1">{displaySellerName}</h3>
+                  <span className="inline-block text-[11px] font-semibold px-2.5 py-0.5 bg-blue-50 text-blue-600 rounded-md border border-blue-100">
+                    {post.user?.role === 'AGENT' ? 'Chuyên viên môi giới' : 'Cá nhân bán'}
                   </span>
                 </div>
               </div>
@@ -265,8 +261,9 @@ export default function PostDetailPage() {
                   <>
                     <a 
                       href={`tel:${post.phone || post.user?.phoneNumber || '0901234567'}`}
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2.5 transition-all shadow-sm active:scale-[0.98]"
+                      className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors"
                     >
+                      <span>📞</span>
                       <span>{post.phone || post.user?.phoneNumber || '0901234567'}</span>
                     </a>
                     
@@ -279,22 +276,25 @@ export default function PostDetailPage() {
                         const sellerId = post.user?.id || post.userId;
                         router.push(`/chat?sellerId=${sellerId}&sellerName=${encodeURIComponent(displaySellerName)}&postId=${post.id}`);
                       }} 
-                      className="w-full bg-white border border-gray-200 text-[#1877F2] hover:bg-blue-50/50 font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2.5 transition-all shadow-sm active:scale-[0.98]"
+                      className="w-full bg-white border border-[#1877F2] text-[#1877F2] hover:bg-blue-50 font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors"
                     >
-                      Chat với {displaySellerName}
+                      <span>💬</span>
+                      <span>Chat với {displaySellerName}</span>
                     </button>
 
-                    {/* 🌟 NÚT MỞ MODAL BÁO CÁO VI PHẠM (Chỉ hiện khi không phải chủ bài) */}
                     <button 
                       onClick={() => setReportModal(true)}
-                      className="w-full mt-2 text-red-400 hover:text-red-600 hover:bg-red-50 text-sm font-semibold py-2.5 rounded-xl transition-colors flex justify-center items-center gap-1.5"
+                      className="w-full mt-4 text-gray-400 hover:text-red-500 text-xs font-medium py-2 transition-colors flex justify-center items-center gap-1.5"
                     >
-                      🚩 Báo cáo vi phạm
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
+                      </svg>
+                      Báo cáo tin đăng
                     </button>
                   </>
                 ) : (
-                  <div className="text-center text-gray-500 italic py-4 bg-gray-50 rounded-2xl">
-                    Đây là tin đăng của bạn
+                  <div className="text-center py-4 bg-gray-50 rounded-xl border border-gray-100">
+                    <span className="text-gray-500 text-sm font-medium">Đây là tin đăng của bạn</span>
                   </div>
                 )}
               </div>
@@ -304,62 +304,57 @@ export default function PostDetailPage() {
         </div>
       </main>
 
-      {/* 🌟 MODAL BÁO CÁO VI PHẠM 🌟 */}
+      {/* MODAL BÁO CÁO VI PHẠM */}
       {reportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-fade-in-up">
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-red-50/30">
-              <h3 className="font-extrabold text-gray-800 text-lg flex items-center gap-2 text-red-600">
-                🚩 Báo cáo tin đăng này
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full overflow-hidden animate-fade-in-up">
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
+                <span className="text-red-500">🚩</span> Báo cáo tin đăng
               </h3>
               <button 
                 onClick={() => setReportModal(false)} 
-                className="text-gray-400 hover:text-red-500 font-bold text-2xl"
+                className="text-gray-400 hover:text-red-500 text-xl font-bold leading-none"
               >
                 &times;
               </button>
             </div>
             
-            <form onSubmit={submitReport} className="p-6">
-              <p className="text-sm text-gray-500 mb-4">
-                Vui lòng chọn lý do để giúp Nhà Tốt kiểm tra và xử lý kịp thời. Thông tin người báo cáo sẽ được bảo mật.
+            <form onSubmit={submitReport} className="p-5">
+              <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+                Vui lòng chọn lý do để hệ thống kiểm tra và xử lý. Thông tin của bạn sẽ được bảo mật.
               </p>
               
-              <div className="space-y-3 mb-6">
+              <div className="space-y-2 mb-5">
                 {REPORT_REASONS.map((reason, idx) => (
                   <label 
                     key={idx} 
                     className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
-                      reportReason === reason ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:bg-gray-50'
+                      reportReason === reason ? 'border-red-500 bg-red-50' : 'border-gray-100 hover:bg-gray-50'
                     }`}
                   >
-                    <input 
-                      type="radio" 
-                      name="reportReason" 
-                      value={reason} 
-                      checked={reportReason === reason}
-                      onChange={(e) => setReportReason(e.target.value)}
-                      className="w-4 h-4 text-red-600 focus:ring-red-500 cursor-pointer" 
-                    />
-                    <span className={`text-sm ${reportReason === reason ? 'font-bold text-red-700' : 'text-gray-700'}`}>
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${reportReason === reason ? 'border-red-500' : 'border-gray-300'}`}>
+                      {reportReason === reason && <div className="w-2 h-2 bg-red-500 rounded-full"></div>}
+                    </div>
+                    <span className={`text-sm ${reportReason === reason ? 'font-semibold text-red-600' : 'text-gray-600'}`}>
                       {reason}
                     </span>
                   </label>
                 ))}
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex gap-2.5">
                 <button 
                   type="button" 
                   onClick={() => setReportModal(false)} 
-                  className="flex-1 bg-gray-100 text-gray-600 font-bold py-3 rounded-xl hover:bg-gray-200 transition-colors"
+                  className="flex-1 bg-gray-100 text-gray-700 font-semibold py-2.5 rounded-xl hover:bg-gray-200 transition-colors text-sm"
                 >
-                  Hủy bỏ
+                  Hủy
                 </button>
                 <button 
                   type="submit" 
                   disabled={isReporting || !reportReason} 
-                  className="flex-1 bg-red-500 text-white font-bold py-3 rounded-xl hover:bg-red-600 transition-colors shadow-md shadow-red-500/30 flex justify-center items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 bg-red-500 text-white font-semibold py-2.5 rounded-xl hover:bg-red-600 transition-colors disabled:opacity-50 text-sm"
                 >
                   {isReporting ? 'Đang gửi...' : 'Gửi báo cáo'}
                 </button>
