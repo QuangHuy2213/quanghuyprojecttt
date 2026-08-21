@@ -1,16 +1,59 @@
 'use client';
 
-import React, { useState } from 'react';
-import Header from '../../components/Header';
+import React, { useState, useEffect } from 'react';
+import Header from '@/components/Header'; // Dùng @/ để tránh lỗi đường dẫn nhé
+import { apiUrl } from '@/services/api'; 
 
 export default function ContactPage() {
-  const [formData, setFormData] = useState({ name: '', phone: '', email: '', message: '' });
+  const [formData, setFormData] = useState({ name: '', phone: '', email: '', subject: '', message: '' });
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // 🌟 THÊM ĐOẠN NÀY: Tự động lấy thông tin User khi trang vừa load
+  useEffect(() => {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        setFormData(prev => ({
+          ...prev,
+          name: user.fullName || '',
+          email: user.email || '',
+          // Nếu lúc login bạn có lưu phoneNumber thì nó sẽ hiện, nếu không sẽ để trống
+          phone: user.phoneNumber || '' 
+        }));
+      } catch (error) {
+        console.error("Lỗi lấy dữ liệu user:", error);
+      }
+    }
+  }, []); // [] đảm bảo code này chỉ chạy 1 lần duy nhất khi mở trang
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitted(true);
-    // Xử lý gửi form API ở đây (nếu có backend)
+    setIsLoading(true);
+
+    try {
+      const res = await fetch(apiUrl('contacts'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: formData.name,
+          email: formData.email,
+          subject: formData.subject,
+          message: `SĐT Khách hàng: ${formData.phone}\n\nNội dung: ${formData.message}`
+        })
+      });
+
+      if (res.ok) {
+        setIsSubmitted(true);
+      } else {
+        alert('Có lỗi xảy ra, vui lòng thử lại sau!');
+      }
+    } catch (error) {
+      console.error("Lỗi gửi liên hệ:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -18,7 +61,7 @@ export default function ContactPage() {
       <Header />
       
       <main className="max-w-4xl mx-auto py-12 px-4 flex-grow w-full">
-        <div className="bg-white p-8 sm:p-12 rounded-3xl shadow-xl border border-gray-100">
+        <div className="bg-white p-8 sm:p-12 rounded-3xl shadow-xl border border-gray-100 animate-fade-in-up">
           <div className="text-center mb-10">
             <h1 className="text-3xl font-extrabold text-gray-800">Liên hệ & Hỗ trợ</h1>
             <p className="text-gray-500 mt-2 text-sm">Chúng tôi luôn sẵn sàng lắng nghe và hỗ trợ bạn 24/7</p>
@@ -55,22 +98,48 @@ export default function ContactPage() {
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
+                
+                {/* Dòng 1: Tên & SĐT */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Họ và tên *</label>
-                    <input required type="text" placeholder="Nhập họ tên của bạn..." className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1877F2]" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                    <input required type="text" placeholder="Nhập họ tên của bạn..." className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1877F2] text-gray-800 font-medium" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Số điện thoại *</label>
-                    <input required type="tel" placeholder="Nhập số điện thoại..." className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1877F2]" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+                    <input required type="tel" placeholder="Nhập số điện thoại..." className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1877F2] text-gray-800 font-medium" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Nội dung yêu cầu *</label>
-                  <textarea required rows={4} placeholder="Nhập nội dung cần hỗ trợ..." className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1877F2]" value={formData.message} onChange={e => setFormData({...formData, message: e.target.value})} />
+
+                {/* Dòng 2: Email & Chủ đề */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Email *</label>
+                    <input required type="email" placeholder="Nhập email của bạn..." className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1877F2] text-gray-800 font-medium" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Chủ đề cần hỗ trợ *</label>
+                    <select required className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1877F2] text-gray-800 font-medium" value={formData.subject} onChange={e => setFormData({...formData, subject: e.target.value})}>
+                      <option value="" disabled>-- Chọn chủ đề --</option>
+                      <option value="Hỗ trợ đăng tin">Hỗ trợ đăng tin</option>
+                      <option value="Tài khoản bị khóa">Tài khoản bị khóa</option>
+                      <option value="Báo cáo lừa đảo">Báo cáo lừa đảo</option>
+                      <option value="Góp ý dịch vụ">Góp ý dịch vụ</option>
+                      <option value="Khác">Khác...</option>
+                    </select>
+                  </div>
                 </div>
-                <button type="submit" className="w-full bg-[#1877F2] hover:bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-md transition-all text-sm">
-                  Gửi yêu cầu hỗ trợ
+
+                {/* Dòng 3: Nội dung */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-600 uppercase mb-1">Nội dung chi tiết *</label>
+                  <textarea required rows={4} placeholder="Nhập nội dung cần hỗ trợ..." className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1877F2] text-gray-800" value={formData.message} onChange={e => setFormData({...formData, message: e.target.value})} />
+                </div>
+
+                <button disabled={isLoading} type="submit" className="w-full bg-[#1877F2] hover:bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-md transition-all text-sm disabled:opacity-50 flex justify-center items-center gap-2">
+                  {isLoading ? (
+                    <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Đang gửi...</>
+                  ) : 'Gửi yêu cầu hỗ trợ'}
                 </button>
               </form>
             )}

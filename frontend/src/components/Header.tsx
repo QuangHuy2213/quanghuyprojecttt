@@ -5,29 +5,76 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import UserDropdown from './UserDropdown';
 import { apiUrl } from '../services/api';
+import { supabase } from '../services/supabase'; // 🌟 ĐÃ THÊM: Import Supabase để lắng nghe Realtime
 
 export default function Header() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   
+  // STATE QUẢN LÝ DROPDOWN
   const [showFavorites, setShowFavorites] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false); // 🌟 ĐÃ THÊM: State bật/tắt menu thông báo
+  
+  // STATE QUẢN LÝ DỮ LIỆU
   const [favoritePosts, setFavoritePosts] = useState<any[]>([]);
   const [isLoadingFavs, setIsLoadingFavs] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]); // 🌟 ĐÃ THÊM: Danh sách thông báo
+  const [unreadCount, setUnreadCount] = useState(0); // 🌟 ĐÃ THÊM: Số lượng chưa đọc
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
+    const token = localStorage.getItem('access_token'); // Cần token để gọi API thông báo
+
     if (storedUser) {
       const parsedUser = JSON.parse(storedUser);
       setUser(parsedUser);
 
-      // 🌟 Lấy danh sách yêu thích ngay khi load trang để lấy số lượng (Badge)
+      // 1. TẢI DANH SÁCH YÊU THÍCH
       fetch(apiUrl(`posts/favorites/${parsedUser.id}`))
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) setFavoritePosts(data);
         })
         .catch(err => console.error('Lỗi tải danh sách yêu thích', err));
+
+      // 2. TẢI DANH SÁCH THÔNG BÁO LẦN ĐẦU (🌟 MỚI)
+      if (token) {
+        fetch(apiUrl('notifications'), {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) {
+            setNotifications(data);
+            setUnreadCount(data.filter((n: any) => !n.isRead && !n.is_read).length);
+          }
+        })
+        .catch(err => console.error('Lỗi tải thông báo', err));
+      }
+
+      // 3. LẮNG NGHE THÔNG BÁO MỚI TỪ SUPABASE (REALTIME) (🌟 MỚI)
+      const channel = supabase
+        .channel(`global_notifications_${parsedUser.id}`)
+        .on('postgres_changes', { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'notifications' 
+          }, 
+          (payload) => {
+            const newNotif = payload.new;
+            // Nếu đúng là thông báo của mình thì mới hiện
+            if (String(newNotif.user_id) === String(parsedUser.id)) {
+              setNotifications(prev => [newNotif, ...prev]); // Đẩy lên đầu danh sách
+              setUnreadCount(prev => prev + 1); // Tăng số đếm
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, []);
 
@@ -36,7 +83,11 @@ export default function Header() {
     localStorage.removeItem('user');
     setUser(null);
     setShowUserMenu(false);
-    setFavoritePosts([]); // Xóa list yêu thích khi đăng xuất
+    setShowFavorites(false);
+    setShowNotifications(false);
+    setFavoritePosts([]); 
+    setNotifications([]);
+    setUnreadCount(0);
     router.push('/');
   };
 
@@ -45,8 +96,11 @@ export default function Header() {
     return Number(price).toLocaleString('vi-VN');
   };
 
+  // --- XỬ LÝ ĐÓNG/MỞ CÁC MENU TRÁNH ĐÈ LÊN NHAU ---
+  
   const toggleFavorites = async () => {
     setShowUserMenu(false);
+    setShowNotifications(false); // Tắt thông báo khi mở trái tim
     if (!user) {
       alert('Vui lòng đăng nhập để xem danh sách đã lưu!');
       router.push('/login');
@@ -56,7 +110,6 @@ export default function Header() {
     const willShow = !showFavorites;
     setShowFavorites(willShow);
 
-    // Vẫn gọi lại API khi mở dropdown để cập nhật dữ liệu mới nhất (đề phòng user vừa thả tim ở trang khác)
     if (willShow) {
       setIsLoadingFavs(true);
       try {
@@ -69,6 +122,17 @@ export default function Header() {
         setIsLoadingFavs(false);
       }
     }
+  };
+
+  const toggleNotifications = () => {
+    setShowUserMenu(false);
+    setShowFavorites(false); // Tắt trái tim khi mở thông báo
+    if (!user) {
+      alert('Vui lòng đăng nhập để xem thông báo!');
+      router.push('/login');
+      return;
+    }
+    setShowNotifications(!showNotifications);
   };
 
   const handleRemoveFavorite = async (e: React.MouseEvent, postId: number) => {
@@ -87,6 +151,24 @@ export default function Header() {
       });
     } catch (error) {
       console.error('Lỗi khi xóa tin đã lưu:', error);
+    }
+  };
+
+  // 🌟 ĐÃ THÊM: Hàm Đánh dấu tất cả là đã đọc
+  const handleMarkAllAsRead = async () => {
+    const token = localStorage.getItem('access_token');
+    if (!token) return;
+
+    try {
+      await fetch(apiUrl('notifications/read-all'), {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      // Cập nhật giao diện lập tức
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true, is_read: true })));
+      setUnreadCount(0);
+    } catch (error) {
+      console.error('Lỗi đánh dấu đã đọc', error);
     }
   };
 
@@ -109,11 +191,10 @@ export default function Header() {
         {/* NÚT TÍNH NĂNG BÊN PHẢI */}
         <div className="flex items-center gap-2.5">
           
-          {/* NÚT TRÁI TIM (Tin đã lưu) */}
+          {/* ===================== NÚT TRÁI TIM ===================== */}
           <div className="relative">
             <button 
               onClick={toggleFavorites}
-              // Thêm class "relative" vào đây để cục đỏ bám sát góc nút
               className={`relative flex items-center justify-center w-10 h-10 rounded-full shadow-sm transition-all ${
                 showFavorites ? 'bg-white text-[#1877F2] ring-2 ring-white/50' : 'bg-white text-gray-700 hover:bg-gray-100'
               }`} 
@@ -123,7 +204,6 @@ export default function Header() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
               </svg>
 
-              {/* 🌟 CỤC BADGE THÔNG BÁO SỐ LƯỢNG 🌟 */}
               {user && favoritePosts.length > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold px-1.5 min-w-[20px] h-5 rounded-full flex items-center justify-center border-2 border-[#1877F2] shadow-sm">
                   {favoritePosts.length > 99 ? '99+' : favoritePosts.length}
@@ -175,10 +255,72 @@ export default function Header() {
             )}
           </div>
 
-          {/* NÚT THÔNG BÁO */}
-          <button className="flex items-center justify-center w-10 h-10 bg-white text-gray-700 hover:bg-gray-100 rounded-full shadow-sm transition-all" title="Thông báo">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
-          </button>
+          {/* ===================== NÚT THÔNG BÁO (🌟 MỚI NÂNG CẤP) ===================== */}
+          <div className="relative">
+            <button 
+              onClick={toggleNotifications}
+              className={`relative flex items-center justify-center w-10 h-10 rounded-full shadow-sm transition-all ${
+                showNotifications ? 'bg-white text-[#1877F2] ring-2 ring-white/50' : 'bg-white text-gray-700 hover:bg-gray-100'
+              }`} 
+              title="Thông báo"
+            >
+              <svg className="w-5 h-5" fill={showNotifications ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              
+              {/* BADGE THÔNG BÁO CHƯA ĐỌC */}
+              {user && unreadCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold px-1.5 min-w-[20px] h-5 rounded-full flex items-center justify-center border-2 border-[#1877F2] shadow-sm">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </button>
+
+            {/* DROPDOWN DANH SÁCH THÔNG BÁO */}
+            {showNotifications && (
+              <div className="absolute top-full right-0 mt-3 w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden text-gray-800 flex flex-col z-50">
+                <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                  <h3 className="font-bold text-gray-700">Thông báo</h3>
+                  <div className="flex items-center gap-4">
+                    {unreadCount > 0 && (
+                      <button onClick={handleMarkAllAsRead} className="text-[#1877F2] text-xs font-semibold hover:underline">
+                        Đánh dấu đã đọc
+                      </button>
+                    )}
+                    <button onClick={() => setShowNotifications(false)} className="text-gray-400 hover:text-red-500 text-2xl leading-none">&times;</button>
+                  </div>
+                </div>
+                
+                <div className="max-h-[60vh] overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="p-8 text-center text-gray-400 text-sm flex flex-col items-center">
+                      <span className="text-3xl mb-2">🔕</span>
+                      Bạn chưa có thông báo nào
+                    </div>
+                  ) : (
+                    notifications.map((notif) => {
+                      const isUnread = !notif.isRead && !notif.is_read;
+                      return (
+                        <div key={notif.id} className={`flex gap-3 p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer ${isUnread ? 'bg-blue-50/40' : ''}`}>
+                          {/* Chấm xanh lá báo chưa đọc */}
+                          <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${isUnread ? 'bg-[#1877F2]' : 'bg-transparent'}`}></div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className={`text-sm ${isUnread ? 'font-bold text-gray-800' : 'font-semibold text-gray-600'}`}>
+                              {notif.title}
+                            </h4>
+                            <p className="text-xs text-gray-500 mt-1 line-clamp-2 leading-relaxed">{notif.content}</p>
+                            <span className="text-[10px] text-gray-400 font-medium mt-2 block">
+                              {new Date(notif.created_at || notif.createdAt).toLocaleString('vi-VN')}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
          {/* NÚT LIÊN HỆ / QUẢN LÝ CHAT */}
           <Link href="/chat" className="hidden md:flex items-center gap-2 bg-white text-gray-700 hover:bg-gray-100 px-4 py-2 rounded-full shadow-sm text-sm font-semibold transition-all">
@@ -203,7 +345,11 @@ export default function Header() {
           {/* MENU NGƯỜI DÙNG */}
           <div className="relative">
             <button 
-              onClick={() => { setShowUserMenu(!showUserMenu); setShowFavorites(false); }}
+              onClick={() => { 
+                setShowUserMenu(!showUserMenu); 
+                setShowFavorites(false); 
+                setShowNotifications(false); // Đóng thông báo khi mở User Menu
+              }}
               className="flex items-center gap-2 bg-white text-gray-700 hover:bg-gray-100 px-3 py-2 rounded-full shadow-sm transition-all"
             >
               <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">

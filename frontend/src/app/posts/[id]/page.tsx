@@ -14,6 +14,11 @@ export default function PostDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
 
+  // 🌟 THÊM STATE CHO TÍNH NĂNG BÁO CÁO VI PHẠM
+  const [reportModal, setReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [isReporting, setIsReporting] = useState(false);
+
   // STATE QUẢN LÝ POPUP (TOAST NOTIFICATION)
   const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({
     show: false,
@@ -29,17 +34,14 @@ export default function PostDetailPage() {
   };
 
   useEffect(() => {
-    // Lấy user hiện tại để kiểm tra quyền sở hữu
     const storedUser = localStorage.getItem('user');
     if (storedUser) setCurrentUser(JSON.parse(storedUser));
 
     if (id) {
-      // 1. Tự động ghi nhận vào lịch sử xem tin
       const viewedPosts = JSON.parse(localStorage.getItem('viewed_posts') || '[]');
       const updatedHistory = [Number(id), ...viewedPosts.filter((item: number) => item !== Number(id))].slice(0, 20);
       localStorage.setItem('viewed_posts', JSON.stringify(updatedHistory));
 
-      // 2. Lấy dữ liệu bài viết từ API
       fetch(apiUrl(`posts/${id}`))
         .then(res => res.json())
         .then(data => {
@@ -59,7 +61,45 @@ export default function PostDetailPage() {
     return `${(price / 1_000_000).toLocaleString('vi-VN')} triệu`;
   };
 
-  // MÀN HÌNH LOADING
+  // 🌟 HÀM XỬ LÝ GỬI BÁO CÁO VI PHẠM TỚI BACKEND
+  const submitReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!currentUser) {
+      showToast('Vui lòng đăng nhập để thực hiện báo cáo!', 'error');
+      return router.push('/login');
+    }
+
+    if (!reportReason) {
+      return showToast('Vui lòng chọn lý do báo cáo!', 'error');
+    }
+
+    setIsReporting(true);
+    try {
+      const res = await fetch(apiUrl('reports'), { // 👈 Gọi API backend bạn vừa tạo
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          postId: post.id,
+          reason: reportReason
+        })
+      });
+
+      if (res.ok) {
+        showToast('Báo cáo thành công. Cảm ơn bạn!', 'success');
+        setReportModal(false);
+        setReportReason(''); // Reset form
+      } else {
+        showToast('Có lỗi xảy ra, không thể gửi báo cáo.', 'error');
+      }
+    } catch (error) {
+      showToast('Lỗi kết nối máy chủ.', 'error');
+    } finally {
+      setIsReporting(false);
+    }
+  };
+
   if (isLoading) return (
     <div className="min-h-screen bg-[#f8fafc] flex flex-col">
       <Header />
@@ -75,7 +115,6 @@ export default function PostDetailPage() {
     </div>
   );
 
-  // MÀN HÌNH LỖI KHÔNG TÌM THẤY BÀI VIẾT
   if (!post) return (
     <div className="min-h-screen bg-[#f8fafc] flex flex-col">
       <Header />
@@ -90,10 +129,18 @@ export default function PostDetailPage() {
     </div>
   );
 
-  // Biến lưu tên hiển thị thống nhất
   const displaySellerName = post.sellerName || post.user?.fullName || 'Người bán';
-  // Kiểm tra xem người đang xem có phải chủ bài đăng không
   const isOwner = currentUser && String(currentUser.id) === String(post.user?.id || post.userId);
+
+  // Danh sách các lý do báo cáo phổ biến
+  const REPORT_REASONS = [
+    "Tin giả mạo, lừa đảo",
+    "Thông tin không chính xác (giá, diện tích...)",
+    "Đã bán nhưng chưa gỡ bài",
+    "Hình ảnh không đúng thực tế",
+    "Nội dung phản cảm, sai quy định",
+    "Lý do khác..."
+  ];
 
   return (
     <div className="min-h-screen bg-[#f8fafc] relative overflow-hidden">
@@ -197,6 +244,7 @@ export default function PostDetailPage() {
           {/* CỘT PHẢI: THÔNG TIN NGƯỜI BÁN */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 sticky top-28 space-y-6">
+              
               <div className="flex items-center gap-4 pb-6 border-b border-gray-100">
                 <div className="relative">
                   <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#1877F2] to-blue-400 text-white flex items-center justify-center font-bold text-xl shadow-md">
@@ -221,6 +269,7 @@ export default function PostDetailPage() {
                     >
                       <span>{post.phone || post.user?.phoneNumber || '0901234567'}</span>
                     </a>
+                    
                     <button 
                       onClick={() => {
                         if (!currentUser) {
@@ -234,6 +283,14 @@ export default function PostDetailPage() {
                     >
                       Chat với {displaySellerName}
                     </button>
+
+                    {/* 🌟 NÚT MỞ MODAL BÁO CÁO VI PHẠM (Chỉ hiện khi không phải chủ bài) */}
+                    <button 
+                      onClick={() => setReportModal(true)}
+                      className="w-full mt-2 text-red-400 hover:text-red-600 hover:bg-red-50 text-sm font-semibold py-2.5 rounded-xl transition-colors flex justify-center items-center gap-1.5"
+                    >
+                      🚩 Báo cáo vi phạm
+                    </button>
                   </>
                 ) : (
                   <div className="text-center text-gray-500 italic py-4 bg-gray-50 rounded-2xl">
@@ -241,10 +298,77 @@ export default function PostDetailPage() {
                   </div>
                 )}
               </div>
+
             </div>
           </div>
         </div>
       </main>
+
+      {/* 🌟 MODAL BÁO CÁO VI PHẠM 🌟 */}
+      {reportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-fade-in-up">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-red-50/30">
+              <h3 className="font-extrabold text-gray-800 text-lg flex items-center gap-2 text-red-600">
+                🚩 Báo cáo tin đăng này
+              </h3>
+              <button 
+                onClick={() => setReportModal(false)} 
+                className="text-gray-400 hover:text-red-500 font-bold text-2xl"
+              >
+                &times;
+              </button>
+            </div>
+            
+            <form onSubmit={submitReport} className="p-6">
+              <p className="text-sm text-gray-500 mb-4">
+                Vui lòng chọn lý do để giúp Nhà Tốt kiểm tra và xử lý kịp thời. Thông tin người báo cáo sẽ được bảo mật.
+              </p>
+              
+              <div className="space-y-3 mb-6">
+                {REPORT_REASONS.map((reason, idx) => (
+                  <label 
+                    key={idx} 
+                    className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                      reportReason === reason ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <input 
+                      type="radio" 
+                      name="reportReason" 
+                      value={reason} 
+                      checked={reportReason === reason}
+                      onChange={(e) => setReportReason(e.target.value)}
+                      className="w-4 h-4 text-red-600 focus:ring-red-500 cursor-pointer" 
+                    />
+                    <span className={`text-sm ${reportReason === reason ? 'font-bold text-red-700' : 'text-gray-700'}`}>
+                      {reason}
+                    </span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="flex gap-3">
+                <button 
+                  type="button" 
+                  onClick={() => setReportModal(false)} 
+                  className="flex-1 bg-gray-100 text-gray-600 font-bold py-3 rounded-xl hover:bg-gray-200 transition-colors"
+                >
+                  Hủy bỏ
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isReporting || !reportReason} 
+                  className="flex-1 bg-red-500 text-white font-bold py-3 rounded-xl hover:bg-red-600 transition-colors shadow-md shadow-red-500/30 flex justify-center items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isReporting ? 'Đang gửi...' : 'Gửi báo cáo'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
