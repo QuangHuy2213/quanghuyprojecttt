@@ -37,6 +37,7 @@ export class AdminService {
         avatarUrl: true,
         role: true,
         createdAt: true,
+        isLocked: true, // 🌟 THÊM DÒNG NÀY ĐỂ TRẢ VỀ TRẠNG THÁI KHÓA
       }
     });
   }
@@ -63,19 +64,41 @@ export class AdminService {
         fullName: data.fullName,
         phoneNumber: data.phoneNumber,
         role: data.role || 'USER',
+        isLocked: false, // Mặc định khi tạo mới là không khóa
       }
     });
   }
 
   async updateUserDetails(id: string, data: any) {
-    return this.prisma.user.update({
+    // 1. Cập nhật thông tin và trạng thái khóa của User
+    const updatedUser = await this.prisma.user.update({
       where: { id },
       data: {
         fullName: data.fullName,
         phoneNumber: data.phoneNumber,
         role: data.role,
+        isLocked: data.isLocked,
       }
     });
+
+    // 2. 🌟 XỬ LÝ TRẠNG THÁI BÀI VIẾT DỰA TRÊN TRẠNG THÁI KHÓA 🌟
+    if (data.isLocked !== undefined) {
+      if (data.isLocked === true) {
+        // Nếu bị khóa -> Ẩn tất cả bài viết
+        await this.prisma.posts.updateMany({
+          where: { userId: id },
+          data: { status: 'HIDDEN' }
+        });
+      } else {
+        // Nếu mở khóa -> Khôi phục bài viết về trạng thái ACTIVE (hoặc PENDING tùy ý bạn)
+        await this.prisma.posts.updateMany({
+          where: { userId: id },
+          data: { status: 'ACTIVE' }
+        });
+      }
+    }
+
+    return updatedUser;
   }
 
   async deleteUser(id: string) {
@@ -174,11 +197,13 @@ export class AdminService {
       data: { status }
     });
   }
+
   async deleteContact(id: number) {
     return this.prisma.contact.delete({
       where: { id }
     });
   }
+
   // 🌟 THÊM HÀM XÓA BÀI VIẾT DÀNH CHO ADMIN
   async deletePostByAdmin(postId: number, reportId: number) {
     // 1. Xóa bài viết trong bảng Posts
@@ -194,6 +219,7 @@ export class AdminService {
       data: { status: 'RESOLVED' }
     });
   }
+
   async deleteReport(id: number) {
     return this.prisma.report.delete({
       where: { id }

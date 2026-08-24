@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, Res, UseGuards, Patch } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { AuthGuard } from '@nestjs/passport';
+import { AuthGuard } from '@nestjs/passport'; // Import trực tiếp AuthGuard từ đây
 import {
   ApiBody,
   ApiCreatedResponse,
@@ -8,6 +8,7 @@ import {
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import {
   ForgotPasswordDto,
@@ -38,6 +39,19 @@ export class AuthController {
     return this.authService.login(body);
   }
 
+  // 🌟 ĐÃ CẬP NHẬT: Sử dụng AuthGuard('jwt') trực tiếp
+  @Patch('upgrade-to-agent')
+  @UseGuards(AuthGuard('jwt')) 
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Nâng cấp tài khoản hiện tại từ USER lên AGENT' })
+  @ApiOkResponse({ description: 'Nâng cấp tài khoản thành công' })
+  @ApiUnauthorizedResponse({ description: 'Chưa đăng nhập hoặc token hết hạn' })
+  async upgradeToAgent(@Req() req) {
+    // Với AuthGuard('jwt'), user sẽ nằm trong req.user
+    const userId = req.user.userId || req.user.id || req.user.sub;
+    return this.authService.upgradeToAgent(userId);
+  }
+
   @Post('forgot-password')
   @ApiOperation({ summary: 'Gửi email đặt lại mật khẩu' })
   @ApiBody({ type: ForgotPasswordDto })
@@ -54,31 +68,23 @@ export class AuthController {
     return this.authService.resetPassword(body.token, body.newPassword);
   }
 
-  // --- GOOGLE OAUTH ROUTES (MỚI THÊM) ---
+  // --- GOOGLE OAUTH ROUTES ---
 
-  // API 1: Bật Popup đăng nhập Google
   @Get('google')
   @UseGuards(AuthGuard('google'))
   @ApiOperation({ summary: 'Chuyển hướng sang Google để đăng nhập' })
   @ApiOkResponse({ description: 'Chuyển hướng OAuth sang Google' })
-  async googleAuth(@Req() req) {
-    // AuthGuard sẽ tự động chuyển hướng người dùng sang Google
-  }
+  async googleAuth(@Req() req) {}
 
-  // API 2: Google trả kết quả về đây
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
   @ApiOperation({ summary: 'Nhận callback từ Google OAuth' })
   @ApiOkResponse({ description: 'Đăng nhập Google thành công và redirect về frontend' })
   async googleAuthRedirect(@Req() req, @Res() res) {
-    // Xử lý lưu user và tạo token
     const loginData = await this.authService.validateGoogleUser(req.user);
 
-    // Chuyển hướng về Frontend kèm theo token và thông tin user
-    // Thay link bằng tên miền thật Vercel của bạn
-  const frontendUrl = `https://nguyenducquanghuy.vercel.app/auth/callback?token=${loginData.access_token}&user=${encodeURIComponent(JSON.stringify(loginData.user))}`;
+    const frontendUrl = `https://nguyenducquanghuy.vercel.app/auth/callback?token=${loginData.access_token}&user=${encodeURIComponent(JSON.stringify(loginData.user))}`;
     
     return res.redirect(frontendUrl);
   }
-  
 }

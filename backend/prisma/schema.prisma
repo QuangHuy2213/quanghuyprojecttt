@@ -48,7 +48,8 @@ model User {
   avatarUrl        String?
   googleId         String?        @unique 
   role             Role           @default(USER)
-
+  isLocked         Boolean        @default(false)
+  
   posts            posts[]  
   favorites        Favorite[]
 
@@ -124,16 +125,17 @@ model Notification {
 
 // --- 🌟 MỚI: BÁO CÁO VI PHẠM ---
 model Report {
-  id          Int      @id @default(autoincrement())
-  userId      String   // Người thực hiện báo cáo
-  postId      Int?     // Bài đăng bị báo cáo (nếu có)
-  targetUserId String? // Hoặc tài khoản bị báo cáo (nếu có)
-  reason      String   // Lý do báo cáo
-  status      String   @default("PENDING") // PENDING, RESOLVED, IGNORED
-  createdAt   DateTime @default(now())
+  id           Int      @id @default(autoincrement())
+  userId       String   // Người thực hiện báo cáo
+  postId       Int?     // Bài đăng bị báo cáo (nếu có)
+  targetUserId String?  // Hoặc tài khoản bị báo cáo (nếu có)
+  reason       String   // Lý do báo cáo
+  status       String   @default("PENDING") // PENDING, RESOLVED, IGNORED
+  createdAt    DateTime @default(now())
 
-  user        User     @relation(fields: [userId], references: [id])
-  post        posts?   @relation(fields: [postId], references: [id])
+  // Thêm onDelete: Cascade để tự xóa báo cáo khi User hoặc Bài viết bị xóa
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post         posts?   @relation(fields: [postId], references: [id], onDelete: Cascade)
 }
 
 // --- 🌟 MỚI: LIÊN HỆ & TRỢ GIÚP ---
@@ -203,12 +205,15 @@ model posts {
 
   cities          cities?         @relation(fields: [city], references: [code], onDelete: NoAction, onUpdate: NoAction)
   districts       districts?      @relation(fields: [district], references: [code], onDelete: NoAction, onUpdate: NoAction)
-  user            User?           @relation(fields: [userId], references: [id])
+  
+  // 🌟 ĐÃ CẬP NHẬT: Thêm onDelete: Cascade để tự động xóa bài viết khi User bị xóa
+  user            User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
   category        Category?       @relation(fields: [categoryId], references: [id])
   images          Image[]
   favorites       Favorite[]
   
-  // 🌟 ĐÃ THÊM: Mối quan hệ hai chiều với bảng Report
+  // Mối quan hệ hai chiều với bảng Report
   reports         Report[]
 
   createdAt       DateTime        @default(now())

@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsEmail, IsInt, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsEmail, IsInt, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class UpdateUserRoleDto {
   @ApiProperty({ example: 'AGENT', enum: ['USER', 'AGENT', 'ADMIN'] })
@@ -49,6 +49,12 @@ export class UpdateUserDetailsDto {
   @IsOptional()
   @IsString()
   role?: 'USER' | 'AGENT' | 'ADMIN';
+
+  // 🌟 THÊM TRƯỜNG NÀY ĐỂ CHO PHÉP NHẬN LỆNH KHÓA / MỞ KHÓA
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean()
+  isLocked?: boolean;
 }
 
 export class ReviewPostDto {

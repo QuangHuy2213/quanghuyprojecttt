@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -106,5 +106,27 @@ export class AuthService {
         phoneNumber: user.phoneNumber // 🌟 ĐÃ BỔ SUNG SỐ ĐIỆN THOẠI CHO ĐĂNG NHẬP GOOGLE
       } 
     };
+  }
+ async upgradeToAgent(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, fullName: true, role: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Không tìm thấy tài khoản cần nâng cấp.');
+    }
+
+    if (user.role === 'AGENT') {
+      throw new BadRequestException('Tài khoản đã là AGENT.');
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: { role: 'AGENT' },
+      select: { id: true, email: true, fullName: true, role: true },
+    });
+
+    return { message: 'Nâng cấp thành công!', user: updatedUser };
   }
 }
