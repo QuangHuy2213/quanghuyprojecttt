@@ -13,11 +13,11 @@ export class ChatController {
 
   @UseGuards(AuthGuard('jwt'))
   @Post('send')
-  async sendMessage(
-    @Body() body: { postId: number; content: string }, 
-    @Req() req: AuthenticatedRequest
-  ) {
-    const senderId = req.user.userId;
-    return this.chatService.handleMessageWithAI(senderId, Number(body.postId), body.content);
-  }
+  async sendMessage(@Req() req, @Body() body: any) {
+    const senderId = req.user.id; // Lấy từ token đăng nhập
+    const { postId, receiverId, content } = body;
+
+  // Gọi service đã được nâng cấp
+    return this.chatService.handleMessageWithAI(senderId, receiverId, postId, content);
+}
 }
