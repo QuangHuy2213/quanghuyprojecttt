@@ -23,7 +23,11 @@ export default function AdminUsersPage() {
 
   const fetchUsers = () => {
     setLoading(true);
-    fetch(apiUrl('admin/users'))
+    const token = localStorage.getItem('access_token'); // 🌟 THÊM TOKEN
+    
+    fetch(apiUrl('admin/users'), {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) setUsers(data);
@@ -58,18 +62,35 @@ export default function AdminUsersPage() {
     setIsModalOpen(true);
   };
 
-  // --- XỬ LÝ LƯU (THÊM/SỬA) ---
+  // --- 🌟 ĐÃ SỬA: XỬ LÝ LƯU (THÊM/SỬA) 🌟 ---
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const isCreate = modalMode === 'create';
       const url = isCreate ? apiUrl('admin/users') : apiUrl(`admin/users/${editingId}`);
       const method = isCreate ? 'POST' : 'PATCH';
+      const token = localStorage.getItem('access_token'); // Lấy token
+      
+      // 🌟 LỌC DỮ LIỆU: Chỉ gửi những trường được phép
+      let payload = {};
+      if (isCreate) {
+        payload = formData; // Thêm mới thì gửi tất cả
+      } else {
+        // Chế độ Sửa (PATCH): Bỏ email và password ra khỏi cục dữ liệu gửi lên
+        payload = {
+          fullName: formData.fullName,
+          phoneNumber: formData.phoneNumber,
+          role: formData.role
+        };
+      }
 
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` // Gửi kèm token
+        },
+        body: JSON.stringify(payload), // Gửi payload đã lọc sạch
       });
 
       if (res.ok) {
@@ -78,14 +99,14 @@ export default function AdminUsersPage() {
         fetchUsers();
       } else {
         const errorData = await res.json();
-        alert(`Lỗi: ${errorData.message}`);
+        alert(`Lỗi: ${errorData.message || errorData.error}`);
       }
     } catch (error) {
       console.error("Lỗi lưu user:", error);
     }
   };
 
-  // --- XỬ LÝ KHÓA / MỞ KHÓA ---
+  // --- 🌟 ĐÃ SỬA: XỬ LÝ KHÓA / MỞ KHÓA 🌟 ---
   const handleToggleLock = async (user: any) => {
     const isCurrentlyLocked = user.isLocked;
     const confirmMessage = isCurrentlyLocked 
@@ -95,10 +116,15 @@ export default function AdminUsersPage() {
     if (!confirm(confirmMessage)) return;
 
     try {
+      const token = localStorage.getItem('access_token'); // Lấy token
+      
       const res = await fetch(apiUrl(`admin/users/${user.id}`), {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isLocked: !isCurrentlyLocked }),
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify({ isLocked: !isCurrentlyLocked }), // Đã lọc sạch, chỉ gửi isLocked
       });
 
       if (res.ok) {
@@ -112,12 +138,18 @@ export default function AdminUsersPage() {
     }
   };
 
-  // --- XỬ LÝ XÓA ---
+  // --- 🌟 ĐÃ SỬA: XỬ LÝ XÓA 🌟 ---
   const handleDelete = async (userId: string, name: string) => {
     if (!confirm(`🗑️ CẢNH BÁO: Xóa vĩnh viễn tài khoản ${name}? Hành động này sẽ xóa toàn bộ bài đăng liên quan!`)) return;
 
     try {
-      const res = await fetch(apiUrl(`admin/users/${userId}`), { method: 'DELETE' });
+      const token = localStorage.getItem('access_token'); // Lấy token
+      const res = await fetch(apiUrl(`admin/users/${userId}`), { 
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}` 
+        }
+      });
       if (res.ok) {
         setUsers(users.filter(u => u.id !== userId));
       }

@@ -4,11 +4,12 @@ import React, { useEffect, useState, useRef, Suspense } from 'react';
 import Header from '@/components/Header';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/services/supabase'; 
+import { apiUrl } from '@/services/api';
 
 const DEFAULT_AVATAR = 'https://i.imgur.com/L1nYE9z.jpg'; 
 
 // =====================================================================
-// 1. COMPONENT CON: XỬ LÝ LOGIC CHAT VỚI SUPABASE REALTIME
+// 1. COMPONENT CON: XỬ LÝ LOGIC CHAT VÀ POPUP ĐỒNG KIỂM (ESCROW)
 // =====================================================================
 function ChatContent() {
   const router = useRouter();
@@ -16,6 +17,7 @@ function ChatContent() {
   
   const sellerId = searchParams.get('sellerId');
   const sellerName = searchParams.get('sellerName');
+  const postId = searchParams.get('postId'); // 🌟 Nhận thêm postId từ URL nếu có
 
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeChat, setActiveChat] = useState<any>(null);
@@ -26,6 +28,10 @@ function ChatContent() {
   
   // STATE HIỂN THỊ MODAL YÊU CẦU ĐĂNG NHẬP
   const [showAuthModal, setShowAuthModal] = useState(false);
+
+  // 🌟 STATE QUẢN LÝ GIAO DỊCH ĐỒNG KIỂM (ESCROW)
+  const [transaction, setTransaction] = useState<any>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
@@ -45,7 +51,6 @@ function ChatContent() {
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     if (!storedUser) {
-      // THAY THẾ ALERT BẰNG MODAL
       setShowAuthModal(true);
       return;
     }
@@ -81,7 +86,8 @@ function ChatContent() {
           name: sellerName,
           avatar: DEFAULT_AVATAR, 
           lastMessage: 'Bắt đầu cuộc trò chuyện...',
-          time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+          time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+          postId: postId || null
         };
 
         const updatedList = [newChatTarget, ...prevList];
@@ -92,24 +98,41 @@ function ChatContent() {
         return cleanList;
       });
     }
-  }, [sellerId, sellerName, currentUser, router]);
+  }, [sellerId, sellerName, postId, currentUser, router]);
 
-  // [3] LẤY LỊCH SỬ TIN NHẮN 
+  // [3] LẤY LỊCH SỬ TIN NHẮN & KIỂM TRA TRẠNG THÁI GIAO DỊCH ĐỒNG KIỂM
   useEffect(() => {
     if (!currentUser || !activeChat) return;
-    const fetchMessages = async () => {
-      const { data, error } = await supabase
+    
+    const fetchMessagesAndTransaction = async () => {
+      // Lấy tin nhắn Supabase
+      const { data } = await supabase
         .from('messages')
         .select('*')
         .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${activeChat.id}),and(sender_id.eq.${activeChat.id},receiver_id.eq.${currentUser.id})`)
         .order('created_at', { ascending: true });
 
       if (data) setMessages(data);
+
+      // Kiểm tra xem giữa 2 người có giao dịch nào đang VERIFYING hay không
+      try {
+        const token = localStorage.getItem('access_token');
+        const res = await fetch(apiUrl(`transactions/check?user1=${currentUser.id}&user2=${activeChat.id}`), {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const txData = await res.json();
+          setTransaction(txData || null);
+        }
+      } catch (err) {
+        // Bỏ qua lỗi nếu chưa có bảng transaction
+      }
     };
-    fetchMessages();
+
+    fetchMessagesAndTransaction();
   }, [activeChat, currentUser]);
 
-  // [4] LẮNG NGHE TIN NHẮN MỚI TOÀN CẦU & TỰ ĐỘNG LẤY TÊN THẬT TỪ DB
+  // [4] LẮNG NGHE TIN NHẮN MỚI TOÀN CẦU 
   useEffect(() => {
     if (!currentUser) return;
 
@@ -124,8 +147,6 @@ function ChatContent() {
           const newMsg = payload.new;
           
           if (newMsg.receiver_id === String(currentUser.id) || newMsg.sender_id === String(currentUser.id)) {
-            
-            // 1. Cập nhật tin nhắn vào khung chat nếu đang mở đúng người
             const currentActiveChat = activeChatRef.current;
             if (currentActiveChat && (
               (newMsg.sender_id === String(currentActiveChat.id) && newMsg.receiver_id === String(currentUser.id)) ||
@@ -137,13 +158,11 @@ function ChatContent() {
               });
             }
 
-            // 2. Xác định ID người kia và trích xuất thông tin
             const otherPersonId = String(newMsg.sender_id) === String(currentUser.id) ? String(newMsg.receiver_id) : String(newMsg.sender_id);
             const timeNow = new Date(newMsg.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
             const isMine = String(newMsg.sender_id) === String(currentUser.id);
             const msgSnippet = isMine ? `Bạn: ${newMsg.text}` : newMsg.text;
 
-            // 3. Tự động gọi Database (bảng User) để bốc Tên thật & Avatar
             let realName = `Người dùng ${otherPersonId.substring(0, 4)}`;
             let realAvatar = DEFAULT_AVATAR;
 
@@ -153,11 +172,8 @@ function ChatContent() {
                 realName = userData.fullName || realName;
                 realAvatar = userData.avatarUrl || realAvatar;
               }
-            } catch (err) {
-              console.log("Không thể lấy thông tin user", err);
-            }
+            } catch (err) {}
 
-            // 4. Cập nhật danh sách ChatList bên trái
             setChatList((prevList) => {
               const existingChatIndex = prevList.findIndex(c => String(c.id) === otherPersonId);
               let updatedList = [...prevList];
@@ -200,7 +216,7 @@ function ChatContent() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // [6] XỬ LÝ GỬI TIN NHẮN 
+  // [6] XỬ LÝ GỬI TIN NHẮN (TÍCH HỢP QUÉT TỪ KHÓA AI Ở BACKEND)
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!messageInput.trim() || !activeChat || !currentUser) return;
@@ -208,6 +224,7 @@ function ChatContent() {
     const textToSend = messageInput.trim();
     setMessageInput(''); 
 
+    // 1. Lưu vào Supabase chat cơ bản
     const { error } = await supabase.from('messages').insert([
       {
         sender_id: String(currentUser.id),
@@ -222,9 +239,58 @@ function ChatContent() {
       setMessageInput(textToSend); 
       return;
     }
+
+    // 2. 🌟 Gửi tin nhắn lên Backend NestJS để Bot AI quét từ khóa ("chốt", "chuyển cọc", "stk"...)
+    try {
+      const token = localStorage.getItem('access_token');
+      await fetch(apiUrl('chat/send'), {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          postId: activeChat.postId || postId || 1, // ID bài đăng liên quan
+          receiverId: activeChat.id,
+          content: textToSend 
+        })
+      });
+    } catch (err) {
+      console.log("Không thể gọi API quét từ khóa AI", err);
+    }
+  };
+
+  // [7] XÁC NHẬN ĐỒNG KIỂM (CÓ / KHÔNG)
+  const handleVerifyTransaction = async (isConfirmed: boolean) => {
+    if (!transaction) return;
+    setIsVerifying(true);
+
+    try {
+      const token = localStorage.getItem('access_token');
+      const res = await fetch(apiUrl(`transactions/${transaction.id}/verify`), {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ isConfirmed })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        showToast(data.message || 'Đã gửi xác nhận thành công!', 'success');
+        setTransaction(null); // Tắt popup sau khi xác nhận
+      } else {
+        showToast('Có lỗi xảy ra khi xác nhận.', 'error');
+      }
+    } catch (error) {
+      showToast('Không thể kết nối đến máy chủ.', 'error');
+    } finally {
+      setIsVerifying(false);
+    }
   };
   
-  // [7] XÓA CUỘC TRÒ CHUYỆN
+  // [8] XÓA CUỘC TRÒ CHUYỆN
   const handleDeleteChat = async () => {
     if (!activeChat || !confirm("Bạn có chắc chắn muốn xóa toàn bộ cuộc trò chuyện này?")) return;
 
@@ -373,6 +439,35 @@ function ChatContent() {
                   Xóa cuộc trò chuyện
                 </button>
               </div>
+
+              {/* 🌟 POPUP ĐỒNG KIỂM (HIỆN LÊN KHI AI QUÉT THẤY TỪ KHÓA CHỐT GIAO DỊCH) */}
+              {transaction && transaction.status === 'VERIFYING' && (
+                <div className="bg-amber-50 border-b border-amber-200 p-4 sm:p-5 flex flex-col items-center text-center animate-fade-up shadow-inner">
+                  <div className="text-2xl mb-1">⚠️</div>
+                  <h4 className="font-black text-amber-900 text-sm sm:text-base">Hệ thống phát hiện dấu hiệu chốt giao dịch!</h4>
+                  <p className="text-[11px] sm:text-xs text-amber-700 max-w-xl mt-1 leading-relaxed">
+                    Để bảo vệ quyền lợi và chống gian lận trốn phí nền tảng, vui lòng xác nhận trung thực: <b>Giao dịch này đã thành công chưa?</b>
+                    <br /><i>(Cảnh báo: Khai báo gian dối sẽ dẫn đến khóa vĩnh viễn tài khoản).</i>
+                  </p>
+
+                  <div className="mt-4 flex gap-3 w-full max-w-xs">
+                    <button 
+                      disabled={isVerifying}
+                      onClick={() => handleVerifyTransaction(true)}
+                      className="flex-1 bg-emerald-600 text-white font-bold py-2.5 rounded-xl shadow-md hover:bg-emerald-700 transition-all text-xs active:scale-95"
+                    >
+                      CÓ (Đã thành công)
+                    </button>
+                    <button 
+                      disabled={isVerifying}
+                      onClick={() => handleVerifyTransaction(false)}
+                      className="flex-1 bg-rose-600 text-white font-bold py-2.5 rounded-xl shadow-md hover:bg-rose-700 transition-all text-xs active:scale-95"
+                    >
+                      KHÔNG (Chưa)
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="flex-1 overflow-y-auto p-6 space-y-4">
                 {messages.length === 0 ? (

@@ -6,8 +6,8 @@ import { apiUrl } from '../services/api';
 
 export default function UserDropdown({ user, onLogout, onClose }: { user: any; onLogout: () => void; onClose: () => void }) {
   const [loading, setLoading] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false); // 🌟 State bật/tắt modal xác nhận
-  const [toastMessage, setToastMessage] = useState<string | null>(null); // 🌟 State hiển thị thông báo kết quả
+  const [showConfirmModal, setShowConfirmModal] = useState(false); // State bật/tắt modal xác nhận
+  const [toastMessage, setToastMessage] = useState<string | null>(null); // State hiển thị thông báo kết quả
   
   const displayName = user?.fullName || 'Thành viên Nhà Tốt';
   const firstLetter = displayName.charAt(0).toUpperCase();
@@ -23,8 +23,9 @@ export default function UserDropdown({ user, onLogout, onClose }: { user: any; o
         return;
       }
       
-      const res = await fetch(apiUrl('auth/upgrade-to-agent'), {
-        method: 'PATCH',
+      // 🌟 CẬP NHẬT: Gọi API khởi tạo thanh toán VNPAY thay vì gọi API update thẳng role
+      const res = await fetch(apiUrl('payments/upgrade-agent'), {
+        method: 'POST',
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -32,19 +33,18 @@ export default function UserDropdown({ user, onLogout, onClose }: { user: any; o
       });
 
       if (res.ok) {
-        if (user) {
-          user.role = 'AGENT';
-          localStorage.setItem('user', JSON.stringify(user));
+        const data = await res.json();
+        // 🌟 CẬP NHẬT: Chuyển hướng người dùng sang trang thanh toán của VNPAY
+        if (data.paymentUrl) {
+          window.location.href = data.paymentUrl;
+        } else {
+          setToastMessage('❌ Lỗi hệ thống: Không lấy được đường dẫn thanh toán.');
+          setLoading(false);
         }
-        setToastMessage('🎉 Chúc mừng! Bạn đã nâng cấp thành công lên tài khoản Môi giới.');
-        setTimeout(() => {
-          onClose();
-          window.location.reload();
-        }, 1500);
       } else {
         const errData = await res.json().catch(() => ({}));
         console.error("Lỗi từ server:", errData);
-        setToastMessage('❌ Nâng cấp thất bại, vui lòng kiểm tra lại đăng nhập.');
+        setToastMessage('❌ Khởi tạo thanh toán thất bại, vui lòng thử lại sau.');
         setLoading(false);
       }
     } catch (error) {
@@ -58,14 +58,14 @@ export default function UserDropdown({ user, onLogout, onClose }: { user: any; o
 
   return (
     <>
-      {/* 🌟 TOAST THÔNG BÁO KẾT QUẢ HIỆN ĐẠI */}
+      {/* TOAST THÔNG BÁO KẾT QUẢ HIỆN ĐẠI */}
       {toastMessage && (
         <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[100] bg-gray-900/95 backdrop-blur-md text-white px-6 py-3.5 rounded-2xl shadow-2xl border border-white/20 text-xs font-bold animate-bounce flex items-center gap-3">
           <span>✨</span> {toastMessage}
         </div>
       )}
 
-      {/* 🌟 MODAL XÁC NHẬN NÂNG CẤP ĐẸP MẮT */}
+      {/* MODAL XÁC NHẬN NÂNG CẤP ĐẸP MẮT */}
       {showConfirmModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[99] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-gray-100 text-center animate-fadeIn">
@@ -73,8 +73,9 @@ export default function UserDropdown({ user, onLogout, onClose }: { user: any; o
               ⭐
             </div>
             <h3 className="text-lg font-black text-gray-900 mb-2">Nâng cấp tài khoản Môi giới?</h3>
+            {/* 🌟 CẬP NHẬT: Nội dung thông báo mức phí 299k */}
             <p className="text-xs text-gray-500 leading-relaxed mb-6">
-              Trở thành Môi giới (Agent) ngay lập tức để mở khóa tính năng đăng tin rao bán và cho thuê bất động sản miễn phí!
+              Mở khóa tính năng đăng tin không giới hạn với gói <strong className="text-amber-600">299.000 VNĐ / 3 tháng</strong>. Thanh toán an toàn qua cổng VNPAY.
             </p>
             <div className="grid grid-cols-2 gap-3">
               <button 
@@ -88,7 +89,7 @@ export default function UserDropdown({ user, onLogout, onClose }: { user: any; o
                 disabled={loading}
                 className="py-3 px-4 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 shadow-lg shadow-orange-500/25 transition-all"
               >
-                {loading ? 'Đang xử lý...' : 'Xác nhận ngay'}
+                {loading ? 'Đang kết nối...' : 'Thanh toán ngay'}
               </button>
             </div>
           </div>
@@ -124,7 +125,7 @@ export default function UserDropdown({ user, onLogout, onClose }: { user: any; o
               onClick={() => setShowConfirmModal(true)}
               className="w-full mt-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-extrabold py-2.5 px-4 rounded-xl text-xs hover:from-amber-600 hover:to-orange-600 transition-all shadow-md shadow-orange-500/25 flex items-center justify-center gap-2"
             >
-              <span>⭐</span> Nâng cấp tài khoản Môi giới
+              <span>⭐</span> Nâng cấp lên Môi giới
             </button>
           )}
 
