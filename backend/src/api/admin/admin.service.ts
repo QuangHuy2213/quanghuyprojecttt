@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as bcrypt from 'bcrypt'; 
 import * as nodemailer from 'nodemailer';
@@ -7,7 +7,6 @@ import * as nodemailer from 'nodemailer';
 export class AdminService {
   constructor(private prisma: PrismaService) {}
 
-  // --- 🌟 CẤU HÌNH MAIL CỦA ADMIN 🌟 ---
   private transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
@@ -22,7 +21,14 @@ export class AdminService {
     const pendingPosts = await this.prisma.posts.count({ where: { status: 'PENDING' } });
     const activePosts = await this.prisma.posts.count({ where: { status: 'ACTIVE' } });
     
-    return { totalUsers, pendingPosts, activePosts };
+    // Tính tổng doanh thu từ các giao dịch THÀNH CÔNG
+    const successfulTransactions = await this.prisma.transaction.aggregate({
+      where: { status: 'SUCCESS' },
+      _sum: { calculatedFee: true },
+    });
+    const totalRevenue = successfulTransactions._sum.calculatedFee || 0;
+    
+    return { totalUsers, pendingPosts, activePosts, totalRevenue };
   }
 
   // --- LOGIC LẤY & ĐỔI QUYỀN USER ---
@@ -37,7 +43,9 @@ export class AdminService {
         avatarUrl: true,
         role: true,
         createdAt: true,
-        isLocked: true, // 🌟 THÊM DÒNG NÀY ĐỂ TRẢ VỀ TRẠNG THÁI KHÓA
+        isLocked: true, 
+        lockReason: true, 
+        agentExpiresAt: true, 
       }
     });
   }
@@ -64,13 +72,12 @@ export class AdminService {
         fullName: data.fullName,
         phoneNumber: data.phoneNumber,
         role: data.role || 'USER',
-        isLocked: false, // Mặc định khi tạo mới là không khóa
+        isLocked: false,
       }
     });
   }
 
   async updateUserDetails(id: string, data: any) {
-    // 1. Cập nhật thông tin và trạng thái khóa của User
     const updatedUser = await this.prisma.user.update({
       where: { id },
       data: {
@@ -78,19 +85,17 @@ export class AdminService {
         phoneNumber: data.phoneNumber,
         role: data.role,
         isLocked: data.isLocked,
+        lockReason: data.lockReason,
       }
     });
 
-    // 2. 🌟 XỬ LÝ TRẠNG THÁI BÀI VIẾT DỰA TRÊN TRẠNG THÁI KHÓA 🌟
     if (data.isLocked !== undefined) {
       if (data.isLocked === true) {
-        // Nếu bị khóa -> Ẩn tất cả bài viết
         await this.prisma.posts.updateMany({
           where: { userId: id },
           data: { status: 'HIDDEN' }
         });
       } else {
-        // Nếu mở khóa -> Khôi phục bài viết về trạng thái ACTIVE (hoặc PENDING tùy ý bạn)
         await this.prisma.posts.updateMany({
           where: { userId: id },
           data: { status: 'ACTIVE' }
@@ -116,13 +121,11 @@ export class AdminService {
 
   // Duyệt hoặc Từ chối bài đăng
   async reviewPost(postId: number, status: 'ACTIVE' | 'HIDDEN', reason?: string) {
-    // Cập nhật trạng thái bài đăng
     const updatedPost = await this.prisma.posts.update({
       where: { id: postId },
       data: { status },
     });
 
-    // Tạo thông báo cho người đăng bài
     const title = status === 'ACTIVE' ? 'Bài đăng đã được duyệt' : 'Bài đăng bị từ chối';
     const content = status === 'ACTIVE' 
       ? `Chúc mừng! Bài đăng "${updatedPost.title}" của bạn đã được duyệt và hiển thị.`
@@ -140,6 +143,66 @@ export class AdminService {
     return updatedPost;
   }
 
+  // --- QUẢN LÝ GIAO DỊCH (ĐỐI SOÁT CHÉO) ---
+  async getAllTransactions() {
+    return this.prisma.transaction.findMany({
+      include: {
+        buyer: { select: { fullName: true, email: true, phoneNumber: true } },
+        seller: { select: { fullName: true, email: true, phoneNumber: true } },
+        post: { select: { title: true, price: true, transactionType: true, posterType: true, brokerCommission: true } }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
+  // 🌟 HÀM XỬ LÝ TRANH CHẤP / ĐỐI SOÁT GIAO DỊCH CHO ADMIN (CHUẨN XÁC)
+  async resolveTransactionDispute(id: string, resolutionStatus: 'SUCCESS' | 'CANCELLED', finalFee?: number) {
+    const transaction = await this.prisma.transaction.findUnique({
+      where: { id },
+      include: { post: true }
+    });
+
+    if (!transaction) {
+      throw new NotFoundException('Không tìm thấy giao dịch!');
+    }
+
+    let feeToUpdate = finalFee;
+
+    // Nếu duyệt thành công mà chưa truyền finalFee thủ công, hệ thống tự động tính theo công thức chuẩn
+    if (resolutionStatus === 'SUCCESS' && !feeToUpdate) {
+      const posterType = transaction.post?.posterType as 'OWNER' | 'BROKER';
+      const transactionType = transaction.post?.transactionType as 'SALE' | 'RENT';
+      const price = Number(transaction.post?.price || 0);
+      const brokerCommission = transaction.post?.brokerCommission || 0;
+
+      if (posterType === 'OWNER') {
+        feeToUpdate = transactionType === 'SALE' ? price * 0.015 : price * 0.10;
+      } else {
+        const brokerMoney = transactionType === 'SALE' ? price * (brokerCommission / 100) : price;
+        feeToUpdate = brokerMoney * 0.20;
+      }
+    }
+
+    // Cập nhật trạng thái giao dịch
+    const updated = await this.prisma.transaction.update({
+      where: { id },
+      data: {
+        status: resolutionStatus,
+        calculatedFee: resolutionStatus === 'SUCCESS' ? (feeToUpdate || 0) : 0
+      }
+    });
+
+    // Nếu thành công thì đồng thời đổi trạng thái bài đăng thành SOLD
+    if (resolutionStatus === 'SUCCESS') {
+      await this.prisma.posts.update({
+        where: { id: transaction.postId },
+        data: { status: 'SOLD' }
+      });
+    }
+
+    return { success: true, data: updated };
+  }
+
   // --- QUẢN LÝ LIÊN HỆ & TRỢ GIÚP ---
   async getAllContacts() {
     return this.prisma.contact.findMany({
@@ -154,7 +217,6 @@ export class AdminService {
     });
   }
 
-  // --- 🌟 HÀM GỬI EMAIL TỪ ADMIN 🌟 ---
   async replyContactEmail(contactId: number, emailTo: string, subject: string, message: string) {
     await this.transporter.sendMail({
       from: '"Nhà Tốt Support" <quanghuy22130504@gmail.com>',
@@ -180,12 +242,18 @@ export class AdminService {
     });
   }
 
+  async deleteContact(id: number) {
+    return this.prisma.contact.delete({
+      where: { id }
+    });
+  }
+
   // --- QUẢN LÝ BÁO CÁO VI PHẠM ---
   async getAllReports() {
     return this.prisma.report.findMany({
       include: {
-        user: { select: { fullName: true, email: true } }, // Lấy tên người báo cáo
-        post: { select: { title: true, id: true } }        // Lấy tên bài bị báo cáo
+        user: { select: { fullName: true, email: true } }, 
+        post: { select: { title: true, id: true } }        
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -198,22 +266,11 @@ export class AdminService {
     });
   }
 
-  async deleteContact(id: number) {
-    return this.prisma.contact.delete({
-      where: { id }
-    });
-  }
-
-  // 🌟 THÊM HÀM XÓA BÀI VIẾT DÀNH CHO ADMIN
   async deletePostByAdmin(postId: number, reportId: number) {
-    // 1. Xóa bài viết trong bảng Posts
     await this.prisma.posts.delete({
       where: { id: postId }
-    }).catch(() => {
-      // Đề phòng trường hợp bài viết đã bị xóa từ trước rồi
-    });
+    }).catch(() => {});
 
-    // 2. Cập nhật trạng thái báo cáo thành ĐÃ XỬ LÝ (RESOLVED)
     return this.prisma.report.update({
       where: { id: reportId },
       data: { status: 'RESOLVED' }

@@ -7,8 +7,11 @@ import { PrismaService } from './prisma/prisma.service';
 import { AuthModule } from './api/auth/auth.module'; 
 import { NotificationModule } from './api/notification/notification.module';
 import { AdminModule } from './api/admin/admin.module';
+import { PaymentModule } from './payment/payment.module';
+import { TransactionModule } from './api/transaction/transaction.module';
+import { ChatModule } from './api/chat/chat.module';
 @Module({
-  imports: [AuthModule, NotificationModule, AdminModule],
+  imports: [AuthModule, NotificationModule, AdminModule, PaymentModule, TransactionModule, ChatModule],
   controllers: [AppController, PostsController],
   providers: [AppService, PostsService, PrismaService],
 })

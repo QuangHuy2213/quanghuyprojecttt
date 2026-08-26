@@ -1,6 +1,18 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsArray, IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+
+// Khai báo các enum tương ứng với Prisma Schema
+enum TransactionType {
+  SALE = 'SALE',
+  RENT = 'RENT',
+  PROJECT = 'PROJECT',
+}
+
+enum PosterType {
+  OWNER = 'OWNER',
+  BROKER = 'BROKER',
+}
 
 export class PostsQueryDto {
   @ApiPropertyOptional({ example: 1, minimum: 1, default: 1 })
@@ -68,21 +80,42 @@ export class CreatePostDto {
   @IsString()
   district!: string;
 
-  @ApiProperty({
-    example: 'Căn hộ gần trung tâm, đầy đủ tiện ích, pháp lý rõ ràng.',
-    required: false,
-  })
+  @ApiProperty({ example: 'Căn hộ gần trung tâm, đầy đủ tiện ích...', required: false })
   @IsOptional()
   @IsString()
   content?: string;
 
-  @ApiProperty({
-    example: 'https://example.com/images/post-thumbnail.jpg',
-    required: false,
-  })
+  @ApiProperty({ example: 'https://example.com/images/post-thumbnail.jpg', required: false })
   @IsOptional()
   @IsString()
   thumbnail?: string;
+
+  // 🌟 BỔ SUNG: Mảng nhiều ảnh tải lên hoặc dán link
+  @ApiProperty({ example: ['https://example.com/img1.jpg', 'https://example.com/img2.jpg'], required: false })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  images?: string[];
+
+  // 🌟 BỔ SUNG: Loại giao dịch (SALE hoặc RENT)
+  @ApiProperty({ example: 'SALE', enum: ['SALE', 'RENT', 'PROJECT'], required: false })
+  @IsOptional()
+  @IsEnum(TransactionType)
+  transactionType?: TransactionType;
+
+  // 🌟 BỔ SUNG: Tư cách người đăng (OWNER hoặc BROKER)
+  @ApiProperty({ example: 'OWNER', enum: ['OWNER', 'BROKER'], required: false })
+  @IsOptional()
+  @IsEnum(PosterType)
+  posterType?: PosterType;
+
+  // 🌟 BỔ SUNG: Tỉ lệ phần trăm hoa hồng môi giới
+  @ApiProperty({ example: 2.0, required: false })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  brokerCommission?: number;
 
   @ApiProperty({ description: 'ID người dùng lấy từ phiên đăng nhập', required: false })
   @IsOptional()
@@ -163,6 +196,29 @@ export class UpdatePostDto {
   @IsOptional()
   @IsString()
   thumbnail?: string;
+
+  @ApiPropertyOptional({ example: ['https://example.com/img1.jpg'] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  images?: string[];
+
+  @ApiPropertyOptional({ example: 'SALE', enum: ['SALE', 'RENT', 'PROJECT'] })
+  @IsOptional()
+  @IsEnum(TransactionType)
+  transactionType?: TransactionType;
+
+  @ApiPropertyOptional({ example: 'OWNER', enum: ['OWNER', 'BROKER'] })
+  @IsOptional()
+  @IsEnum(PosterType)
+  posterType?: PosterType;
+
+  @ApiPropertyOptional({ example: 2.0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  brokerCommission?: number;
 
   @ApiPropertyOptional({ example: 'PENDING', enum: ['PENDING', 'ACTIVE', 'SOLD', 'HIDDEN'] })
   status?: 'PENDING' | 'ACTIVE' | 'SOLD' | 'HIDDEN';

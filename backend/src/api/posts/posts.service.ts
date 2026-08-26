@@ -122,6 +122,12 @@ export class PostsService {
         content: data.content,
         thumbnail: data.thumbnail,
         userId: data.userId ? String(data.userId) : null,
+        transactionType: data.transactionType || 'SALE',
+        posterType: data.posterType || 'OWNER',
+        brokerCommission: data.brokerCommission ?? null,
+        images: data.images?.length
+          ? { create: data.images.map((url) => ({ url })) }
+          : undefined,
         
         // 🌟 THÊM MỚI: Bắt buộc bài đăng mới phải ở trạng thái PENDING chờ duyệt
         status: 'PENDING',

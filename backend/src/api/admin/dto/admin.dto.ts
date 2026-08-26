@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsEmail, IsInt, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsEmail, IsInt, IsNumber, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class UpdateUserRoleDto {
   @ApiProperty({ example: 'AGENT', enum: ['USER', 'AGENT', 'ADMIN'] })
@@ -50,11 +50,17 @@ export class UpdateUserDetailsDto {
   @IsString()
   role?: 'USER' | 'AGENT' | 'ADMIN';
 
-  // 🌟 THÊM TRƯỜNG NÀY ĐỂ CHO PHÉP NHẬN LỆNH KHÓA / MỞ KHÓA
+  // CHO PHÉP NHẬN LỆNH KHÓA / MỞ KHÓA
   @ApiPropertyOptional({ example: false })
   @IsOptional()
   @IsBoolean()
   isLocked?: boolean;
+
+  // 🌟 MỚI: THÊM TRƯỜNG LÝ DO KHÓA TÀI KHOẢN
+  @ApiPropertyOptional({ example: 'Có hành vi gian lận trốn phí giao dịch' })
+  @IsOptional()
+  @IsString()
+  lockReason?: string;
 }
 
 export class ReviewPostDto {
@@ -97,4 +103,16 @@ export class ReplyContactEmailDto {
   @ApiProperty({ example: 'Cam on ban da lien he. Chung toi se ho tro trong hom nay.' })
   @IsString()
   message!: string;
+}
+
+// 🌟 MỚI: DTO CHO API XỬ LÝ TRANH CHẤP GIAO DỊCH (ESCROW)
+export class ResolveTransactionDto {
+  @ApiProperty({ example: 'SUCCESS', enum: ['SUCCESS', 'CANCELLED'] })
+  @IsString()
+  resolutionStatus!: 'SUCCESS' | 'CANCELLED';
+
+  @ApiPropertyOptional({ example: 450000, description: 'Số tiền phí phạt hoặc phí hoa hồng Admin quyết định thu' })
+  @IsOptional()
+  @IsNumber()
+  finalFee?: number;
 }

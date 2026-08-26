@@ -1,15 +1,10 @@
 generator client {
-
   provider = "prisma-client-js"
-
 }
 
 datasource db {
-
   provider = "postgresql"
-
-} 
-
+}
 
 // --- ENUMS (Các tùy chọn cố định) ---
 enum Role {
@@ -33,61 +28,79 @@ enum ListingStatus {
 
 // Các loại thông báo
 enum NotificationType {
-  MESSAGE      // Thông báo tin nhắn mới
-  SYSTEM       // Thông báo hệ thống (bảo mật, chào mừng...)
-  POST_UPDATE  // Thông báo cập nhật bài đăng (duyệt, từ chối...)
+  MESSAGE       // Thông báo tin nhắn mới
+  SYSTEM        // Thông báo hệ thống (bảo mật, chào mừng...)
+  POST_UPDATE   // Thông báo cập nhật bài đăng (duyệt, từ chối...)
 }
 
-// --- CÁC BẢNG (User, Category, Image, Favorite, Message, Notification, Report, Contact) ---
+// Enums cho Bảng Giao Dịch (Transaction/Escrow)
+enum EscrowStatus {
+  VERIFYING   // Chờ 2 bên xác nhận
+  SUCCESS     // Đã xác nhận thành công
+  FRAUD       // Gian lận, trốn phí
+  DISPUTE     // Tranh chấp, cần Admin xử lý
+  CANCELLED   // Khách hoặc Chủ đổi ý hủy
+}
+
+// Enum cho Người đăng tin
+enum PosterType {
+  OWNER       // Chủ nhà
+  BROKER      // Môi giới
+}
+
+// --- CÁC BẢNG ---
+
 model User {
-  id               String         @id @default(uuid())
-  email            String         @unique
-  password         String?  
-  fullName         String
-  phoneNumber      String?        @unique
-  avatarUrl        String?
-  googleId         String?        @unique 
-  role             Role           @default(USER)
-  isLocked         Boolean        @default(false)
-  
-  posts            posts[]  
-  favorites        Favorite[]
+  id              String    @id @default(uuid())
+  email           String    @unique
+  password        String?
+  fullName        String
+  phoneNumber     String?   @unique
+  avatarUrl       String?
+  googleId        String?   @unique
+  role            Role      @default(USER)
+  isLocked        Boolean   @default(false)
+  lockReason      String?   // Lý do khóa (VD: Gian lận giao dịch)
+  agentExpiresAt  DateTime? // Hạn sử dụng gói Môi Giới 299k
 
-  sentMessages     Message[]      @relation("SentMessages")
-  receivedMessages Message[]      @relation("ReceivedMessages")
+  posts     posts[]
+  favorites Favorite[]
 
-  notifications    Notification[] 
-  
-  // 🌟 ĐÃ THÊM: Mối quan hệ hai chiều với bảng Report
-  reports          Report[]
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
 
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  notifications Notification[]
+  reports       Report[]
+
+  // Mối quan hệ với bảng Transaction (Người mua và Người bán)
+  boughtTransactions Transaction[] @relation("BuyerTransactions")
+  soldTransactions   Transaction[] @relation("SellerTransactions")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Category {
-  id        Int      @id @default(autoincrement())
-  name      String
-  slug      String   @unique
-
-  posts     posts[]
+  id    Int     @id @default(autoincrement())
+  name  String
+  slug  String  @unique
+  posts posts[]
 }
 
 model Image {
-  id        String   @id @default(uuid())
-  url       String
-  postId    Int        
-  
-  post      posts    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  url    String
+  postId Int
+  post   posts  @relation(fields: [postId], references: [id], onDelete: Cascade)
 }
 
 model Favorite {
-  id        String   @id @default(uuid())
-  userId    String
-  postId    Int        
+  id     String @id @default(uuid())
+  userId String
+  postId Int
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  post      posts    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post posts @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@unique([userId, postId])
 }
@@ -100,10 +113,10 @@ model Message {
   text       String
   createdAt  DateTime @default(now()) @map("created_at")
 
-  sender     User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender   User @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
 
-  @@map("messages") 
+  @@map("messages")
 }
 
 // --- BẢNG THÔNG BÁO ---
@@ -114,16 +127,16 @@ model Notification {
   content   String
   type      NotificationType @default(SYSTEM)
   isRead    Boolean          @default(false) @map("is_read")
-  
-  createdAt DateTime         @default(now()) @map("created_at")
-  updatedAt DateTime         @updatedAt @map("updated_at")
 
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notifications")
 }
 
-// --- 🌟 MỚI: BÁO CÁO VI PHẠM ---
+// --- BÁO CÁO VI PHẠM ---
 model Report {
   id           Int      @id @default(autoincrement())
   userId       String   // Người thực hiện báo cáo
@@ -133,12 +146,11 @@ model Report {
   status       String   @default("PENDING") // PENDING, RESOLVED, IGNORED
   createdAt    DateTime @default(now())
 
-  // Thêm onDelete: Cascade để tự xóa báo cáo khi User hoặc Bài viết bị xóa
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  post         posts?   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post posts? @relation(fields: [postId], references: [id], onDelete: Cascade)
 }
 
-// --- 🌟 MỚI: LIÊN HỆ & TRỢ GIÚP ---
+// --- LIÊN HỆ & TRỢ GIÚP ---
 model Contact {
   id        Int      @id @default(autoincrement())
   fullName  String
@@ -147,6 +159,27 @@ model Contact {
   message   String
   status    String   @default("PENDING") // PENDING, REPLIED
   createdAt DateTime @default(now())
+}
+
+// --- BẢNG LƯU TRỮ GIAO DỊCH (ĐỐI SOÁT CHÉO / ESCROW) ---
+model Transaction {
+  id      String @id @default(uuid())
+  postId  Int
+  buyerId String // Khách hàng (User)
+  sellerId String // Môi giới hoặc Chủ nhà (Agent/User)
+
+  buyerConfirmed  Boolean? // Khách xác nhận (true/false/null)
+  sellerConfirmed Boolean? // Người bán xác nhận (true/false/null)
+
+  calculatedFee Decimal?     @db.Decimal // Tiền phí App thu được (Chiết khấu/Hoa hồng)
+  status        EscrowStatus @default(VERIFYING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  post   posts @relation(fields: [postId], references: [id], onDelete: Cascade)
+  buyer  User  @relation("BuyerTransactions", fields: [buyerId], references: [id])
+  seller User  @relation("SellerTransactions", fields: [sellerId], references: [id])
 }
 
 // --- BẢNG HÀNH CHÍNH & BÀI ĐĂNG ---
@@ -161,61 +194,63 @@ model cities {
 }
 
 model districts {
-  code           String      @id @db.VarChar(10)
-  name           String      @db.VarChar(255)
-  type           String?     @db.VarChar(50)
-  slug           String?     @db.VarChar(255)
-  name_with_type String?     @db.VarChar(255)
-  path           String?     @db.VarChar(255)
-  path_with_type String?     @db.VarChar(255)
-  parent_code    String?     @db.VarChar(10)
-  cities         cities?     @relation(fields: [parent_code], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  code           String  @id @db.VarChar(10)
+  name           String  @db.VarChar(255)
+  type           String? @db.VarChar(50)
+  slug           String? @db.VarChar(255)
+  name_with_type String? @db.VarChar(255)
+  path           String? @db.VarChar(255)
+  path_with_type String? @db.VarChar(255)
+  parent_code    String? @db.VarChar(10)
+  cities         cities? @relation(fields: [parent_code], references: [code], onDelete: NoAction, onUpdate: NoAction)
   posts          posts[]
 }
 
 model posts {
-  id              Int             @id @default(autoincrement())
-  sourceId        String?         @unique
-  title           String          @db.VarChar(255)
-  thumbnail       String?
-  price           Decimal         @db.Decimal
-  area            Decimal         @db.Decimal
-  city            String?         @db.VarChar(10)
-  district        String?         @db.VarChar(10)
-  content         String?
+  id            Int     @id @default(autoincrement())
+  sourceId      String? @unique
+  title         String  @db.VarChar(255)
+  thumbnail     String?
+  price         Decimal @db.Decimal
+  area          Decimal @db.Decimal
+  city          String? @db.VarChar(10)
+  district      String? @db.VarChar(10)
+  content       String?
 
-  ward            String?         
-  addressDetail   String?         
-  bedrooms        Int?            
-  bathrooms       Int?            
-  direction       String?         
-  floors          Int?            
-  length          Float?          
-  width           Float?          
-  legalDocument   String?         
-  furnishing      String?         
+  ward          String?
+  addressDetail String?
+  bedrooms      Int?
+  bathrooms     Int?
+  direction     String?
+  floors        Int?
+  length        Float?
+  width         Float?
+  legalDocument String?
+  furnishing    String?
+  sellerName    String?
 
-  sellerName      String?       
+  // Thông tin phục vụ tính toán hoa hồng
+  posterType       PosterType @default(OWNER) // Là CHỦ NHÀ hay MÔI GIỚI đăng bài
+  brokerCommission Float?     // Tỉ lệ % hoa hồng môi giới tự nhập (nếu là Môi giới + Bán)
 
   transactionType TransactionType @default(SALE)
   status          ListingStatus   @default(PENDING)
 
-  userId          String?
-  categoryId      Int?
+  userId     String?
+  categoryId Int?
 
-  cities          cities?         @relation(fields: [city], references: [code], onDelete: NoAction, onUpdate: NoAction)
-  districts       districts?      @relation(fields: [district], references: [code], onDelete: NoAction, onUpdate: NoAction)
-  
-  // 🌟 ĐÃ CẬP NHẬT: Thêm onDelete: Cascade để tự động xóa bài viết khi User bị xóa
-  user            User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  category        Category?       @relation(fields: [categoryId], references: [id])
-  images          Image[]
-  favorites       Favorite[]
-  
-  // Mối quan hệ hai chiều với bảng Report
-  reports         Report[]
+  cities    cities?    @relation(fields: [city], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  districts districts? @relation(fields: [district], references: [code], onDelete: NoAction, onUpdate: NoAction)
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category  Category?  @relation(fields: [categoryId], references: [id])
 
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @default(now()) @updatedAt
+  images     Image[]
+  favorites  Favorite[]
+  reports    Report[]
+
+  // Mối quan hệ với bảng Transaction
+  transactions Transaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 }

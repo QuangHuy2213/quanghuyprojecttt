@@ -57,6 +57,7 @@ export class AdminController {
     return { message: 'Xóa người dùng thành công!' };
   }
 
+  // --- API QUẢN LÝ BÀI ĐĂNG ---
   @Get('posts/pending')
   @ApiOperation({ summary: 'Lấy các bài đăng chờ duyệt' })
   async getPendingPosts() {
@@ -73,6 +74,26 @@ export class AdminController {
   ) {
     return this.adminService.reviewPost(Number(id), body.status, body.reason);
   }
+
+  // --- API QUẢN LÝ GIAO DỊCH & DOANH THU (ESCROW) ---
+  @Get('transactions')
+  @ApiOperation({ summary: 'Lấy danh sách giao dịch / đối soát' })
+  async getAllTransactions() {
+    return this.adminService.getAllTransactions();
+  }
+
+  @Patch('transactions/:id/resolve')
+  @ApiOperation({ summary: 'Xử lý tranh chấp giao dịch' })
+  @ApiParam({ name: 'id', example: 'uuid-giao-dich' })
+  async resolveTransactionDispute(
+    @Param('id') id: string,
+    @Body('resolutionStatus') resolutionStatus: 'SUCCESS' | 'CANCELLED',
+    @Body('finalFee') finalFee?: number
+  ) {
+    await this.adminService.resolveTransactionDispute(id, resolutionStatus, finalFee);
+    return { message: 'Đã xử lý tranh chấp giao dịch thành công!' };
+  }
+
   // --- API LIÊN HỆ ---
   @Get('contacts')
   @ApiOperation({ summary: 'Lấy danh sách liên hệ' })
@@ -91,6 +112,23 @@ export class AdminController {
     await this.adminService.updateContactStatus(Number(id), status);
     return { message: 'Cập nhật trạng thái liên hệ thành công!' };
   }
+
+  @Post('contacts/reply')
+  @ApiOperation({ summary: 'Gửi email phản hồi liên hệ' })
+  @ApiBody({ type: ReplyContactEmailDto })
+  async replyContactEmail(@Body() body: ReplyContactEmailDto) {
+    await this.adminService.replyContactEmail(body.contactId, body.email, body.subject, body.message);
+    return { message: 'Đã gửi email phản hồi thành công!' };
+  }
+
+  @Delete('contacts/:id')
+  @ApiOperation({ summary: 'Xóa liên hệ' })
+  @ApiParam({ name: 'id', example: 12 })
+  async deleteContact(@Param('id') id: string) {
+    await this.adminService.deleteContact(Number(id));
+    return { message: 'Đã xóa thành công!' };
+  }
+
   // --- API BÁO CÁO VI PHẠM ---
   @Get('reports')
   @ApiOperation({ summary: 'Lấy danh sách báo cáo vi phạm' })
@@ -110,21 +148,6 @@ export class AdminController {
     return { message: 'Cập nhật trạng thái báo cáo thành công!' };
   }
 
-  // 🌟 THÊM API GỬI EMAIL NÀY VÀO TRONG AdminController
-  @Post('contacts/reply')
-  @ApiOperation({ summary: 'Gửi email phản hồi liên hệ' })
-  @ApiBody({ type: ReplyContactEmailDto })
-  async replyContactEmail(@Body() body: ReplyContactEmailDto) {
-    await this.adminService.replyContactEmail(body.contactId, body.email, body.subject, body.message);
-    return { message: 'Đã gửi email phản hồi thành công!' };
-  }
-  @Delete('contacts/:id')
-  @ApiOperation({ summary: 'Xóa liên hệ' })
-  @ApiParam({ name: 'id', example: 12 })
-  async deleteContact(@Param('id') id: string) {
-    await this.adminService.deleteContact(Number(id));
-    return { message: 'Đã xóa thành công!' };
-  }
   @Delete('reports/:reportId/post/:postId')
   @ApiOperation({ summary: 'Xóa bài đăng bị báo cáo' })
   @ApiParam({ name: 'reportId', example: 12 })
@@ -135,6 +158,7 @@ export class AdminController {
   ) {
     return this.adminService.deletePostByAdmin(Number(postId), Number(reportId));
   }
+
   @Delete('reports/:id')
   @ApiOperation({ summary: 'Xóa báo cáo' })
   @ApiParam({ name: 'id', example: 12 })
