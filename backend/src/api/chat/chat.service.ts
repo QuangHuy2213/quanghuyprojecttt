@@ -42,23 +42,34 @@ export class ChatService {
       isMatched = keywords.some(k => content.toLowerCase().includes(k));
     }
 
-    // 🌟 BƯỚC 2: KÍCH HOẠT ĐỒNG KIỂM NẾU AI BÁO TRUE
+   // 🌟 BƯỚC 2: KÍCH HOẠT ĐỒNG KIỂM NẾU AI BÁO TRUE
     if (isMatched) {
       const validPostId = Number(postId);
       if (!validPostId || isNaN(validPostId)) return { success: false };
 
+      const post = await this.prisma.posts.findUnique({ where: { id: validPostId } });
+      if (!post || !post.userId) return { success: false };
+
+      const buyerId = (senderId === post.userId) ? receiverId : senderId;
+      const sellerId = post.userId;
+
+      // 1. Kiểm tra xem họ ĐÃ TỪNG CHỐT THÀNH CÔNG (SUCCESS) chưa?
+      // Nếu đã SUCCESS rồi thì bỏ qua luôn, không bao giờ tạo VERIFYING nữa.
+      const isAlreadyCompleted = await this.transactionService.hasCompletedTransaction(validPostId, buyerId, sellerId);
+      
+      if (isAlreadyCompleted) {
+        return { success: true, message: 'Giao dịch đã hoàn tất trước đó, AI ngừng can thiệp.' };
+      }
+
+      // 2. Nếu chưa thành công, kiểm tra xem có đang hỏi dở (VERIFYING) không
       const existingTx = await this.prisma.transaction.findFirst({
         where: { postId: validPostId, status: 'VERIFYING' }
       });
 
+      // 3. Nếu không vướng VERIFYING hay SUCCESS nào, thì tạo mới phiên hỏi!
+      // (Bao gồm cả trường hợp trước đó họ đã bấm KHÔNG -> CANCELLED)
       if (!existingTx) {
-        const post = await this.prisma.posts.findUnique({ where: { id: validPostId } });
-        
-        if (post && post.userId) {
-          const buyerId = (senderId === post.userId) ? receiverId : senderId;
-          const sellerId = post.userId;
-          await this.transactionService.triggerEscrowVerification(validPostId, buyerId, sellerId);
-        }
+        await this.transactionService.triggerEscrowVerification(validPostId, buyerId, sellerId);
       }
     }
 

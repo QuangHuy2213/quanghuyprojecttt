@@ -1,10 +1,12 @@
-import { Controller, Get, Patch, Param, Body, UseGuards, Req, Query } from '@nestjs/common';
+import { Controller, Get, Patch, Param, Body, UseGuards, Req, Query, BadRequestException } from '@nestjs/common';
+import { ApiOperation } from '@nestjs/swagger'; // 🌟 ĐÃ THÊM IMPORT NÀY ĐỂ SỬA LỖI
 import { TransactionService } from './transaction.service';
 import { AuthGuard } from '@nestjs/passport';
 import type { Request } from 'express';
 
+// Tùy thuộc vào cách bạn lưu payload trong JWT, có thể là userId hoặc sub
 type AuthenticatedRequest = Request & {
-  user: { userId: string };
+  user: { userId?: string, sub?: string }; 
 };
 
 @Controller('transactions')
@@ -18,8 +20,9 @@ export class TransactionController {
     @Body('isConfirmed') isConfirmed: boolean,
     @Req() req: AuthenticatedRequest,
   ) {
-    const userId = req.user.userId;
-    const result = await this.transactionService.verifyTransaction(transactionId, userId, isConfirmed);
+    // Lấy ID người dùng an toàn
+    const userId = req.user.userId || req.user.sub;
+    const result = await this.transactionService.verifyTransaction(transactionId, userId as string, isConfirmed);
 
     return {
       message: 'Cảm ơn bạn đã phản hồi xác nhận giao dịch.',
@@ -35,5 +38,55 @@ export class TransactionController {
     @Query('user2') user2: string,
   ) {
     return this.transactionService.checkActiveTransaction(user1, user2);
+  }
+
+  // =================================================================
+  // 🌟 API YÊU CẦU & PHẢN HỒI HỦY KÈO PHÚT CHÓT (USER)
+  // =================================================================
+  
+  @UseGuards(AuthGuard('jwt'))
+  @Patch(':id/request-cancel')
+  @ApiOperation({ summary: 'User yêu cầu hủy giao dịch sau khi đã chốt' })
+  async requestCancel(
+    @Param('id') transactionId: string,
+    @Body('reason') reason: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const userId = req.user.userId || req.user.sub;
+    if (!reason) throw new BadRequestException('Vui lòng cung cấp lý do hủy.');
+    return this.transactionService.requestCancelAfterSuccess(transactionId, userId as string, reason);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Patch(':id/respond-cancel')
+  @ApiOperation({ summary: 'Đối tác phản hồi yêu cầu hủy (Đồng ý/Phản đối)' })
+  async respondCancel(
+    @Param('id') transactionId: string,
+    @Body('isAgreed') isAgreed: boolean,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const userId = req.user.userId || req.user.sub;
+    if (typeof isAgreed !== 'boolean') {
+      throw new BadRequestException('Trạng thái xác nhận (isAgreed) phải là true hoặc false.');
+    }
+    return this.transactionService.respondToCancelRequest(transactionId, userId as string, isAgreed);
+  }
+
+  // =================================================================
+  // 🌟 API QUẢN LÝ HÓA ĐƠN (DÀNH CHO ADMIN)
+  // =================================================================
+  
+  @Get('invoices/admin/all')
+  @ApiOperation({ summary: 'Admin lấy danh sách toàn bộ hóa đơn' })
+  // @UseGuards(AuthGuard('jwt')) // Mở comment này ra nếu bạn muốn check Auth Admin
+  async getAdminInvoices() {
+    return this.transactionService.getAllInvoices();
+  }
+
+  @Patch('invoices/admin/:id/issue')
+  @ApiOperation({ summary: 'Admin duyệt phát hành hóa đơn' })
+  // @UseGuards(AuthGuard('jwt')) // Mở comment này ra nếu bạn muốn check Auth Admin
+  async issueInvoice(@Param('id') id: string) {
+    return this.transactionService.issueInvoice(id);
   }
 }

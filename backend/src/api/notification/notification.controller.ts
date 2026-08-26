@@ -1,7 +1,8 @@
-import { Controller, Get, Patch, Param, Headers, UnauthorizedException } from '@nestjs/common';
+import { Controller, Get, Patch, Post, Body, Param, Headers, UnauthorizedException } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { NotificationService } from './notification.service';
 import { JwtService } from '@nestjs/jwt';
+import { PrismaService } from '../../prisma/prisma.service'; // 🌟 ĐÃ THÊM PRISMA
 
 @ApiTags('Notifications')
 @ApiBearerAuth()
@@ -10,6 +11,7 @@ export class NotificationController {
   constructor(
     private readonly notificationService: NotificationService,
     private readonly jwtService: JwtService,
+    private readonly prisma: PrismaService, // 🌟 Nhúng Prisma để dùng cho API Cảnh báo
   ) {}
 
   // Hàm phụ trợ: Tự động tách ID người dùng từ Token gửi lên
@@ -26,7 +28,7 @@ export class NotificationController {
     }
   }
 
-  // API 1: Lấy danh sách thông báo
+  // API 1: Lấy danh sách thông báo thông thường
   @Get()
   @ApiOperation({ summary: 'Lấy thông báo của người dùng hiện tại' })
   async getNotifications(@Headers('authorization') authHeader: string) {
@@ -54,5 +56,38 @@ export class NotificationController {
     const userId = this.getUserIdFromToken(authHeader);
     await this.notificationService.markAsRead(Number(id), userId);
     return { message: 'Đã đánh dấu đọc' };
+  }
+
+  // =========================================================
+  // 🌟 MỚI: CÁC API DÀNH RIÊNG CHO TÍNH NĂNG CẢNH BÁO (WARNING)
+  // =========================================================
+
+  // API 4: Admin gửi cảnh báo (Dùng ở trang Admin)
+  @Post('admin/send-warning')
+  @ApiOperation({ summary: 'Admin gửi cảnh báo gian lận cho User' })
+  async sendWarning(@Body() body: { userId: string, content: string }) {
+    return this.prisma.notification.create({
+      data: {
+        userId: body.userId,
+        title: '⚠️ CẢNH BÁO TỪ BAN QUẢN TRỊ',
+        content: body.content,
+        type: 'WARNING_POPUP', // Trùng khớp với Enum trong schema.prisma
+        isRead: false,
+      }
+    });
+  }
+
+  // API 5: Lấy cảnh báo chưa đọc (Dành cho Frontend load lúc khởi động)
+  @Get('unread-warnings')
+  @ApiOperation({ summary: 'Lấy cảnh báo chặn màn hình chưa đọc của User' })
+  async getUnreadWarnings(@Headers('authorization') authHeader: string) {
+    const userId = this.getUserIdFromToken(authHeader);
+    return this.prisma.notification.findFirst({
+      where: {
+        userId: userId,
+        type: 'WARNING_POPUP',
+        isRead: false, // Chỉ lấy những cảnh báo chưa bấm xác nhận
+      }
+    });
   }
 }

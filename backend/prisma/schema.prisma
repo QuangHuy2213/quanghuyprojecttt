@@ -31,15 +31,27 @@ enum NotificationType {
   MESSAGE       // Thông báo tin nhắn mới
   SYSTEM        // Thông báo hệ thống (bảo mật, chào mừng...)
   POST_UPDATE   // Thông báo cập nhật bài đăng (duyệt, từ chối...)
+  WARNING_POPUP // Thông báo cảnh báo gian lận (Hiển thị dạng Modal chặn màn hình)
 }
 
 // Enums cho Bảng Giao Dịch (Transaction/Escrow)
 enum EscrowStatus {
-  VERIFYING   // Chờ 2 bên xác nhận
-  SUCCESS     // Đã xác nhận thành công
-  FRAUD       // Gian lận, trốn phí
-  DISPUTE     // Tranh chấp, cần Admin xử lý
-  CANCELLED   // Khách hoặc Chủ đổi ý hủy
+  VERIFYING               // Chờ 2 bên xác nhận
+  SUCCESS                 // Đã xác nhận thành công
+  FRAUD                   // Gian lận, trốn phí
+  DISPUTE                 // Tranh chấp (1 CÓ, 1 KHÔNG hoặc Kháng cáo Hủy)
+  CANCELLED               // Khách hoặc Chủ đều chọn KHÔNG (Chưa giao dịch)
+  PENDING_CANCEL          // Đang chờ đối tác đồng ý hủy
+  CANCELLED_AFTER_SUCCESS // Hủy kèo phút chót (Sau khi đã bấm SUCCESS)
+}
+
+// Enums cho Bảng Hóa Đơn (Invoice)
+enum InvoiceStatus {
+  DRAFT             // Nháp (Hệ thống vừa tạo, chờ Admin duyệt gửi đi)
+  PENDING_PAYMENT   // Đang chờ thanh toán (Đã gửi cho User, đang đếm ngược 30 ngày)
+  PAID              // Đã thanh toán thành công
+  OVERDUE           // Quá hạn (User chưa thanh toán sau 30 ngày -> Auto Khóa tài khoản)
+  CANCELLED         // Đã hủy (Nếu giao dịch bị CANCELLED_AFTER_SUCCESS)
 }
 
 // Enum cho Người đăng tin
@@ -60,7 +72,7 @@ model User {
   googleId        String?   @unique
   role            Role      @default(USER)
   isLocked        Boolean   @default(false)
-  lockReason      String?   // Lý do khóa (VD: Gian lận giao dịch)
+  lockReason      String?   // Lý do khóa (VD: Gian lận giao dịch, Không đóng phí)
   agentExpiresAt  DateTime? // Hạn sử dụng gói Môi Giới 299k
 
   posts     posts[]
@@ -72,9 +84,12 @@ model User {
   notifications Notification[]
   reports       Report[]
 
-  // Mối quan hệ với bảng Transaction (Người mua và Người bán)
+  // Mối quan hệ với bảng Transaction
   boughtTransactions Transaction[] @relation("BuyerTransactions")
   soldTransactions   Transaction[] @relation("SellerTransactions")
+
+  // Danh sách hóa đơn user cần thanh toán
+  invoices Invoice[] 
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -171,8 +186,12 @@ model Transaction {
   buyerConfirmed  Boolean? // Khách xác nhận (true/false/null)
   sellerConfirmed Boolean? // Người bán xác nhận (true/false/null)
 
-  calculatedFee Decimal?     @db.Decimal // Tiền phí App thu được (Chiết khấu/Hoa hồng)
+  calculatedFee Decimal?     @db.Decimal // Tiền phí App dự tính thu
   status        EscrowStatus @default(VERIFYING)
+
+  // 🌟 Đã bổ sung 2 trường lưu vết Yêu cầu Hủy kèo phút chót
+  cancelInitiatorId String?  // Ghi nhận ID của người bấm nút báo cáo hủy kèo
+  cancelReason      String?  // Lưu lại lý do hủy
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -180,6 +199,28 @@ model Transaction {
   post   posts @relation(fields: [postId], references: [id], onDelete: Cascade)
   buyer  User  @relation("BuyerTransactions", fields: [buyerId], references: [id])
   seller User  @relation("SellerTransactions", fields: [sellerId], references: [id])
+
+  // Mối quan hệ 1-1 với Bảng Hóa đơn
+  invoice Invoice?
+}
+
+// --- BẢNG HÓA ĐƠN THU PHÍ GIAO DỊCH ---
+model Invoice {
+  id            String        @id @default(uuid())
+  transactionId String        @unique // 1 Giao dịch thành công chỉ có 1 Hóa đơn
+  userId        String        // Mã người phải trả tiền (Seller/Broker)
+  
+  amount        Decimal       @db.Decimal // Số tiền phải thanh toán
+  status        InvoiceStatus @default(DRAFT)
+  
+  dueDate       DateTime?     // Hạn chót thanh toán (Cộng 30 ngày từ khi Admin duyệt)
+  paidAt        DateTime?     // Thời gian đã thanh toán thực tế
+  
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  transaction   Transaction   @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // --- BẢNG HÀNH CHÍNH & BÀI ĐĂNG ---
@@ -229,9 +270,8 @@ model posts {
   furnishing    String?
   sellerName    String?
 
-  // Thông tin phục vụ tính toán hoa hồng
-  posterType       PosterType @default(OWNER) // Là CHỦ NHÀ hay MÔI GIỚI đăng bài
-  brokerCommission Float?     // Tỉ lệ % hoa hồng môi giới tự nhập (nếu là Môi giới + Bán)
+  posterType       PosterType @default(OWNER) 
+  brokerCommission Float?     
 
   transactionType TransactionType @default(SALE)
   status          ListingStatus   @default(PENDING)
@@ -247,8 +287,6 @@ model posts {
   images     Image[]
   favorites  Favorite[]
   reports    Report[]
-
-  // Mối quan hệ với bảng Transaction
   transactions Transaction[]
 
   createdAt DateTime @default(now())
