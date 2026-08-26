@@ -13,9 +13,13 @@ export class ChatController {
 
   @UseGuards(AuthGuard('jwt'))
   @Post('send')
-  async sendMessage(@Req() req, @Body() body: any) {
-    const senderId = req.user.id; // Lấy từ token đăng nhập
+  async sendMessage(@Req() req: AuthenticatedRequest, @Body() body: any) {
+    const senderId = req.user.userId;
     const { postId, receiverId, content } = body;
+
+    if (!senderId || !receiverId || !content?.trim()) {
+      return { success: false, message: 'Thiếu thông tin tin nhắn.' };
+    }
 
   // Gọi service đã được nâng cấp
     return this.chatService.handleMessageWithAI(senderId, receiverId, postId, content);

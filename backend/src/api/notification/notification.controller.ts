@@ -1,8 +1,9 @@
-import { Controller, Get, Patch, Post, Body, Param, Headers, UnauthorizedException } from '@nestjs/common';
+import { Controller, Get, Patch, Post, Body, Param, Headers, UnauthorizedException, UseGuards, Req, ForbiddenException } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { NotificationService } from './notification.service';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service'; // 🌟 ĐÃ THÊM PRISMA
+import { AuthGuard } from '@nestjs/passport';
 
 @ApiTags('Notifications')
 @ApiBearerAuth()
@@ -64,8 +65,11 @@ export class NotificationController {
 
   // API 4: Admin gửi cảnh báo (Dùng ở trang Admin)
   @Post('admin/send-warning')
+  @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Admin gửi cảnh báo gian lận cho User' })
-  async sendWarning(@Body() body: { userId: string, content: string }) {
+  async sendWarning(@Body() body: { userId: string, content: string }, @Req() req: any) {
+    if (req.user?.role !== 'ADMIN') throw new ForbiddenException('Chỉ quản trị viên được gửi cảnh báo.');
+    if (!body.content?.trim()) throw new ForbiddenException('Nội dung cảnh báo không được để trống.');
     return this.prisma.notification.create({
       data: {
         userId: body.userId,

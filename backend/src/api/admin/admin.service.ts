@@ -198,6 +198,14 @@ export class AdminService {
         where: { id: transaction.postId },
         data: { status: 'SOLD' }
       });
+      await this.prisma.invoice.upsert({
+        where: { transactionId: id },
+        create: { transactionId: id, userId: transaction.sellerId, amount: feeToUpdate || 0, status: 'DRAFT' },
+        update: { amount: feeToUpdate || 0 },
+      });
+    } else {
+      await this.prisma.posts.update({ where: { id: transaction.postId }, data: { status: 'ACTIVE' } });
+      await this.prisma.invoice.updateMany({ where: { transactionId: id }, data: { status: 'CANCELLED' } });
     }
 
     return { success: true, data: updated };

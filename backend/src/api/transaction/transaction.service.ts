@@ -39,15 +39,56 @@ export class TransactionService {
   // =================================================================
   // 2. AI PHÁT HIỆN TỪ KHÓA & TẠO GIAO DỊCH ĐỂ ĐỒNG KIỂM
   // =================================================================
-  async triggerEscrowVerification(postId: number, buyerId: string, sellerId: string) {
+  async triggerEscrowVerification(postId: number, buyerId: string, sellerId: string, sellerConfirmed?: boolean) {
     return this.prisma.transaction.create({
       data: {
         postId,
         buyerId,
         sellerId,
         status: 'VERIFYING',
+        sellerConfirmed,
       }
     });
+  }
+
+  async markPostSold(postId: number, sellerId: string, buyerPhone: string) {
+    const normalizedPhone = buyerPhone?.replace(/\s+/g, '');
+    if (!/^0\d{9}$/.test(normalizedPhone || '')) {
+      throw new BadRequestException('Số điện thoại khách hàng phải gồm 10 số và bắt đầu bằng 0.');
+    }
+
+    const [post, buyer] = await Promise.all([
+      this.prisma.posts.findUnique({ where: { id: postId } }),
+      this.prisma.user.findUnique({ where: { phoneNumber: normalizedPhone } }),
+    ]);
+    if (!post) throw new BadRequestException('Không tìm thấy bài đăng.');
+    if (post.userId !== sellerId) throw new ForbiddenException('Bạn không phải người đăng tin này.');
+    if (!buyer) throw new BadRequestException('Không tìm thấy tài khoản khách hàng với số điện thoại này.');
+    if (buyer.id === sellerId) throw new BadRequestException('Không thể chọn chính bạn làm khách mua.');
+    if (await this.hasCompletedTransaction(postId, buyer.id, sellerId)) {
+      throw new ConflictException('Giao dịch với khách hàng này đã hoàn tất.');
+    }
+
+    let transaction = await this.prisma.transaction.findFirst({
+      where: { postId, buyerId: buyer.id, sellerId, status: 'VERIFYING' },
+    });
+    if (!transaction) {
+      transaction = await this.triggerEscrowVerification(postId, buyer.id, sellerId, true);
+    } else if (transaction.sellerConfirmed !== true) {
+      transaction = await this.prisma.transaction.update({
+        where: { id: transaction.id }, data: { sellerConfirmed: true },
+      });
+    }
+
+    await this.prisma.notification.create({
+      data: {
+        userId: buyer.id,
+        title: 'Yêu cầu xác nhận giao dịch',
+        content: `Người đăng tin “${post.title}” đã báo giao dịch thành công với bạn. Vui lòng mở cuộc trò chuyện và xác nhận.`,
+        type: 'SYSTEM',
+      },
+    });
+    return transaction;
   }
 
   // =================================================================
@@ -107,6 +148,12 @@ export class TransactionService {
             data: { status: 'SOLD' },
           });
 
+          await tx.invoice.upsert({
+            where: { transactionId },
+            create: { transactionId, userId: updatedTx.sellerId, amount: calculatedFee, status: 'DRAFT' },
+            update: { amount: calculatedFee },
+          });
+
         } else if (!buyerYes && !sellerYes) {
           // 🌟 Trường hợp 2: Cả 2 chọn KHÔNG (Hủy đồng kiểm, AI có thể hỏi lại sau)
           finalStatus = 'CANCELLED';
@@ -115,6 +162,17 @@ export class TransactionService {
           // 🌟 Trường hợp 3: Lệch pha (1 CÓ, 1 KHÔNG) -> Chuyển thành Tranh chấp
           // Tạm thời không auto-ban (FRAUD) ở đây để Admin vào kiểm tra và xử lý cảnh báo sau.
           finalStatus = 'DISPUTE';
+          const admins = await tx.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } });
+          if (admins.length) {
+            await tx.notification.createMany({
+              data: admins.map((admin) => ({
+                userId: admin.id,
+                title: 'Cảnh báo giao dịch cần đối soát',
+                content: `Hai bên trả lời không khớp cho giao dịch #${transactionId.substring(0, 8)} (${transaction.post.title}).`,
+                type: 'SYSTEM' as const,
+              })),
+            });
+          }
         }
       }
 
@@ -135,9 +193,10 @@ export class TransactionService {
   // =================================================================
   // 4. CHECK TRẠNG THÁI HIỂN THỊ POPUP (Cho Frontend)
   // =================================================================
-  async checkActiveTransaction(user1: string, user2: string) {
+  async checkActiveTransaction(user1: string, user2: string, postId?: number) {
     const transaction = await this.prisma.transaction.findFirst({
       where: {
+        ...(postId ? { postId } : {}),
         status: { in: ['VERIFYING', 'DISPUTE'] },
         OR: [
           { buyerId: user1, sellerId: user2 },
@@ -167,6 +226,14 @@ export class TransactionService {
     });
 
     return !!transaction; // Trả về true nếu đã có giao dịch SUCCESS
+  }
+
+  async getUserTransactions(userId: string) {
+    return this.prisma.transaction.findMany({
+      where: { OR: [{ buyerId: userId }, { sellerId: userId }] },
+      include: { post: { select: { id: true, title: true, thumbnail: true } }, invoice: true },
+      orderBy: { updatedAt: 'desc' },
+    });
   }
   // =================================================================
   // 6. YÊU CẦU HỦY KÈO (Có check Quota 3 lần/tháng)
@@ -257,16 +324,32 @@ export class TransactionService {
           where: { id: transaction.postId },
           data: { status: 'ACTIVE' }
         });
+        await tx.invoice.updateMany({
+          where: { transactionId },
+          data: { status: 'CANCELLED' },
+        });
         return tx.transaction.update({
           where: { id: transactionId },
           data: { status: 'CANCELLED_AFTER_SUCCESS' }
         });
       } else {
         // 🌟 Nếu Phản đối -> Đưa vào TRANH CHẤP để Admin xử lý
-        return tx.transaction.update({
+        const disputed = await tx.transaction.update({
           where: { id: transactionId },
           data: { status: 'DISPUTE' }
         });
+        const admins = await tx.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } });
+        if (admins.length) {
+          await tx.notification.createMany({
+            data: admins.map((admin) => ({
+              userId: admin.id,
+              title: 'Tranh chấp hủy giao dịch',
+              content: `Một bên phản đối yêu cầu hủy giao dịch #${transactionId.substring(0, 8)}. Vui lòng kiểm tra và phản hồi.`,
+              type: 'SYSTEM' as const,
+            })),
+          });
+        }
+        return disputed;
       }
     });
   }
@@ -285,6 +368,11 @@ export class TransactionService {
   }
 
   async issueInvoice(invoiceId: string) {
+    const current = await this.prisma.invoice.findUnique({ where: { id: invoiceId } });
+    if (!current) throw new BadRequestException('Không tìm thấy hóa đơn.');
+    if (current.status !== 'DRAFT') {
+      throw new ConflictException('Chỉ hóa đơn nháp mới có thể được phát hành.');
+    }
     // Cộng thêm 30 ngày làm hạn chót
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + 30);

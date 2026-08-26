@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Param, Body, UseGuards, Req, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Patch, Post, Param, Body, UseGuards, Req, Query, BadRequestException } from '@nestjs/common';
 import { ApiOperation } from '@nestjs/swagger'; // 🌟 ĐÃ THÊM IMPORT NÀY ĐỂ SỬA LỖI
 import { TransactionService } from './transaction.service';
 import { AuthGuard } from '@nestjs/passport';
@@ -36,8 +36,28 @@ export class TransactionController {
   async checkTransaction(
     @Query('user1') user1: string,
     @Query('user2') user2: string,
+    @Query('postId') postId?: string,
   ) {
-    return this.transactionService.checkActiveTransaction(user1, user2);
+    return this.transactionService.checkActiveTransaction(user1, user2, postId ? Number(postId) : undefined);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get('my-transactions')
+  async getMyTransactions(@Req() req: AuthenticatedRequest) {
+    const userId = req.user.userId || req.user.sub;
+    return this.transactionService.getUserTransactions(userId as string);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Post('posts/:postId/mark-sold')
+  @ApiOperation({ summary: 'Người đăng báo đã bán và mời khách mua xác nhận bằng số điện thoại' })
+  async markPostSold(
+    @Param('postId') postId: string,
+    @Body('buyerPhone') buyerPhone: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const sellerId = req.user.userId || req.user.sub;
+    return this.transactionService.markPostSold(Number(postId), sellerId as string, buyerPhone);
   }
 
   // =================================================================
@@ -77,16 +97,20 @@ export class TransactionController {
   // =================================================================
   
   @Get('invoices/admin/all')
+  @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Admin lấy danh sách toàn bộ hóa đơn' })
   // @UseGuards(AuthGuard('jwt')) // Mở comment này ra nếu bạn muốn check Auth Admin
-  async getAdminInvoices() {
+  async getAdminInvoices(@Req() req: any) {
+    if (req.user?.role !== 'ADMIN') throw new BadRequestException('Bạn không có quyền quản trị hóa đơn.');
     return this.transactionService.getAllInvoices();
   }
 
   @Patch('invoices/admin/:id/issue')
+  @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Admin duyệt phát hành hóa đơn' })
   // @UseGuards(AuthGuard('jwt')) // Mở comment này ra nếu bạn muốn check Auth Admin
-  async issueInvoice(@Param('id') id: string) {
+  async issueInvoice(@Param('id') id: string, @Req() req: any) {
+    if (req.user?.role !== 'ADMIN') throw new BadRequestException('Bạn không có quyền phát hành hóa đơn.');
     return this.transactionService.issueInvoice(id);
   }
 }

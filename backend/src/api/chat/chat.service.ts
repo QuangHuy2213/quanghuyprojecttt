@@ -17,10 +17,20 @@ export class ChatService {
   }
 
   async handleMessageWithAI(senderId: string, receiverId: string, postId: number, content: string) {
-    let isMatched = false;
+    const normalizedContent = content
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .toLowerCase();
+    const keywords = [
+      'chot', 'dat coc', 'coc tien', 'chuyen khoan', 'thanh toan', 'ky hop dong',
+      'cong chung', 'sang ten', 'mua nha', 'mua can', 'dong y mua', 'so tai khoan', 'stk',
+    ];
+    let isMatched = keywords.some((keyword) => normalizedContent.includes(keyword));
 
     // 🌟 BƯỚC 1: DÙNG AI ĐỂ ĐỌC HIỂU NGỮ CẢNH CÂU NÓI
     try {
+      if (isMatched) throw new Error('KEYWORD_MATCHED');
       const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
       const prompt = `
         Bạn là hệ thống kiểm duyệt tin nhắn giao dịch bất động sản.
@@ -35,11 +45,10 @@ export class ChatService {
       if (responseText.includes('TRUE')) {
         isMatched = true;
       }
-    } catch (error) {
-      console.error("Lỗi API AI, fallback về quét từ khóa:", error);
-      // Fallback dự phòng nếu AI bị nghẽn mạng
-      const keywords = ['chốt', 'cọc', 'stk', 'thanh toán'];
-      isMatched = keywords.some(k => content.toLowerCase().includes(k));
+    } catch (error: any) {
+      if (error?.message !== 'KEYWORD_MATCHED') {
+        console.error("Lỗi API AI, đã dùng bộ từ khóa dự phòng:", error);
+      }
     }
 
    // 🌟 BƯỚC 2: KÍCH HOẠT ĐỒNG KIỂM NẾU AI BÁO TRUE
@@ -63,7 +72,7 @@ export class ChatService {
 
       // 2. Nếu chưa thành công, kiểm tra xem có đang hỏi dở (VERIFYING) không
       const existingTx = await this.prisma.transaction.findFirst({
-        where: { postId: validPostId, status: 'VERIFYING' }
+        where: { postId: validPostId, buyerId, sellerId, status: 'VERIFYING' }
       });
 
       // 3. Nếu không vướng VERIFYING hay SUCCESS nào, thì tạo mới phiên hỏi!
