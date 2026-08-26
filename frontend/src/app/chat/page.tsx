@@ -170,7 +170,7 @@ function ChatApp() {
     const checkTransaction = async () => {
       try {
         const token = localStorage.getItem('access_token');
-        const res = await fetch(apiUrl(`transactions/check?user1=${currentUser.id}&user2=${activeChat.id}`), {
+        const res = await fetch(apiUrl(`transactions/check?user1=${currentUser.id}&user2=${activeChat.id}&postId=${activeChat.postId}`), {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.ok) setTransaction(await res.json());
@@ -250,7 +250,7 @@ function ChatApp() {
 
       // 🌟 BƯỚC 3: Nếu AI quét xong, NGAY LẬP TỨC gọi API check lại giao dịch để bật Popup cho người gửi
       if (res.ok) {
-        const checkRes = await fetch(apiUrl(`transactions/check?user1=${currentUser.id}&user2=${activeChat.id}`), {
+        const checkRes = await fetch(apiUrl(`transactions/check?user1=${currentUser.id}&user2=${activeChat.id}&postId=${activeChat.postId}`), {
           headers: { Authorization: `Bearer ${token}` }
         });
         

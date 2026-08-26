@@ -333,7 +333,7 @@ function ChatContent() {
 
           const res = await fetch(
             apiUrl(
-              `transactions/check?user1=${currentUser.id}&user2=${activeChat.id}`
+              `transactions/check?user1=${currentUser.id}&user2=${activeChat.id}&postId=${postId || activeChat.postId || ''}`
             ),
             {
               headers: {
@@ -529,7 +529,7 @@ function ChatContent() {
             'access_token'
           );
 
-        await fetch(
+        const aiResponse = await fetch(
           apiUrl('chat/send'),
           {
             method: 'POST',
@@ -552,6 +552,13 @@ function ChatContent() {
             }),
           }
         );
+        if (aiResponse.ok) {
+          const checkResponse = await fetch(
+            apiUrl(`transactions/check?user1=${currentUser.id}&user2=${activeChat.id}&postId=${activeChat.postId || postId || ''}`),
+            { headers: { Authorization: `Bearer ${token}` } },
+          );
+          if (checkResponse.ok) setTransaction(await checkResponse.json());
+        }
       } catch (error) {
         console.log(
           'Không thể gọi API AI:',

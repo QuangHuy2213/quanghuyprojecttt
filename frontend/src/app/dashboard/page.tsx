@@ -11,6 +11,9 @@ export default function DashboardPage() {
   const [user, setUser] = useState<any>(null);
   const [myPosts, setMyPosts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [soldPost, setSoldPost] = useState<any>(null);
+  const [buyerPhone, setBuyerPhone] = useState('');
+  const [isSubmittingSold, setIsSubmittingSold] = useState(false);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -73,6 +76,31 @@ export default function DashboardPage() {
     }
   };
 
+  const handleMarkSold = async () => {
+    if (!soldPost || !/^0\d{9}$/.test(buyerPhone)) {
+      alert('Vui lòng nhập số điện thoại khách hàng gồm 10 số, bắt đầu bằng 0.');
+      return;
+    }
+    setIsSubmittingSold(true);
+    try {
+      const token = localStorage.getItem('access_token');
+      const res = await fetch(apiUrl(`transactions/posts/${soldPost.id}/mark-sold`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ buyerPhone }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Không thể gửi yêu cầu xác nhận.');
+      alert('Đã gửi thông báo xác nhận tới khách hàng. Tin sẽ chuyển sang Đã bán khi khách xác nhận.');
+      setSoldPost(null);
+      setBuyerPhone('');
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setIsSubmittingSold(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -84,6 +112,30 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-[#f8fafc]">
       <Header />
+
+      {soldPost && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-md rounded-3xl bg-white p-7 shadow-2xl">
+            <h2 className="text-xl font-black text-gray-900">Xác nhận đã giao dịch</h2>
+            <p className="mt-2 text-sm text-gray-500">Nhập số điện thoại tài khoản khách mua. Hệ thống sẽ gửi yêu cầu để khách xác nhận trước khi đóng tin và tạo hóa đơn nháp.</p>
+            <input
+              autoFocus
+              inputMode="numeric"
+              maxLength={10}
+              value={buyerPhone}
+              onChange={(e) => setBuyerPhone(e.target.value.replace(/\D/g, ''))}
+              placeholder="Ví dụ: 0912345678"
+              className="mt-5 w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-blue-500"
+            />
+            <div className="mt-5 flex gap-3">
+              <button onClick={() => { setSoldPost(null); setBuyerPhone(''); }} className="flex-1 rounded-xl bg-gray-100 py-3 text-sm font-bold text-gray-600">Hủy</button>
+              <button disabled={isSubmittingSold} onClick={handleMarkSold} className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-bold text-white disabled:opacity-50">
+                {isSubmittingSold ? 'Đang gửi...' : 'Gửi xác nhận'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       <main className="max-w-6xl mx-auto px-4 py-10">
         {/* TIÊU ĐỀ & NÚT ĐĂNG TIN */}
@@ -205,7 +257,7 @@ export default function DashboardPage() {
                     {/* Nút đánh dấu Đã bán / Mở lại */}
                     {!isPending && !isRejected && (
                       <button
-                        onClick={() => handleUpdateStatus(post.id, isSold ? 'ACTIVE' : 'SOLD')}
+                        onClick={() => isSold ? handleUpdateStatus(post.id, 'ACTIVE') : setSoldPost(post)}
                         className={`px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${
                           isSold 
                             ? 'bg-emerald-600 text-white hover:bg-emerald-700' 
