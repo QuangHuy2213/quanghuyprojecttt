@@ -53,6 +53,10 @@ export class PostsQueryDto {
   @IsOptional()
   @IsString()
   area?: string;
+
+  @ApiPropertyOptional({ enum: TransactionType })
+  @IsOptional()
+  transactionType?: TransactionType;
 }
 
 export class CreatePostDto {

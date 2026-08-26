@@ -26,6 +26,7 @@ export class PostsController {
       query.keyword,
       query.price,
       query.area,
+      query.transactionType,
     );
   }
 

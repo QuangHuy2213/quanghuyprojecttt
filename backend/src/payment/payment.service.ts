@@ -47,7 +47,11 @@ export class PaymentService {
     if (invoice.status === 'CANCELLED') throw new BadRequestException('Hóa đơn này đã bị hủy.');
 
     // 2. Tạo URL thanh toán
-    const amountToPay = Number(invoice.amount);
+    const baseAmount = Number(invoice.amount);
+    const overdueMonths = invoice.dueDate && new Date() > invoice.dueDate
+      ? Math.max(1, Math.ceil((Date.now() - invoice.dueDate.getTime()) / (30 * 24 * 60 * 60 * 1000)))
+      : 0;
+    const amountToPay = Math.round(baseAmount * (1 + overdueMonths * 0.005));
     const urlString = this.vnpay.buildPaymentUrl({
       vnp_Amount: amountToPay, 
       vnp_IpAddr: ipAddr,

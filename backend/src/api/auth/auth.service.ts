@@ -87,10 +87,10 @@ export class AuthService {
       user = await this.prisma.user.create({
         data: { email: googleUser.email, fullName: googleUser.fullName, googleId: googleUser.googleId, avatarUrl: googleUser.avatarUrl },
       });
-    } else if (!user.googleId) {
+    } else {
       user = await this.prisma.user.update({
         where: { email: user.email },
-        data: { googleId: googleUser.googleId, avatarUrl: googleUser.avatarUrl },
+        data: { googleId: user.googleId || googleUser.googleId, avatarUrl: googleUser.avatarUrl || user.avatarUrl },
       });
     }
     const payload = { sub: user.id, email: user.email, role: user.role };
@@ -106,6 +106,29 @@ export class AuthService {
         phoneNumber: user.phoneNumber // 🌟 ĐÃ BỔ SUNG SỐ ĐIỆN THOẠI CHO ĐĂNG NHẬP GOOGLE
       } 
     };
+  }
+  async getProfile(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, fullName: true, phoneNumber: true, avatarUrl: true, role: true },
+    });
+    if (!user) throw new NotFoundException('Không tìm thấy tài khoản.');
+    return user;
+  }
+
+  async updateProfile(userId: string, data: { email?: string; phoneNumber?: string; avatarUrl?: string }) {
+    if (data.phoneNumber && !/^0\d{9}$/.test(data.phoneNumber)) {
+      throw new BadRequestException('Số điện thoại phải gồm 10 số và bắt đầu bằng 0.');
+    }
+    try {
+      return await this.prisma.user.update({
+        where: { id: userId },
+        data: { email: data.email, phoneNumber: data.phoneNumber, avatarUrl: data.avatarUrl },
+        select: { id: true, email: true, fullName: true, phoneNumber: true, avatarUrl: true, role: true },
+      });
+    } catch {
+      throw new BadRequestException('Email hoặc số điện thoại đã được sử dụng.');
+    }
   }
  async upgradeToAgent(userId: string) {
     const user = await this.prisma.user.findUnique({

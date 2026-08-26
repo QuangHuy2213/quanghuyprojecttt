@@ -5,6 +5,16 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class TransactionService {
   constructor(private prisma: PrismaService) {}
 
+  private withLateFee<T extends { amount: any; dueDate: Date | null; status: string }>(invoice: T) {
+    const baseAmount = Number(invoice.amount);
+    const now = new Date();
+    const overdueMonths = invoice.dueDate && now > invoice.dueDate && !['PAID', 'CANCELLED'].includes(invoice.status)
+      ? Math.max(1, Math.ceil((now.getTime() - invoice.dueDate.getTime()) / (30 * 24 * 60 * 60 * 1000)))
+      : 0;
+    const lateFee = Math.round(baseAmount * 0.005 * overdueMonths);
+    return { ...invoice, status: overdueMonths > 0 && invoice.status === 'PENDING_PAYMENT' ? 'OVERDUE' : invoice.status, overdueMonths, lateFee, totalPayable: baseAmount + lateFee };
+  }
+
   // =================================================================
   // 1. HÀM TÍNH TOÁN CHIẾT KHẤU / HOA HỒNG
   // =================================================================
@@ -235,6 +245,15 @@ export class TransactionService {
       orderBy: { updatedAt: 'desc' },
     });
   }
+
+  async getUserInvoices(userId: string) {
+    const invoices = await this.prisma.invoice.findMany({
+      where: { userId },
+      include: { transaction: { include: { post: { select: { id: true, title: true, thumbnail: true } } } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    return invoices.map((invoice) => this.withLateFee(invoice));
+  }
   // =================================================================
   // 6. YÊU CẦU HỦY KÈO (Có check Quota 3 lần/tháng)
   // =================================================================
@@ -358,13 +377,26 @@ export class TransactionService {
   // =================================================================
   
   async getAllInvoices() {
-    return this.prisma.invoice.findMany({
+    const invoices = await this.prisma.invoice.findMany({
       include: {
         user: { select: { fullName: true, email: true, phoneNumber: true } },
-        transaction: { select: { postId: true } }
+        transaction: { include: { post: { select: { id: true, title: true, thumbnail: true } } } }
       },
       orderBy: { createdAt: 'desc' }
     });
+    return invoices.map((invoice) => this.withLateFee(invoice));
+  }
+
+  async deleteProcessedTransaction(transactionId: string) {
+    const transaction = await this.prisma.transaction.findUnique({ where: { id: transactionId }, include: { invoice: true } });
+    if (!transaction) throw new BadRequestException('Không tìm thấy giao dịch.');
+    if (['VERIFYING', 'DISPUTE', 'PENDING_CANCEL'].includes(transaction.status)) {
+      throw new ConflictException('Giao dịch chưa xử lý xong nên chưa thể xóa.');
+    }
+    if (transaction.invoice && !['PAID', 'CANCELLED'].includes(transaction.invoice.status)) {
+      throw new ConflictException('Hóa đơn chưa hoàn tất nên chưa thể xóa giao dịch.');
+    }
+    return this.prisma.transaction.delete({ where: { id: transactionId } });
   }
 
   async issueInvoice(invoiceId: string) {

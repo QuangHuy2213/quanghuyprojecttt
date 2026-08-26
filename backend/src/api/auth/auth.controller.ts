@@ -39,6 +39,18 @@ export class AuthController {
     return this.authService.login(body);
   }
 
+  @Get('profile')
+  @UseGuards(AuthGuard('jwt'))
+  async getProfile(@Req() req: any) {
+    return this.authService.getProfile(req.user.userId);
+  }
+
+  @Patch('profile')
+  @UseGuards(AuthGuard('jwt'))
+  async updateProfile(@Req() req: any, @Body() body: { email?: string; phoneNumber?: string; avatarUrl?: string }) {
+    return this.authService.updateProfile(req.user.userId, body);
+  }
+
   // 🌟 ĐÃ CẬP NHẬT: Sử dụng AuthGuard('jwt') trực tiếp
   @Patch('upgrade-to-agent')
   @UseGuards(AuthGuard('jwt')) 

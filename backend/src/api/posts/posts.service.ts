@@ -13,7 +13,8 @@ export class PostsService {
     district?: string, 
     keyword?: string, 
     price?: string, 
-    area?: string
+    area?: string,
+    transactionType?: 'SALE' | 'RENT' | 'PROJECT'
   ) {
     const skip = (page - 1) * limit;
     
@@ -23,6 +24,7 @@ export class PostsService {
     // 1. Lọc theo khu vực
     if (city) whereClause.city = city;
     if (district) whereClause.district = district;
+    if (transactionType) whereClause.transactionType = transactionType;
 
     // 2. Lọc theo từ khóa tiêu đề
     if (keyword) {
@@ -88,8 +90,9 @@ export class PostsService {
         cities: true,
         districts: true,
         user: {
-          select: { fullName: true, phoneNumber: true, role: true }
+          select: { id: true, fullName: true, phoneNumber: true, role: true }
         },
+        images: true,
         // 🌟 KÈM THEO SỐ LƯỢNG TIM TRONG TRANG CHI TIẾT
         _count: {
           select: { favorites: true }
@@ -232,6 +235,7 @@ export class PostsService {
 
     if (!post) throw new Error('Không tìm thấy bài viết');
     if (post.userId !== userId) throw new Error('Bạn không có quyền xóa bài viết này!');
+    if (post.status === 'SOLD') throw new BadRequestException('Tin đã giao dịch không được phép xóa.');
 
     return this.prisma.posts.delete({
       where: { id },
@@ -244,6 +248,7 @@ export class PostsService {
     const post = await this.prisma.posts.findUnique({ where: { id } });
     if (!post) throw new Error('Bài viết không tồn tại');
     if (post.userId !== userId) throw new Error('Bạn không có quyền chỉnh sửa bài này!');
+    if (post.status === 'SOLD') throw new BadRequestException('Tin đã giao dịch không được phép mở lại hoặc chỉnh sửa.');
 
     if (data.city !== undefined || data.district !== undefined) {
       await this.validateLocation(data.city ?? post.city ?? undefined, data.district ?? post.district ?? undefined);

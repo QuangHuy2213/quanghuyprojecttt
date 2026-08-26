@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Post, Param, Body, UseGuards, Req, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Delete, Get, Patch, Post, Param, Body, UseGuards, Req, Query, BadRequestException } from '@nestjs/common';
 import { ApiOperation } from '@nestjs/swagger'; // 🌟 ĐÃ THÊM IMPORT NÀY ĐỂ SỬA LỖI
 import { TransactionService } from './transaction.service';
 import { AuthGuard } from '@nestjs/passport';
@@ -46,6 +46,13 @@ export class TransactionController {
   async getMyTransactions(@Req() req: AuthenticatedRequest) {
     const userId = req.user.userId || req.user.sub;
     return this.transactionService.getUserTransactions(userId as string);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get('my-invoices')
+  async getMyInvoices(@Req() req: AuthenticatedRequest) {
+    const userId = req.user.userId || req.user.sub;
+    return this.transactionService.getUserInvoices(userId as string);
   }
 
   @UseGuards(AuthGuard('jwt'))
@@ -112,5 +119,12 @@ export class TransactionController {
   async issueInvoice(@Param('id') id: string, @Req() req: any) {
     if (req.user?.role !== 'ADMIN') throw new BadRequestException('Bạn không có quyền phát hành hóa đơn.');
     return this.transactionService.issueInvoice(id);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Delete('admin/:id')
+  async deleteProcessed(@Param('id') id: string, @Req() req: any) {
+    if (req.user?.role !== 'ADMIN') throw new BadRequestException('Bạn không có quyền xóa dữ liệu đối soát.');
+    return this.transactionService.deleteProcessedTransaction(id);
   }
 }
