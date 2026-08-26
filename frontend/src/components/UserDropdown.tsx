@@ -23,7 +23,7 @@ export default function UserDropdown({ user, onLogout, onClose }: { user: any; o
         return;
       }
       
-      // 🌟 CẬP NHẬT: Gọi API khởi tạo thanh toán VNPAY thay vì gọi API update thẳng role
+      // Gọi API khởi tạo thanh toán VNPAY
       const res = await fetch(apiUrl('payments/upgrade-agent'), {
         method: 'POST',
         headers: { 
@@ -34,7 +34,7 @@ export default function UserDropdown({ user, onLogout, onClose }: { user: any; o
 
       if (res.ok) {
         const data = await res.json();
-        // 🌟 CẬP NHẬT: Chuyển hướng người dùng sang trang thanh toán của VNPAY
+        // Chuyển hướng người dùng sang trang thanh toán của VNPAY
         if (data.paymentUrl) {
           window.location.href = data.paymentUrl;
         } else {
@@ -44,7 +44,7 @@ export default function UserDropdown({ user, onLogout, onClose }: { user: any; o
       } else {
         const errData = await res.json().catch(() => ({}));
         console.error("Lỗi từ server:", errData);
-        setToastMessage('❌ Khởi tạo thanh toán thất bại, vui lòng thử lại sau.');
+        setToastMessage('❌ Khởi tạo thanh toán thất bại, vui lòng đăng nhập lại.');
         setLoading(false);
       }
     } catch (error) {
@@ -73,7 +73,6 @@ export default function UserDropdown({ user, onLogout, onClose }: { user: any; o
               ⭐
             </div>
             <h3 className="text-lg font-black text-gray-900 mb-2">Nâng cấp tài khoản Môi giới?</h3>
-            {/* 🌟 CẬP NHẬT: Nội dung thông báo mức phí 299k */}
             <p className="text-xs text-gray-500 leading-relaxed mb-6">
               Mở khóa tính năng đăng tin không giới hạn với gói <strong className="text-amber-600">299.000 VNĐ / 3 tháng</strong>. Thanh toán an toàn qua cổng VNPAY.
             </p>
@@ -140,6 +139,15 @@ export default function UserDropdown({ user, onLogout, onClose }: { user: any; o
           <div className="text-[11px] font-bold text-gray-400 uppercase px-3 mb-1 tracking-wider">Tiện ích</div>
           
           <div className="space-y-0.5">
+            {/* 🌟 MỤC MỚI: LỊCH SỬ GIAO DỊCH */}
+            <Link href="/my-transactions" onClick={onClose} className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors group">
+              <div className="flex items-center gap-3">
+                <span className="text-gray-400 group-hover:text-[#1877F2] transition-colors">🤝</span>
+                <span className="text-sm font-semibold text-gray-700">Lịch sử giao dịch</span>
+              </div>
+              <span className="text-gray-300 text-sm">›</span>
+            </Link>
+
             <Link href="/dashboard" onClick={onClose} className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors group">
               <div className="flex items-center gap-3">
                 <span className="text-gray-400 group-hover:text-[#1877F2] transition-colors">📊</span>

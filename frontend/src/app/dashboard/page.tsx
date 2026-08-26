@@ -54,10 +54,8 @@ export default function DashboardPage() {
     }
   };
 
-  // HÀM TẮT/BẬT TRẠNG THÁI HIỂN THỊ CỦA CÔNG TẮC
-  const handleToggleStatus = async (postId: number, currentStatus: string) => {
-    const newStatus = currentStatus === 'HIDDEN' ? 'ACTIVE' : 'HIDDEN';
-
+  // HÀM ĐỔI TRẠNG THÁI (BẬT/TẮT HOẶC ĐÃ BÁN)
+  const handleUpdateStatus = async (postId: number, newStatus: string) => {
     // Cập nhật giao diện ngay lập tức
     setMyPosts(prev => prev.map(post => 
       post.id === postId ? { ...post, status: newStatus } : post
@@ -76,95 +74,149 @@ export default function DashboardPage() {
   };
 
   if (isLoading) {
-    return <div className="min-h-screen bg-gray-50 flex items-center justify-center text-gray-500 font-medium">Đang tải dữ liệu...</div>;
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1877F2]"></div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-gray-50 to-blue-100">
+    <div className="min-h-screen bg-[#f8fafc]">
       <Header />
       
-      <main className="max-w-6xl mx-auto px-4 py-12">
+      <main className="max-w-6xl mx-auto px-4 py-10">
         {/* TIÊU ĐỀ & NÚT ĐĂNG TIN */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 bg-white p-8 rounded-3xl shadow-xl border border-gray-100">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
           <div>
-            <h1 className="text-3xl font-extrabold text-gray-800 tracking-tight">Quản lý tin đăng</h1>
-            <p className="text-gray-500 mt-1.5 text-sm sm:text-base">
-              Bạn đang có tổng cộng <span className="font-bold text-[#1877F2]">{myPosts.length}</span> tin trên hệ thống.
+            <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">Quản lý tin đăng</h1>
+            <p className="text-gray-500 mt-1 text-sm">
+              Bạn đang có tổng cộng <span className="font-extrabold text-[#1877F2]">{myPosts.length}</span> tin trên hệ thống.
             </p>
           </div>
           <Link 
             href="/create-post" 
-            className="bg-[#1877F2] hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md flex items-center gap-2 active:scale-95 text-sm sm:text-base whitespace-nowrap"
+            className="bg-[#1877F2] hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-2xl transition-all shadow-lg shadow-blue-500/25 flex items-center gap-2 text-sm whitespace-nowrap"
           >
             <span className="text-lg leading-none">+</span> Đăng tin mới
           </Link>
         </div>
 
         {myPosts.length === 0 ? (
-          <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-16 text-center">
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-16 text-center">
             <div className="text-6xl mb-4">📝</div>
             <h2 className="text-xl font-extrabold text-gray-800 mb-2">Bạn chưa đăng tin nào</h2>
-            <p className="text-gray-500 mb-6 text-sm sm:text-base">Hãy khởi tạo bài đăng đầu tiên của bạn để tiếp cận hàng triệu khách hàng.</p>
-            <Link href="/create-post" className="inline-block bg-[#1877F2] text-white font-bold px-6 py-3 rounded-xl shadow-md hover:bg-blue-600 transition-all">
+            <p className="text-gray-500 mb-6 text-sm">Hãy khởi tạo bài đăng đầu tiên của bạn để tiếp cận hàng triệu khách hàng.</p>
+            <Link href="/create-post" className="inline-block bg-[#1877F2] text-white font-bold px-6 py-3 rounded-2xl shadow-lg shadow-blue-500/25 hover:bg-blue-600 transition-all text-sm">
               Tiến hành đăng tin ngay
             </Link>
           </div>
         ) : (
-          <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
-            <div className="grid grid-cols-12 gap-4 p-5 bg-gray-50 font-bold text-gray-600 text-xs uppercase tracking-wider border-b border-gray-200">
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="grid grid-cols-12 gap-4 p-5 bg-gray-50/70 font-bold text-gray-400 text-[11px] uppercase tracking-wider border-b border-gray-100">
               <div className="col-span-6 md:col-span-5">Thông tin bài đăng</div>
-              <div className="hidden md:block col-span-3 text-center">Mức giá</div>
-              <div className="col-span-3 md:col-span-2 text-center">Trạng thái</div>
+              <div className="hidden md:block col-span-2 text-center">Mức giá</div>
+              <div className="col-span-3 md:col-span-3 text-center">Trạng thái & Kiểm duyệt</div>
               <div className="col-span-3 md:col-span-2 text-center">Thao tác</div>
             </div>
 
             {myPosts.map((post) => {
-              const isVisible = post.status !== 'HIDDEN';
+              const status = post.status; // ACTIVE, HIDDEN, PENDING, REJECTED, SOLD
+              const isVisible = status === 'ACTIVE';
+              const isPending = status === 'PENDING';
+              const isRejected = status === 'REJECTED'; // Giả định trạng thái bị từ chối từ admin
+              const isSold = status === 'SOLD';
+
+              // Kiểm tra xem có bị khóa nút bật/tắt không (Ví dụ: Đang chờ duyệt hoặc bị từ chối)
+              const isToggleDisabled = isPending || isRejected;
 
               return (
-                <div key={post.id} className={`grid grid-cols-12 gap-4 p-5 border-b border-gray-100 items-center transition-colors ${isVisible ? 'hover:bg-blue-50/20' : 'bg-gray-50/80 opacity-75'}`}>
+                <div key={post.id} className="grid grid-cols-12 gap-4 p-5 border-b border-gray-50 items-center hover:bg-gray-50/50 transition-colors">
                   
+                  {/* THÔNG TIN BÀI ĐĂNG (Đã xóa mã tin) */}
                   <div className="col-span-6 md:col-span-5 flex gap-4 items-center">
                     <img 
                       src={post.thumbnail || 'https://via.placeholder.com/150'} 
                       alt={post.title} 
-                      className={`w-20 h-20 object-cover rounded-2xl border border-gray-200 flex-shrink-0 shadow-sm ${!isVisible && 'grayscale'}`} 
+                      className="w-20 h-20 object-cover rounded-2xl border border-gray-100 flex-shrink-0 shadow-sm" 
                     />
-                    <div>
-                      <Link href={`/posts/${post.id}`} className="font-bold text-gray-800 line-clamp-2 hover:text-[#1877F2] transition-colors text-sm sm:text-base">
+                    <div className="min-w-0">
+                      <Link href={`/posts/${post.id}`} className="font-bold text-gray-800 line-clamp-2 hover:text-[#1877F2] transition-colors text-sm">
                         {post.title}
                       </Link>
-                      <div className="text-xs text-gray-400 mt-1">Mã tin: #{post.id}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">Ngày đăng: {new Date(post.createdAt).toLocaleDateString('vi-VN')}</div>
+                      <div className="text-[11px] text-gray-400 mt-1.5 font-medium">
+                        Ngày đăng: {new Date(post.createdAt).toLocaleDateString('vi-VN')}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="hidden md:block col-span-3 text-center font-extrabold text-[#1877F2]">
+                  {/* MỨC GIÁ */}
+                  <div className="hidden md:block col-span-2 text-center font-extrabold text-[#1877F2] text-sm font-mono">
                     {Number(post.price || 0).toLocaleString('vi-VN')} VNĐ
                   </div>
 
-                  {/* CÔNG TẮC TOGGLE TRẠNG THÁI */}
-                  <div className="col-span-3 md:col-span-2 flex flex-col items-center justify-center gap-1.5">
-                    <button
-                      onClick={() => handleToggleStatus(post.id, post.status)}
-                      className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors duration-300 focus:outline-none ${
-                        isVisible ? 'bg-green-500' : 'bg-gray-300'
-                      }`}
-                      title={isVisible ? 'Bấm để ẩn tin' : 'Bấm để hiện tin'}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow-md ${
-                          isVisible ? 'translate-x-7' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                    <span className={`text-[11px] font-bold ${isVisible ? 'text-green-600' : 'text-gray-500'}`}>
-                      {isVisible ? 'Đang hiển thị' : 'Đã ẩn'}
-                    </span>
+                  {/* TRẠNG THÁI & CÔNG TẮC BẬT TẮT (BỊ KHÓA NẾU BỊ ADMIN TỪ CHỐI / CHỜ DUYỆT) */}
+                  <div className="col-span-3 md:col-span-3 flex flex-col items-center justify-center gap-2">
+                    {isRejected ? (
+                      <div className="flex flex-col items-center">
+                        <span className="px-3 py-1 bg-rose-50 text-rose-600 text-[10px] font-black rounded-xl border border-rose-100 mb-1">
+                          BỊ TỪ CHỐI
+                        </span>
+                        <span className="text-[10px] text-gray-400 italic">Admin không duyệt</span>
+                      </div>
+                    ) : isPending ? (
+                      <div className="flex flex-col items-center">
+                        <span className="px-3 py-1 bg-amber-50 text-amber-600 text-[10px] font-black rounded-xl border border-amber-100 mb-1">
+                          ĐANG CHỜ DUYỆT
+                        </span>
+                        <span className="text-[10px] text-gray-400 italic">Chờ Admin kiểm duyệt</span>
+                      </div>
+                    ) : isSold ? (
+                      <div className="flex flex-col items-center">
+                        <span className="px-3 py-1 bg-purple-50 text-purple-600 text-[10px] font-black rounded-xl border border-purple-100 mb-1">
+                          ĐÃ BÁN
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <button
+                          disabled={isToggleDisabled}
+                          onClick={() => handleUpdateStatus(post.id, isVisible ? 'HIDDEN' : 'ACTIVE')}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none ${
+                            isVisible ? 'bg-emerald-500' : 'bg-gray-300'
+                          }`}
+                          title={isVisible ? 'Bấm để ẩn tin' : 'Bấm để hiện tin'}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow-md ${
+                              isVisible ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                        <span className={`text-xs font-bold ${isVisible ? 'text-emerald-600' : 'text-gray-400'}`}>
+                          {isVisible ? 'Hiển thị' : 'Đã ẩn'}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
-                  {/* THAO TÁC SỬA / XÓA */}
-                  <div className="col-span-3 md:col-span-2 flex justify-center gap-2">
+                  {/* THAO TÁC (SỬA, XÓA, ĐÃ BÁN) */}
+                  <div className="col-span-3 md:col-span-2 flex justify-center items-center gap-1.5">
+                    {/* Nút đánh dấu Đã bán / Mở lại */}
+                    {!isPending && !isRejected && (
+                      <button
+                        onClick={() => handleUpdateStatus(post.id, isSold ? 'ACTIVE' : 'SOLD')}
+                        className={`px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                          isSold 
+                            ? 'bg-emerald-600 text-white hover:bg-emerald-700' 
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                        title={isSold ? 'Mở lại tin bán' : 'Đánh dấu đã bán'}
+                      >
+                        {isSold ? 'Mở bán' : 'Đã bán'}
+                      </button>
+                    )}
+
                     <Link 
                       href={`/dashboard/edit/${post.id}`}
                       className="p-2.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all shadow-sm" 
@@ -180,6 +232,7 @@ export default function DashboardPage() {
                       🗑️
                     </button>
                   </div>
+
                 </div>
               );
             })}
