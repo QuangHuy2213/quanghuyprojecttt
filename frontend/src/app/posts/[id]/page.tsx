@@ -273,15 +273,20 @@ export default function PostDetailPage() {
                           showToast('Vui lòng đăng nhập để chat!', 'error');
                           return router.push('/login');
                         }
+
                         const sellerId = post.user?.id || post.userId;
-                        router.push(`/chat?sellerId=${sellerId}&sellerName=${encodeURIComponent(displaySellerName)}&postId=${post.id}`);
+
+                        router.push(
+                          `/chat/${post.id}?sellerId=${encodeURIComponent(
+                            String(sellerId)
+                          )}&sellerName=${encodeURIComponent(displaySellerName)}`
+                        );
                       }} 
                       className="w-full bg-white border border-[#1877F2] text-[#1877F2] hover:bg-blue-50 font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors"
                     >
                       <span>💬</span>
                       <span>Chat với {displaySellerName}</span>
                     </button>
-
                     <button 
                       onClick={() => setReportModal(true)}
                       className="w-full mt-4 text-gray-400 hover:text-red-500 text-xs font-medium py-2 transition-colors flex justify-center items-center gap-1.5"
