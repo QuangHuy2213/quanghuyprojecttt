@@ -166,6 +166,7 @@ function ChatApp() {
       if (data) setMessages(data);
     };
 
+    // Hàm check giao dịch tách riêng để gọi nhiều lần
     const checkTransaction = async () => {
       try {
         const token = localStorage.getItem('access_token');
@@ -192,7 +193,7 @@ function ChatApp() {
             return [...prev, newMsg];
           });
           
-          // Cập nhật lại Last Message trong danh sách bên trái
+          // Cập nhật lại Last Message
           setChatList(prev => {
             const newList = [...prev];
             const idx = newList.findIndex(c => c.id === activeChat.id);
@@ -204,6 +205,10 @@ function ChatApp() {
             }
             return newList;
           });
+
+          // 🌟 BÍ QUYẾT: Khi có tin nhắn bất kỳ bay tới, ngầm tự động check lại giao dịch!
+          // Việc này giúp đối tác (người nhận tin nhắn "chốt") cũng hiện popup ngay lập tức.
+          checkTransaction();
         }
       }).subscribe();
 
@@ -215,7 +220,7 @@ function ChatApp() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // 4. Gửi tin nhắn
+ // 4. Gửi tin nhắn
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!messageInput.trim() || !currentUser || !activeChat) return;
@@ -223,7 +228,7 @@ function ChatApp() {
     const textToSend = messageInput.trim();
     setMessageInput('');
 
-    // Lưu vào Supabase
+    // BƯỚC 1: Lưu vào Supabase để hiện lên khung chat nhanh nhất
     const { error } = await supabase.from('messages').insert([
       { sender_id: String(currentUser.id), receiver_id: String(activeChat.id), text: textToSend }
     ]);
@@ -234,17 +239,32 @@ function ChatApp() {
       return;
     }
 
-    // Gửi báo cho Backend quét AI
+    // BƯỚC 2: Gửi báo cho Backend quét AI
     try {
       const token = localStorage.getItem('access_token');
-      await fetch(apiUrl('chat/send'), {
+      const res = await fetch(apiUrl('chat/send'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ postId: activeChat.postId, receiverId: activeChat.id, content: textToSend })
       });
-    } catch (error) {}
-  };
 
+      // 🌟 BƯỚC 3: Nếu AI quét xong, NGAY LẬP TỨC gọi API check lại giao dịch để bật Popup cho người gửi
+      if (res.ok) {
+        const checkRes = await fetch(apiUrl(`transactions/check?user1=${currentUser.id}&user2=${activeChat.id}`), {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (checkRes.ok) {
+          const txData = await checkRes.json();
+          if (txData && txData.status === 'VERIFYING') {
+            setTransaction(txData); // Bật popup ngay!
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Lỗi gửi/quét AI:", error);
+    }
+  };
   // 5. Giải quyết Đồng kiểm (Escrow)
   const handleVerifyTransaction = async (isConfirmed: boolean) => {
     if (!transaction) return;
