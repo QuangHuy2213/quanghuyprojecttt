@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import UserDropdown from './UserDropdown';
 import { apiUrl } from '../services/api';
-import { supabase } from '../services/supabase'; // 🌟 ĐÃ THÊM: Import Supabase để lắng nghe Realtime
+import { supabase } from '../services/supabase'; 
 
 export default function Header() {
   const router = useRouter();
@@ -14,17 +14,20 @@ export default function Header() {
   // STATE QUẢN LÝ DROPDOWN
   const [showFavorites, setShowFavorites] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false); // 🌟 ĐÃ THÊM: State bật/tắt menu thông báo
+  const [showNotifications, setShowNotifications] = useState(false); 
   
   // STATE QUẢN LÝ DỮ LIỆU
   const [favoritePosts, setFavoritePosts] = useState<any[]>([]);
   const [isLoadingFavs, setIsLoadingFavs] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]); // 🌟 ĐÃ THÊM: Danh sách thông báo
-  const [unreadCount, setUnreadCount] = useState(0); // 🌟 ĐÃ THÊM: Số lượng chưa đọc
+  const [notifications, setNotifications] = useState<any[]>([]); 
+  const [unreadCount, setUnreadCount] = useState(0); 
+
+  // 🌟 STATE QUẢN LÝ POPUP CẢNH BÁO TỪ ADMIN
+  const [warningPopup, setWarningPopup] = useState<any>(null);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
-    const token = localStorage.getItem('access_token'); // Cần token để gọi API thông báo
+    const token = localStorage.getItem('access_token'); 
 
     if (storedUser) {
       const parsedUser = JSON.parse(storedUser);
@@ -38,22 +41,34 @@ export default function Header() {
         })
         .catch(err => console.error('Lỗi tải danh sách yêu thích', err));
 
-      // 2. TẢI DANH SÁCH THÔNG BÁO LẦN ĐẦU (🌟 MỚI)
       if (token) {
+        // 2. TẢI DANH SÁCH THÔNG BÁO THƯỜNG
         fetch(apiUrl('notifications'), {
           headers: { Authorization: `Bearer ${token}` }
         })
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) {
-            setNotifications(data);
-            setUnreadCount(data.filter((n: any) => !n.isRead && !n.is_read).length);
+            // Loại bỏ WARNING_POPUP ra khỏi danh sách thông báo chuông
+            const normalNotifs = data.filter((n: any) => n.type !== 'WARNING_POPUP');
+            setNotifications(normalNotifs);
+            setUnreadCount(normalNotifs.filter((n: any) => !n.isRead && !n.is_read).length);
           }
         })
         .catch(err => console.error('Lỗi tải thông báo', err));
+
+        // 🌟 3. KIỂM TRA CẢNH BÁO CHƯA ĐỌC LÚC MỞ TRANG
+        fetch(apiUrl('notifications/unread-warnings'), {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.id) setWarningPopup(data);
+        })
+        .catch(err => console.error('Lỗi kiểm tra cảnh báo', err));
       }
 
-      // 3. LẮNG NGHE THÔNG BÁO MỚI TỪ SUPABASE (REALTIME) (🌟 MỚI)
+      // 4. LẮNG NGHE THÔNG BÁO MỚI TỪ SUPABASE (REALTIME)
       const channel = supabase
         .channel(`global_notifications_${parsedUser.id}`)
         .on('postgres_changes', { 
@@ -63,10 +78,17 @@ export default function Header() {
           }, 
           (payload) => {
             const newNotif = payload.new;
-            // Nếu đúng là thông báo của mình thì mới hiện
             if (String(newNotif.user_id) === String(parsedUser.id)) {
-              setNotifications(prev => [newNotif, ...prev]); // Đẩy lên đầu danh sách
-              setUnreadCount(prev => prev + 1); // Tăng số đếm
+              
+              // 🌟 NẾU LÀ CẢNH BÁO TỪ ADMIN -> BẬT MODAL LÊN NGAY LẬP TỨC
+              if (newNotif.type === 'WARNING_POPUP') {
+                setWarningPopup(newNotif);
+              } 
+              // Nếu là thông báo thường -> Thêm vào chuông
+              else {
+                setNotifications(prev => [newNotif, ...prev]); 
+                setUnreadCount(prev => prev + 1); 
+              }
             }
           }
         )
@@ -88,6 +110,7 @@ export default function Header() {
     setFavoritePosts([]); 
     setNotifications([]);
     setUnreadCount(0);
+    setWarningPopup(null);
     router.push('/');
   };
 
@@ -96,11 +119,9 @@ export default function Header() {
     return Number(price).toLocaleString('vi-VN');
   };
 
-  // --- XỬ LÝ ĐÓNG/MỞ CÁC MENU TRÁNH ĐÈ LÊN NHAU ---
-  
   const toggleFavorites = async () => {
     setShowUserMenu(false);
-    setShowNotifications(false); // Tắt thông báo khi mở trái tim
+    setShowNotifications(false); 
     if (!user) {
       alert('Vui lòng đăng nhập để xem danh sách đã lưu!');
       router.push('/login');
@@ -126,7 +147,7 @@ export default function Header() {
 
   const toggleNotifications = () => {
     setShowUserMenu(false);
-    setShowFavorites(false); // Tắt trái tim khi mở thông báo
+    setShowFavorites(false); 
     if (!user) {
       alert('Vui lòng đăng nhập để xem thông báo!');
       router.push('/login');
@@ -154,7 +175,6 @@ export default function Header() {
     }
   };
 
-  // 🌟 ĐÃ THÊM: Hàm Đánh dấu tất cả là đã đọc
   const handleMarkAllAsRead = async () => {
     const token = localStorage.getItem('access_token');
     if (!token) return;
@@ -164,7 +184,6 @@ export default function Header() {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${token}` }
       });
-      // Cập nhật giao diện lập tức
       setNotifications(prev => prev.map(n => ({ ...n, isRead: true, is_read: true })));
       setUnreadCount(0);
     } catch (error) {
@@ -172,8 +191,61 @@ export default function Header() {
     }
   };
 
+  // 🌟 HÀM XÁC NHẬN ĐÃ ĐỌC CẢNH BÁO TỪ ADMIN
+  const handleAcknowledgeWarning = async () => {
+    if (!warningPopup) return;
+    try {
+      const token = localStorage.getItem('access_token');
+      await fetch(apiUrl(`notifications/${warningPopup.id}/read`), {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setWarningPopup(null); // Tắt Modal
+    } catch (err) {
+      console.error('Lỗi khi xác nhận cảnh báo', err);
+    }
+  };
+
   return (
     <header className="bg-[#1877F2] text-white sticky top-0 z-50 shadow-md">
+      
+      {/* ========================================================================= */}
+      {/* 🌟 MODAL CẢNH BÁO GIAN LẬN (CHẶN TOÀN MÀN HÌNH - KHÔNG THỂ BẤM RA NGOÀI) */}
+      {/* ========================================================================= */}
+      {warningPopup && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 backdrop-blur-md px-4">
+          <div className="bg-white rounded-[2rem] shadow-[0_0_50px_rgba(239,68,68,0.3)] max-w-lg w-full overflow-hidden animate-fade-in-up border border-red-100">
+            <div className="bg-red-500 p-8 flex flex-col items-center text-center relative overflow-hidden">
+              {/* Hiệu ứng nền chớp đỏ */}
+              <div className="absolute inset-0 bg-red-600 animate-pulse opacity-50"></div>
+              <span className="text-6xl mb-3 relative z-10 drop-shadow-md">🚨</span>
+              <h2 className="text-xl font-black text-white uppercase tracking-wider relative z-10 drop-shadow-md">
+                {warningPopup.title || 'CẢNH BÁO TỪ BAN QUẢN TRỊ'}
+              </h2>
+            </div>
+            
+            <div className="p-8 text-center bg-white">
+              <p className="text-gray-800 font-medium text-[15px] leading-relaxed mb-6 whitespace-pre-wrap">
+                {warningPopup.content}
+              </p>
+              
+              <div className="bg-rose-50 border border-red-100 rounded-2xl p-5 mb-8 text-left shadow-inner">
+                <p className="text-xs text-red-700 font-medium leading-relaxed">
+                  <b>* Lưu ý nghiêm trọng:</b> Mọi hành vi cố tình cung cấp thông tin sai lệch, lách luật hoặc trốn tránh phí nền tảng trong quá trình giao dịch sẽ dẫn đến việc tài khoản của bạn bị <b>khóa vĩnh viễn</b> và đưa vào danh sách đen của Nhà Tốt.
+                </p>
+              </div>
+
+              <button 
+                onClick={handleAcknowledgeWarning}
+                className="w-full bg-gray-900 hover:bg-black text-white font-bold py-4 rounded-xl shadow-xl transition-all active:scale-95 text-sm uppercase tracking-wide"
+              >
+                Tôi đã hiểu và cam kết tuân thủ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
         
         {/* LOGO */}
@@ -255,7 +327,7 @@ export default function Header() {
             )}
           </div>
 
-          {/* ===================== NÚT THÔNG BÁO (🌟 MỚI NÂNG CẤP) ===================== */}
+          {/* ===================== NÚT THÔNG BÁO ===================== */}
           <div className="relative">
             <button 
               onClick={toggleNotifications}
@@ -268,7 +340,6 @@ export default function Header() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
               
-              {/* BADGE THÔNG BÁO CHƯA ĐỌC */}
               {user && unreadCount > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold px-1.5 min-w-[20px] h-5 rounded-full flex items-center justify-center border-2 border-[#1877F2] shadow-sm">
                   {unreadCount > 99 ? '99+' : unreadCount}
@@ -276,7 +347,6 @@ export default function Header() {
               )}
             </button>
 
-            {/* DROPDOWN DANH SÁCH THÔNG BÁO */}
             {showNotifications && (
               <div className="absolute top-full right-0 mt-3 w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden text-gray-800 flex flex-col z-50">
                 <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
@@ -302,7 +372,6 @@ export default function Header() {
                       const isUnread = !notif.isRead && !notif.is_read;
                       return (
                         <div key={notif.id} className={`flex gap-3 p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer ${isUnread ? 'bg-blue-50/40' : ''}`}>
-                          {/* Chấm xanh lá báo chưa đọc */}
                           <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${isUnread ? 'bg-[#1877F2]' : 'bg-transparent'}`}></div>
                           <div className="flex-1 min-w-0">
                             <h4 className={`text-sm ${isUnread ? 'font-bold text-gray-800' : 'font-semibold text-gray-600'}`}>
@@ -322,7 +391,6 @@ export default function Header() {
             )}
           </div>
 
-         {/* NÚT LIÊN HỆ / QUẢN LÝ CHAT */}
           <Link href="/chat" className="hidden md:flex items-center gap-2 bg-white text-gray-700 hover:bg-gray-100 px-4 py-2 rounded-full shadow-sm text-sm font-semibold transition-all">
             <svg className="w-4 h-4 text-[#1877F2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -330,14 +398,12 @@ export default function Header() {
             Liên hệ
           </Link>
 
-          {/* ĐĂNG NHẬP (nếu chưa có user) */}
           {!user && (
             <Link href="/login" className="bg-white text-gray-700 hover:bg-gray-100 px-4 py-2 rounded-full shadow-sm text-sm font-semibold transition-all">
               Đăng nhập
             </Link>
           )}
 
-          {/* NÚT ĐĂNG TIN */}
           <Link href="/create-post" className="bg-[#222222] hover:bg-black text-white text-sm font-bold px-5 py-2 rounded-full shadow-md transition-all">
             ĐĂNG TIN
           </Link>
@@ -348,7 +414,7 @@ export default function Header() {
               onClick={() => { 
                 setShowUserMenu(!showUserMenu); 
                 setShowFavorites(false); 
-                setShowNotifications(false); // Đóng thông báo khi mở User Menu
+                setShowNotifications(false); 
               }}
               className="flex items-center gap-2 bg-white text-gray-700 hover:bg-gray-100 px-3 py-2 rounded-full shadow-sm transition-all"
             >
