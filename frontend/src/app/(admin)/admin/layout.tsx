@@ -43,9 +43,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  // DANH SÁCH MENU MỚI (Đã thêm Báo cáo & Liên hệ)
+  // 🌟 CẬP NHẬT: THÊM MỤC QUẢN LÝ GIAO DỊCH VÀO MENU
   const menuItems = [
     { name: 'Tổng quan (Dashboard)', path: '/admin', icon: '📊' },
+    { name: 'Quản lý Đối soát', path: '/admin/transactions', icon: '💰' }, // <--- MỚI THÊM VÀO ĐÂY
     { name: 'Quản lý Người dùng', path: '/admin/users', icon: '👥' },
     { name: 'Duyệt bài đăng', path: '/admin/posts', icon: '📝' },
     { name: 'Báo cáo vi phạm', path: '/admin/reports', icon: '🚩' },
@@ -68,7 +69,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         <nav className="flex-1 p-5 space-y-2 overflow-y-auto custom-scrollbar">
           {menuItems.map((item) => {
-            const isActive = pathname === item.path;
+            // Highlight nếu đang ở trang hiện tại (hoặc các trang con của nó)
+            const isActive = pathname === item.path || (pathname.startsWith(item.path) && item.path !== '/admin');
             return (
               <Link 
                 key={item.path} 
@@ -103,11 +105,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* ======================= NỘI DUNG CHÍNH ======================= */}
       <main className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
         
-        {/* HEADER MỚI CỦA ADMIN (Đã xóa thông báo) */}
+        {/* HEADER CỦA ADMIN */}
         <header className="bg-white/70 backdrop-blur-xl px-10 py-5 flex items-center justify-between sticky top-0 z-10 border-b border-gray-100/50">
           <div>
             <h2 className="text-2xl font-black text-gray-800 tracking-tight">
-              {menuItems.find(m => m.path === pathname)?.name || 'Quản trị hệ thống'}
+              {menuItems.find(m => isActivePath(pathname, m.path))?.name || 'Quản trị hệ thống'}
             </h2>
             <div className="text-sm text-gray-500 font-medium mt-1 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
@@ -137,4 +139,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       
     </div>
   );
+}
+
+// Hàm phụ trợ để hiển thị đúng tiêu đề Header
+function isActivePath(currentPath: string, menuPath: string) {
+  if (menuPath === '/admin') return currentPath === '/admin';
+  return currentPath.startsWith(menuPath);
 }
