@@ -9,7 +9,7 @@ import { apiUrl } from '../services/api';
 export default function HomePage() {
   const [cities, setCities] = useState<any[]>([]);
   const [districts, setDistricts] = useState<any[]>([]);
-  const [filters, setFilters] = useState({ keyword: '', city: '', district: '', price: '', area: '' });
+  const [filters, setFilters] = useState({ keyword: '', city: '', district: '', price: '', area: '', transactionType: '' });
   const [appliedFilters, setAppliedFilters] = useState(filters);
 
   useEffect(() => {
@@ -36,7 +36,7 @@ export default function HomePage() {
   }, [filters.city]);
 
   const handleReset = () => {
-    const empty = { keyword: '', city: '', district: '', price: '', area: '' };
+    const empty = { keyword: '', city: '', district: '', price: '', area: '', transactionType: '' };
     setFilters(empty);
     setAppliedFilters(empty);
   };
@@ -95,6 +95,9 @@ export default function HomePage() {
       {/* KHUNG TÌM KIẾM NỔI LÊN (FLOATING CARD) VỚI ĐỔ BÓNG ĐẬM & HỖ TRỢ ENTER */}
       <div className="max-w-5xl mx-auto px-4 -mt-16 relative z-30 mb-6 w-full">
         <form onSubmit={handleSubmit} className="bg-white p-6 md:p-8 rounded-3xl shadow-2xl border border-gray-100">
+          <div className="mb-5 flex justify-center gap-2 rounded-2xl bg-gray-100 p-1.5">
+            {[['','Tất cả'],['SALE','Mua bán'],['RENT','Cho thuê']].map(([value,label])=><button key={value} type="button" onClick={()=>{const next={...filters,transactionType:value};setFilters(next);setAppliedFilters(next)}} className={`flex-1 rounded-xl px-5 py-2.5 text-sm font-black transition-all ${filters.transactionType===value?'bg-white text-blue-600 shadow-sm':'text-gray-500'}`}>{label}</button>)}
+          </div>
           
           {/* Ô TỪ KHÓA */}
           <div className="relative mb-5">

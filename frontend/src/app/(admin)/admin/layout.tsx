@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import UserAvatar from '@/components/UserAvatar';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -63,7 +64,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             NHÀ TỐT
           </Link>
           <span className="mt-3 text-[11px] font-extrabold text-gray-400 uppercase tracking-[0.2em] bg-gray-100 px-3 py-1 rounded-full">
-            Admin Workspace
+            Khu vực quản trị
           </span>
         </div>
 
@@ -119,14 +120,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
           {/* AVATAR ADMIN */}
           <div className="flex items-center gap-4 bg-white p-2 pr-4 rounded-full shadow-sm border border-gray-100">
-            <img 
-              src={adminUser?.avatarUrl || 'https://i.imgur.com/L1nYE9z.jpg'} 
-              alt="Admin Avatar" 
-              className="w-10 h-10 rounded-full object-cover border-2 border-[#1877F2]/20"
-            />
+            <UserAvatar user={adminUser} className="w-10 h-10 border-2 border-[#1877F2]/20" />
             <div className="text-right hidden md:block">
               <div className="text-sm font-extrabold text-gray-800">{adminUser?.fullName}</div>
-              <div className="text-[10px] font-bold text-[#1877F2] uppercase tracking-wider">Super Admin</div>
+              <div className="text-[10px] font-bold text-[#1877F2] uppercase tracking-wider">Quản trị viên</div>
             </div>
           </div>
         </header>

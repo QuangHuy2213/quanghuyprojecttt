@@ -20,7 +20,7 @@ const formatPrice = (price: any) => {
   return `${numPrice.toLocaleString('vi-VN')} Đ`;
 };
 
-export default function PostList({ filters }: { filters: { keyword: string; city: string; district: string; price: string; area: string } }) {
+export default function PostList({ filters }: { filters: { keyword: string; city: string; district: string; price: string; area: string; transactionType?: string } }) {
   const [posts, setPosts] = useState<any[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -67,6 +67,7 @@ export default function PostList({ filters }: { filters: { keyword: string; city
       if (filters.keyword) url += `&keyword=${filters.keyword}`;
       if (filters.price) url += `&price=${filters.price}`;
       if (filters.area) url += `&area=${filters.area}`;
+      if (filters.transactionType) url += `&transactionType=${filters.transactionType}`;
 
       const res = await fetch(apiUrl(url));
       const result = await res.json();
@@ -136,6 +137,7 @@ export default function PostList({ filters }: { filters: { keyword: string; city
             >
               {/* Ảnh bìa */}
               <div className="relative aspect-[4/3] w-full overflow-hidden bg-gray-100">
+                <span className={`absolute left-2 top-2 z-10 rounded-full px-2.5 py-1 text-[10px] font-black text-white ${post.transactionType === 'RENT' ? 'bg-emerald-600' : 'bg-blue-600'}`}>{post.transactionType === 'RENT' ? 'CHO THUÊ' : 'MUA BÁN'}</span>
                 {/* ĐÃ XÓA NHÃN "MUA BÁN" Ở ĐÂY */}
 
                 {/* Nút thả tim */}

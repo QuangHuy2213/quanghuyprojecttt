@@ -180,8 +180,8 @@ export default function CreatePostPage() {
       });
 
       if (res.ok) {
-        showToast('Đăng tin thành công rực rỡ!', 'success');
-        setTimeout(() => router.push('/'), 1500);
+        showToast('Đã gửi tin. Bài đăng đang chờ quản trị viên xét duyệt.', 'success');
+        setTimeout(() => router.replace('/dashboard'), 600);
       } else {
         showToast('Có lỗi xảy ra, vui lòng kiểm tra lại thông tin!', 'error');
       }
@@ -475,11 +475,7 @@ export default function CreatePostPage() {
             </div>
 
             {/* Nút Submit */}
-            <button type="submit" disabled={isLoading} 
-              className="w-full mt-6 flex items-center justify-center gap-2 py-4 px-4 rounded-2xl shadow-lg shadow-blue-500/30 text-sm font-bold text-white bg-gradient-to-r from-[#1877F2] to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:opacity-70 transform hover:-translate-y-0.5 transition-all"
-            >
-              {isLoading ? 'ĐANG XỬ LÝ...' : '🚀 ĐĂNG TIN NGAY'}
-            </button>
+            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3"><button type="button" onClick={()=>router.back()} disabled={isLoading} className="rounded-2xl bg-gray-100 py-4 text-sm font-bold text-gray-600 hover:bg-gray-200">Hủy</button><button type="submit" disabled={isLoading} className="sm:col-span-2 flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#1877F2] to-blue-600 py-4 text-sm font-bold text-white shadow-lg shadow-blue-500/30 disabled:opacity-70">{isLoading ? 'ĐANG GỬI XÉT DUYỆT...' : 'ĐĂNG TIN'}</button></div>
           </form>
         </div>
       </main>

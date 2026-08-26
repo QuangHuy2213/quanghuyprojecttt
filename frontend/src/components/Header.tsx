@@ -6,6 +6,20 @@ import { useRouter } from 'next/navigation';
 import UserDropdown from './UserDropdown';
 import { apiUrl } from '../services/api';
 import { supabase } from '../services/supabase'; 
+import UserAvatar from './UserAvatar';
+
+async function readJsonSafely(response: Response) {
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`API ${response.status}: ${text || response.statusText}`);
+  }
+  if (!text.trim()) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error('API trả về dữ liệu không đúng định dạng JSON.');
+  }
+}
 
 export default function Header() {
   const router = useRouter();
@@ -35,7 +49,7 @@ export default function Header() {
 
       // 1. TẢI DANH SÁCH YÊU THÍCH
       fetch(apiUrl(`posts/favorites/${parsedUser.id}`))
-        .then(res => res.json())
+        .then(readJsonSafely)
         .then(data => {
           if (Array.isArray(data)) setFavoritePosts(data);
         })
@@ -46,7 +60,7 @@ export default function Header() {
         fetch(apiUrl('notifications'), {
           headers: { Authorization: `Bearer ${token}` }
         })
-        .then(res => res.json())
+        .then(readJsonSafely)
         .then(data => {
           if (Array.isArray(data)) {
             // Loại bỏ WARNING_POPUP ra khỏi danh sách thông báo chuông
@@ -61,7 +75,7 @@ export default function Header() {
         fetch(apiUrl('notifications/unread-warnings'), {
           headers: { Authorization: `Bearer ${token}` }
         })
-        .then(res => res.json())
+        .then(readJsonSafely)
         .then(data => {
           if (data && data.id) setWarningPopup(data);
         })
@@ -100,6 +114,15 @@ export default function Header() {
     }
   }, []);
 
+  useEffect(() => {
+    const syncUser = () => {
+      const stored = localStorage.getItem('user');
+      setUser(stored ? JSON.parse(stored) : null);
+    };
+    window.addEventListener('user-updated', syncUser);
+    return () => window.removeEventListener('user-updated', syncUser);
+  }, []);
+
   const handleLogout = () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('user');
@@ -135,7 +158,7 @@ export default function Header() {
       setIsLoadingFavs(true);
       try {
         const res = await fetch(apiUrl(`posts/favorites/${user.id}`));
-        const data = await res.json();
+        const data = await readJsonSafely(res);
         if (Array.isArray(data)) setFavoritePosts(data);
       } catch (error) {
         console.error('Lỗi tải danh sách yêu thích', error);
@@ -418,9 +441,7 @@ export default function Header() {
               }}
               className="flex items-center gap-2 bg-white text-gray-700 hover:bg-gray-100 px-3 py-2 rounded-full shadow-sm transition-all"
             >
-              <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
+              <UserAvatar user={user} className="w-6 h-6" />
               <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
               </svg>

@@ -1,222 +1,24 @@
 'use client';
-
-import React, { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import Header from '@/components/Header';
 import { apiUrl } from '@/services/api';
 
-export default function UserTransactionsPage() {
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  
-  // State cho Modal Yêu Cầu Hủy Kèo
-  const [cancelModal, setCancelModal] = useState<{ isOpen: boolean, txId: string }>({ isOpen: false, txId: '' });
-  const [cancelReason, setCancelReason] = useState('');
-  const [isCancelling, setIsCancelling] = useState(false);
+const txLabels: Record<string,string> = { VERIFYING:'Chờ xác nhận',SUCCESS:'Đã giao dịch',DISPUTE:'Đang đối soát',CANCELLED:'Chưa giao dịch',PENDING_CANCEL:'Chờ hủy',CANCELLED_AFTER_SUCCESS:'Đã hủy sau giao dịch',FRAUD:'Có dấu hiệu gian lận' };
+const invLabels: Record<string,string> = { DRAFT:'Chờ admin phát hành',PENDING_PAYMENT:'Chờ thanh toán',PAID:'Đã thanh toán',OVERDUE:'Quá hạn',CANCELLED:'Đã hủy' };
 
-  useEffect(() => {
-    const userStr = localStorage.getItem('user');
-    const token = localStorage.getItem('access_token');
-    
-    if (userStr && token) {
-      const user = JSON.parse(userStr);
-      setCurrentUser(user);
-      
-      // Fetch lịch sử giao dịch cá nhân
-      fetch(apiUrl('transactions/my-transactions'), {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) setTransactions(data);
-      })
-      .catch(err => console.error("Lỗi tải giao dịch:", err));
-    }
-  }, []);
-
-  // 1. Hàm Gửi yêu cầu hủy
-  const submitCancelRequest = async () => {
-    if (!cancelReason.trim()) return alert('Vui lòng nhập lý do hủy!');
-    setIsCancelling(true);
-    
-    try {
-      const token = localStorage.getItem('access_token');
-      const res = await fetch(apiUrl(`transactions/${cancelModal.txId}/request-cancel`), {
-        method: 'PATCH',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify({ reason: cancelReason })
-      });
-
-      if (res.ok) {
-        alert('Đã gửi yêu cầu hủy. Đang chờ đối tác xác nhận.');
-        setCancelModal({ isOpen: false, txId: '' });
-        setCancelReason('');
-        window.location.reload(); 
-      } else {
-        const errorData = await res.json();
-        alert(`Không thể gửi yêu cầu: ${errorData.message}`);
-      }
-    } catch (error) {
-      alert('Lỗi kết nối.');
-    } finally {
-      setIsCancelling(false);
-    }
-  };
-
-  // 2. Hàm Phản hồi yêu cầu hủy (Đồng ý / Kháng cáo)
-  const handleRespondCancel = async (txId: string, isAgreed: boolean) => {
-    const actionText = isAgreed ? "ĐỒNG Ý HỦY" : "PHẢN ĐỐI (Đưa ra Tranh chấp)";
-    if (!confirm(`Bạn có chắc chắn muốn ${actionText} giao dịch này?`)) return;
-
-    try {
-      const token = localStorage.getItem('access_token');
-      const res = await fetch(apiUrl(`transactions/${txId}/respond-cancel`), {
-        method: 'PATCH',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify({ isAgreed })
-      });
-
-      if (res.ok) {
-        alert(isAgreed ? 'Đã xác nhận hủy giao dịch thành công.' : 'Đã chuyển giao dịch sang trạng thái Tranh chấp. Ban quản trị sẽ kiểm tra.');
-        window.location.reload();
-      } else {
-        const errorData = await res.json();
-        alert(`Lỗi: ${errorData.message}`);
-      }
-    } catch (error) {
-      console.error("Lỗi phản hồi:", error);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <Header />
-      
-      <main className="max-w-5xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-black text-gray-900 mb-6">Lịch sử giao dịch</h1>
-        
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden p-6">
-          {transactions.length === 0 ? (
-            <div className="text-center py-10 text-gray-500">Bạn chưa có giao dịch nào.</div>
-          ) : (
-            <div className="space-y-4">
-              {transactions.map(tx => {
-                const isBuyer = tx.buyerId === currentUser?.id;
-                const roleText = isBuyer ? 'Bạn là người mua' : 'Bạn là người bán';
-                const isInitiator = tx.cancelInitiatorId === currentUser?.id;
-                
-                // Kiểm tra xem đã qua 3 ngày (Grace Period) chưa
-                const updatedAt = new Date(tx.updatedAt);
-                const isGracePeriodOver = (new Date().getTime() - updatedAt.getTime()) > (3 * 24 * 60 * 60 * 1000);
-
-                return (
-                  <div key={tx.id} className="border border-gray-100 p-5 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:border-blue-100 transition-all">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md">#{tx.id.substring(0,8)}</span>
-                        <span className="text-xs font-semibold text-blue-600">{roleText}</span>
-                      </div>
-                      <h3 className="font-bold text-gray-800">Giao dịch Bài đăng ID: {tx.postId}</h3>
-                      <p className="text-sm mt-1">
-                        Trạng thái: <strong className={
-                          tx.status === 'SUCCESS' ? 'text-emerald-600' : 
-                          tx.status === 'PENDING_CANCEL' ? 'text-amber-500' :
-                          tx.status === 'DISPUTE' ? 'text-rose-600' : 'text-gray-700'
-                        }>{tx.status}</strong>
-                      </p>
-
-                      {/* Hiển thị lý do nếu đang chờ hủy */}
-                      {tx.status === 'PENDING_CANCEL' && (
-                        <p className="text-xs text-gray-500 mt-2 bg-amber-50 p-2 rounded-lg border border-amber-100">
-                          Lý do xin hủy: "{tx.cancelReason}"
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="flex flex-col gap-2">
-                      {/* TRƯỜNG HỢP 1: Giao dịch thành công -> Bấm xin hủy */}
-                      {tx.status === 'SUCCESS' && !isGracePeriodOver && (
-                        <button 
-                          onClick={() => setCancelModal({ isOpen: true, txId: tx.id })}
-                          className="px-4 py-2 bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold rounded-xl text-sm transition-all"
-                        >
-                          Yêu cầu Hủy kèo
-                        </button>
-                      )}
-                      
-                      {tx.status === 'SUCCESS' && isGracePeriodOver && (
-                        <span className="text-xs italic text-gray-400">Đã quá hạn hủy</span>
-                      )}
-                      
-                      {/* TRƯỜNG HỢP 2: Đang chờ hủy */}
-                      {tx.status === 'PENDING_CANCEL' && (
-                        isInitiator ? (
-                          <span className="text-sm font-semibold text-amber-600 bg-amber-50 px-4 py-2 rounded-xl">Đang chờ đối tác duyệt</span>
-                        ) : (
-                          <div className="flex gap-2">
-                            <button 
-                              onClick={() => handleRespondCancel(tx.id, true)}
-                              className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 font-bold rounded-xl text-sm transition-all"
-                            >
-                              Đồng ý Hủy
-                            </button>
-                            <button 
-                              onClick={() => handleRespondCancel(tx.id, false)}
-                              className="px-4 py-2 bg-rose-600 text-white hover:bg-rose-700 shadow-md font-bold rounded-xl text-sm transition-all"
-                            >
-                              Phản đối (Đưa ra Admin)
-                            </button>
-                          </div>
-                        )
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </main>
-
-      {/* 🌟 MODAL NHẬP LÝ DO YÊU CẦU HỦY */}
-      {cancelModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl animate-fade-in-up">
-            <h3 className="font-black text-lg text-gray-900 mb-2">Yêu cầu Hủy Giao Dịch</h3>
-            <p className="text-sm text-gray-500 mb-4">
-              Vui lòng nhập lý do. Đối tác của bạn sẽ xem xét và xác nhận yêu cầu này.
-            </p>
-            
-            <textarea 
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-              placeholder="Ví dụ: Xem nhà thực tế không ưng ý, thỏa thuận lại không thành công..."
-              className="w-full border border-gray-200 rounded-xl p-3 text-sm min-h-[100px] mb-4 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            />
-            
-            <div className="flex gap-2 justify-end">
-              <button 
-                onClick={() => setCancelModal({ isOpen: false, txId: '' })}
-                className="px-4 py-2 bg-gray-100 font-bold text-gray-700 rounded-xl hover:bg-gray-200"
-              >
-                Đóng
-              </button>
-              <button 
-                onClick={submitCancelRequest}
-                disabled={isCancelling}
-                className="px-4 py-2 bg-rose-600 text-white font-bold rounded-xl shadow-md disabled:opacity-50"
-              >
-                {isCancelling ? 'Đang gửi...' : 'Gửi Yêu Cầu'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+export default function TransactionsAndInvoicesPage(){
+ const [tab,setTab]=useState<'transactions'|'invoices'>('transactions'); const [transactions,setTransactions]=useState<any[]>([]); const [invoices,setInvoices]=useState<any[]>([]); const [user,setUser]=useState<any>(); const [loading,setLoading]=useState(true); const [popup,setPopup]=useState<string|null>(null);
+ const load=useCallback(async()=>{ const token=localStorage.getItem('access_token'), stored=localStorage.getItem('user'); if(!token||!stored){setLoading(false);return;} setUser(JSON.parse(stored)); const headers={Authorization:`Bearer ${token}`}; try{const [a,b]=await Promise.all([fetch(apiUrl('transactions/my-transactions'),{headers,cache:'no-store'}),fetch(apiUrl('transactions/my-invoices'),{headers,cache:'no-store'})]); if(a.ok)setTransactions(await a.json()); if(b.ok)setInvoices(await b.json());}finally{setLoading(false)} },[]);
+ useEffect(()=>{load();const timer=setInterval(load,15000);return()=>clearInterval(timer)},[load]);
+ const notify=(m:string)=>{setPopup(m);setTimeout(()=>setPopup(null),3000)};
+ const requestCancel=async(id:string)=>{const reason=window.prompt('Nhập lý do hủy giao dịch sau khi gặp mặt:');if(!reason?.trim())return;const token=localStorage.getItem('access_token');const res=await fetch(apiUrl(`transactions/${id}/request-cancel`),{method:'PATCH',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({reason})});const data=await res.json().catch(()=>({}));notify(res.ok?'Đã gửi yêu cầu hủy tới đối tác.':data.message||'Không thể gửi yêu cầu.');if(res.ok)load()};
+ const respondCancel=async(id:string,isAgreed:boolean)=>{const token=localStorage.getItem('access_token');const res=await fetch(apiUrl(`transactions/${id}/respond-cancel`),{method:'PATCH',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({isAgreed})});const data=await res.json().catch(()=>({}));notify(res.ok?(isAgreed?'Đã đồng ý hủy giao dịch.':'Đã chuyển tranh chấp tới admin.'):data.message||'Không thể xử lý.');if(res.ok)load()};
+ const pay=async(id:string)=>{const token=localStorage.getItem('access_token');const res=await fetch(apiUrl('payments/pay-invoice'),{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({invoiceId:id})});const data=await res.json();if(res.ok&&data.paymentUrl)location.href=data.paymentUrl;else notify(data.message||'Không thể tạo phiên thanh toán.');};
+ if(loading)return <div className="min-h-screen bg-slate-50"><Header/><div className="grid min-h-[60vh] place-items-center font-bold text-blue-600">Đang tải dữ liệu...</div></div>;
+ return <div className="min-h-screen bg-slate-50"><Header/>{popup&&<div className="fixed left-1/2 top-24 z-[100] -translate-x-1/2 rounded-2xl bg-rose-600 px-6 py-4 text-sm font-bold text-white shadow-2xl">{popup}</div>}<main className="mx-auto max-w-6xl px-4 py-10">
+  <section className="rounded-[2rem] bg-gradient-to-br from-slate-950 to-blue-900 p-8 text-white shadow-xl"><p className="text-xs font-bold uppercase tracking-[.2em] text-blue-200">Tài chính cá nhân</p><h1 className="mt-2 text-3xl font-black">Lịch sử giao dịch & hóa đơn</h1><p className="mt-2 text-sm text-blue-100">Thanh toán trong 30 ngày. Sau hạn, phí chậm thanh toán là 0,5% phí gốc cho mỗi tháng trễ.</p></section>
+  <div className="mt-6 inline-flex rounded-2xl border bg-white p-1.5"><button onClick={()=>setTab('transactions')} className={`rounded-xl px-5 py-2.5 text-sm font-bold ${tab==='transactions'?'bg-blue-600 text-white':'text-slate-500'}`}>Lịch sử giao dịch</button><button onClick={()=>setTab('invoices')} className={`rounded-xl px-5 py-2.5 text-sm font-bold ${tab==='invoices'?'bg-blue-600 text-white':'text-slate-500'}`}>Hóa đơn ({invoices.filter(i=>i.status==='PENDING_PAYMENT').length})</button></div>
+  <div className="mt-5 grid gap-4">{tab==='transactions'?transactions.map(tx=><article key={tx.id} className="flex flex-col gap-4 rounded-2xl border bg-white p-5 shadow-sm md:flex-row md:items-center"><img src={tx.post?.thumbnail||'https://via.placeholder.com/160'} className="h-20 w-28 rounded-xl object-cover" alt=""/><div className="flex-1"><Link href={`/posts/${tx.postId}`} className="font-black text-slate-900 hover:text-blue-600">{tx.post?.title||'Tin bất động sản'}</Link><p className="mt-1 text-sm text-slate-500">{tx.buyerId===user?.id?'Vai trò: Người mua':'Vai trò: Người bán'}</p></div><span className="rounded-full bg-blue-50 px-4 py-2 text-xs font-black text-blue-700">{txLabels[tx.status]||tx.status}</span><div className="flex gap-2">{tx.status==='SUCCESS'&&<button onClick={()=>requestCancel(tx.id)} className="rounded-xl bg-rose-50 px-4 py-2 text-xs font-bold text-rose-600">Yêu cầu hủy</button>}{tx.status==='PENDING_CANCEL'&&tx.cancelInitiatorId!==user?.id&&<><button onClick={()=>respondCancel(tx.id,true)} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold">Đồng ý hủy</button><button onClick={()=>respondCancel(tx.id,false)} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-bold text-white">Phản đối</button></>}</div></article>):invoices.map(inv=><article key={inv.id} className="rounded-2xl border bg-white p-6 shadow-sm"><div className="flex flex-col gap-5 md:flex-row md:items-center"><div className="flex-1"><Link href={`/posts/${inv.transaction?.post?.id}`} className="text-lg font-black text-slate-900 hover:text-blue-600">{inv.transaction?.post?.title||'Tin bất động sản'}</Link><p className="mt-2 text-sm text-slate-500">Hạn thanh toán: <b>{inv.dueDate?new Date(inv.dueDate).toLocaleDateString('vi-VN'):'Chờ phát hành'}</b></p>{inv.overdueMonths>0&&<p className="mt-1 text-sm font-bold text-rose-600">Trễ {inv.overdueMonths} tháng · Phí chậm {Number(inv.lateFee).toLocaleString('vi-VN')} ₫</p>}</div><div className="md:text-right"><p className="text-xs font-bold uppercase text-slate-400">Tổng thanh toán</p><p className="text-2xl font-black text-blue-700">{Number(inv.totalPayable).toLocaleString('vi-VN')} ₫</p><span className="text-xs font-bold text-slate-500">{invLabels[inv.status]||inv.status}</span></div>{['PENDING_PAYMENT','OVERDUE'].includes(inv.status)&&<button onClick={()=>pay(inv.id)} className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-black text-white">Thanh toán ngay</button>}</div></article>)}{((tab==='transactions'&&!transactions.length)||(tab==='invoices'&&!invoices.length))&&<div className="rounded-2xl bg-white p-12 text-center text-slate-400">Chưa có dữ liệu.</div>}</div>
+ </main></div>;
 }

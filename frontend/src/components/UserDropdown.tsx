@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { apiUrl } from '../services/api';
+import UserAvatar from './UserAvatar';
 
 export default function UserDropdown({ user, onLogout, onClose }: { user: any; onLogout: () => void; onClose: () => void }) {
   const [loading, setLoading] = useState(false);
@@ -10,7 +11,6 @@ export default function UserDropdown({ user, onLogout, onClose }: { user: any; o
   const [toastMessage, setToastMessage] = useState<string | null>(null); // State hiển thị thông báo kết quả
   
   const displayName = user?.fullName || 'Thành viên Nhà Tốt';
-  const firstLetter = displayName.charAt(0).toUpperCase();
 
   const handleUpgrade = async () => {
     setLoading(true);
@@ -100,9 +100,7 @@ export default function UserDropdown({ user, onLogout, onClose }: { user: any; o
         {/* THÔNG TIN USER */}
         <div className="p-6 text-center bg-gradient-to-b from-blue-50/50 to-white border-b border-gray-100 relative">
           <div className="relative inline-block mx-auto mb-3">
-            <div className="w-20 h-20 bg-gradient-to-tr from-[#1877F2] to-blue-400 text-white rounded-full flex items-center justify-center text-3xl font-extrabold shadow-md mx-auto">
-              {firstLetter}
-            </div>
+            <UserAvatar user={user} className="w-20 h-20 shadow-md mx-auto" />
           </div>
 
           <h3 className="font-extrabold text-lg text-gray-800 tracking-tight">{displayName}</h3>
@@ -154,6 +152,10 @@ export default function UserDropdown({ user, onLogout, onClose }: { user: any; o
                 <span className="text-sm font-semibold text-gray-700">Quản lý tin đăng</span>
               </div>
               <span className="text-gray-300 text-sm">›</span>
+            </Link>
+
+            <Link href="/settings" onClick={onClose} className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors group">
+              <div className="flex items-center gap-3"><span>⚙️</span><span className="text-sm font-semibold text-gray-700">Cài đặt tài khoản</span></div><span className="text-gray-300">›</span>
             </Link>
 
             <Link href="/saved-searches" onClick={onClose} className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors group">

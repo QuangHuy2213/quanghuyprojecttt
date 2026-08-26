@@ -2,6 +2,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { apiUrl } from '@/services/api';
+import Link from 'next/link';
+
+const statusLabel: Record<string,string> = { SUCCESS:'Đã giao dịch',VERIFYING:'Chờ xác nhận',DISPUTE:'Cần đối soát',FRAUD:'Gian lận',PENDING_CANCEL:'Chờ hủy',CANCELLED:'Chưa giao dịch',CANCELLED_AFTER_SUCCESS:'Đã hủy',DRAFT:'Bản nháp',PENDING_PAYMENT:'Chờ thanh toán',PAID:'Đã thanh toán',OVERDUE:'Quá hạn' };
 
 // =========================================================================
 // 🌟 COMPONENT: MODAL GỬI CẢNH BÁO CHẶN MÀN HÌNH
@@ -43,7 +46,7 @@ function AdminWarningModal({ targetUserId, targetUserName, onClose }: { targetUs
           <div className="mb-4">
             <label className="block text-sm font-semibold text-gray-700 mb-1">Đối tượng nhận cảnh báo:</label>
             <div className="bg-rose-50 border border-red-100 px-4 py-2.5 rounded-xl text-red-600 font-bold text-sm">
-              {targetUserName} (ID: {targetUserId.substring(0, 8)}...)
+              {targetUserName}
             </div>
           </div>
           <div className="mb-6">
@@ -100,7 +103,7 @@ export default function AdminTransactionsPage() {
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); const timer = setInterval(fetchData, 15000); return () => clearInterval(timer); }, []);
 
   // --- Xử lý Giao dịch ---
   const handleResolveDispute = async (transactionId: string, action: 'APPROVE' | 'CANCEL') => {
@@ -110,10 +113,18 @@ export default function AdminTransactionsPage() {
       const res = await fetch(apiUrl(`admin/transactions/${transactionId}/resolve`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ resolutionStatus: action === 'APPROVE' ? 'SUCCESS' : 'CANCELLED' }),
       });
       if (res.ok) { alert('✨ Đã giải quyết tranh chấp!'); fetchData(); }
     } catch (error) { console.error(error); }
+  };
+
+  const handleDelete = async (transactionId: string) => {
+    if (!confirm('Xóa giao dịch đã xử lý khỏi danh sách? Dữ liệu hóa đơn liên quan cũng sẽ bị xóa.')) return;
+    const token = localStorage.getItem('access_token');
+    const res = await fetch(apiUrl(`transactions/admin/${transactionId}`), { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) fetchData(); else alert(data.message || 'Chưa thể xóa giao dịch này.');
   };
 
   // --- Xử lý Hóa đơn ---
@@ -156,19 +167,19 @@ export default function AdminTransactionsPage() {
             onClick={() => setActiveTab('TRANSACTIONS')}
             className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'TRANSACTIONS' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
           >
-            Quản lý Giao Dịch
+            Giao dịch & đối soát
           </button>
           <button 
             onClick={() => setActiveTab('INVOICES')}
             className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'INVOICES' ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
           >
-            Quản lý Hóa Đơn
+            Hóa đơn thanh toán
           </button>
         </div>
 
         <div className={`text-white px-6 py-3 rounded-2xl shadow-lg flex flex-col ${activeTab === 'TRANSACTIONS' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 shadow-blue-500/20' : 'bg-gradient-to-r from-emerald-500 to-teal-500 shadow-emerald-500/20'}`}>
           <span className="text-[10px] uppercase font-bold tracking-wider opacity-80">
-            {activeTab === 'TRANSACTIONS' ? 'Tổng phí App tạm tính' : 'Tổng tiền đã thu (PAID)'}
+            {activeTab === 'TRANSACTIONS' ? 'Tổng phí nền tảng dự kiến' : 'Tổng tiền đã thu'}
           </span>
           <span className="text-lg font-black font-mono">
             {activeTab === 'TRANSACTIONS' ? totalRevenue.toLocaleString() : totalCollected.toLocaleString()} VNĐ
@@ -184,7 +195,7 @@ export default function AdminTransactionsPage() {
           <div className="flex gap-2 py-2 overflow-x-auto">
             {['ALL', 'SUCCESS', 'VERIFYING', 'DISPUTE', 'FRAUD', 'PENDING_CANCEL', 'CANCELLED_AFTER_SUCCESS'].map((status) => (
               <button key={status} onClick={() => setTxFilter(status)} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${txFilter === status ? 'bg-gray-900 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                {status === 'ALL' ? 'Tất cả' : status.replace(/_/g, ' ')}
+                {status === 'ALL' ? 'Tất cả' : statusLabel[status] || status}
               </button>
             ))}
           </div>
@@ -193,10 +204,10 @@ export default function AdminTransactionsPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50 text-gray-400 text-[11px] uppercase tracking-wider font-bold">
-                  <th className="py-3 px-4">Mã GD / Post</th>
-                  <th className="py-3 px-4">Bên Mua & Bên Bán</th>
-                  <th className="py-3 px-4">Giá trị nhà</th>
-                  <th className="py-3 px-4">Phí App Thu</th>
+                  <th className="py-3 px-4">Bài đăng</th>
+                  <th className="py-3 px-4">Người mua và người bán</th>
+                  <th className="py-3 px-4">Giá trị giao dịch</th>
+                  <th className="py-3 px-4">Phí nền tảng</th>
                   <th className="py-3 px-4">Trạng thái</th>
                   <th className="py-3 px-4 text-right">Hành động</th>
                 </tr>
@@ -208,17 +219,16 @@ export default function AdminTransactionsPage() {
                   filteredTx.map((tx) => (
                     <tr key={tx.id} className="hover:bg-blue-50/20 transition-all">
                       <td className="py-4 px-4">
-                        <div className="font-bold text-xs text-gray-900 font-mono">#{tx.id.substring(0, 8)}</div>
-                        <div className="text-[11px] text-gray-400 mt-0.5">Post ID: {tx.postId}</div>
+                        <Link href={`/posts/${tx.postId}`} className="font-bold text-sm text-blue-700 hover:underline">{tx.post?.title || 'Xem bài đăng'}</Link>
                       </td>
                       <td className="py-4 px-4">
                         <div className="text-xs text-gray-700 flex items-center gap-1.5 mb-1">
-                          <span className="w-8 text-gray-400">Mua:</span> 
+                          <span className="w-9 text-gray-400">Mua:</span> 
                           <span className="font-bold flex-1">{tx.buyer?.fullName || tx.buyerId?.substring(0, 6)}</span>
                           <button onClick={() => setWarningTarget({userId: tx.buyerId, userName: tx.buyer?.fullName || 'Người Mua'})} className="text-lg hover:scale-110 transition-transform bg-rose-50 rounded px-1" title="Cảnh báo">⚠️</button>
                         </div>
                         <div className="text-xs text-gray-700 flex items-center gap-1.5">
-                          <span className="w-8 text-gray-400">Bán:</span> 
+                          <span className="w-9 text-gray-400">Bán:</span> 
                           <span className="font-bold flex-1">{tx.seller?.fullName || tx.sellerId?.substring(0, 6)}</span>
                           <button onClick={() => setWarningTarget({userId: tx.sellerId, userName: tx.seller?.fullName || 'Người Bán'})} className="text-lg hover:scale-110 transition-transform bg-rose-50 rounded px-1" title="Cảnh báo">⚠️</button>
                         </div>
@@ -227,16 +237,16 @@ export default function AdminTransactionsPage() {
                       <td className="py-4 px-4 font-mono text-xs font-bold text-blue-600">{tx.calculatedFee ? `${Number(tx.calculatedFee).toLocaleString()}` : '--'}</td>
                       <td className="py-4 px-4">
                         <span className={`inline-flex px-2 py-1 rounded-md text-[10px] font-black border ${tx.status === 'SUCCESS' ? 'bg-emerald-50 text-emerald-600' : tx.status === 'DISPUTE' ? 'bg-rose-50 text-rose-600 animate-pulse' : 'bg-gray-100 text-gray-600'}`}>
-                          {tx.status}
+                          {statusLabel[tx.status] || tx.status}
                         </span>
                       </td>
                       <td className="py-4 px-4 text-right">
                         {tx.status === 'DISPUTE' ? (
                           <div className="flex flex-col items-end gap-1.5">
-                            <button onClick={() => handleResolveDispute(tx.id, 'APPROVE')} className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold w-full max-w-[120px]">Duyệt Thành Công</button>
-                            <button onClick={() => handleResolveDispute(tx.id, 'CANCEL')} className="px-3 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold w-full max-w-[120px]">Hủy Bỏ</button>
+                            <button onClick={() => handleResolveDispute(tx.id, 'APPROVE')} className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold w-full max-w-[140px]">Công nhận giao dịch</button>
+                            <button onClick={() => handleResolveDispute(tx.id, 'CANCEL')} className="px-3 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold w-full max-w-[140px]">Hủy giao dịch</button>
                           </div>
-                        ) : <span className="text-xs text-gray-400 italic">N/A</span>}
+                        ) : ['SUCCESS','CANCELLED','CANCELLED_AFTER_SUCCESS','FRAUD'].includes(tx.status) ? <button onClick={()=>handleDelete(tx.id)} className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-100">Xóa</button> : <span className="text-xs text-gray-400">Đang hoạt động</span>}
                       </td>
                     </tr>
                   ))
@@ -255,7 +265,7 @@ export default function AdminTransactionsPage() {
           <div className="flex gap-2 py-2 overflow-x-auto">
             {['ALL', 'DRAFT', 'PENDING_PAYMENT', 'PAID', 'OVERDUE', 'CANCELLED'].map((status) => (
               <button key={status} onClick={() => setInvFilter(status)} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${invFilter === status ? 'bg-gray-900 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                {status === 'ALL' ? 'Tất cả' : status.replace(/_/g, ' ')}
+                {status === 'ALL' ? 'Tất cả' : statusLabel[status] || status}
               </button>
             ))}
           </div>
@@ -264,10 +274,10 @@ export default function AdminTransactionsPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50 text-gray-400 text-[11px] uppercase tracking-wider font-bold">
-                  <th className="py-3 px-4">Mã HĐ / Post</th>
-                  <th className="py-3 px-4">Khách Hàng (Người nợ)</th>
-                  <th className="py-3 px-4">Số Tiền Thu</th>
-                  <th className="py-3 px-4">Hạn Thanh Toán</th>
+                  <th className="py-3 px-4">Bài đăng</th>
+                  <th className="py-3 px-4">Người thanh toán</th>
+                  <th className="py-3 px-4">Số tiền cần thu</th>
+                  <th className="py-3 px-4">Hạn thanh toán</th>
                   <th className="py-3 px-4">Trạng thái</th>
                   <th className="py-3 px-4 text-right">Hành động</th>
                 </tr>
@@ -279,26 +289,25 @@ export default function AdminTransactionsPage() {
                   filteredInv.map((inv) => (
                     <tr key={inv.id} className="hover:bg-emerald-50/20 transition-all">
                       <td className="py-4 px-4">
-                        <div className="font-bold text-xs text-gray-900 font-mono">#{inv.id.substring(0, 8)}</div>
-                        <div className="text-[11px] text-gray-400 mt-0.5">Post ID: {inv.transaction?.postId || 'N/A'}</div>
+                        <Link href={`/posts/${inv.transaction?.post?.id}`} className="font-bold text-sm text-blue-700 hover:underline">{inv.transaction?.post?.title || 'Xem bài đăng'}</Link>
                       </td>
                       <td className="py-4 px-4">
                         <div className="text-xs font-bold text-gray-800">{inv.user?.fullName}</div>
                         <div className="text-[11px] text-gray-500 mt-0.5">{inv.user?.phoneNumber || inv.user?.email}</div>
                       </td>
-                      <td className="py-4 px-4 font-mono text-xs font-bold text-emerald-600">{Number(inv.amount || 0).toLocaleString()}</td>
+                      <td className="py-4 px-4 font-mono text-xs font-bold text-emerald-600">{Number(inv.totalPayable || inv.amount || 0).toLocaleString()}</td>
                       <td className="py-4 px-4 text-xs font-medium text-gray-600">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString('vi-VN') : '--'}</td>
                       <td className="py-4 px-4">
                         <span className={`inline-flex px-2.5 py-1 rounded-xl text-[10px] font-black border ${inv.status === 'PAID' ? 'bg-emerald-50 text-emerald-600' : inv.status === 'PENDING_PAYMENT' ? 'bg-amber-50 text-amber-600' : 'bg-gray-100 text-gray-600'}`}>
-                          {inv.status}
+                          {statusLabel[inv.status] || inv.status}
                         </span>
                       </td>
                       <td className="py-4 px-4 text-right">
                         {inv.status === 'DRAFT' ? (
                           <button onClick={() => handleIssueInvoice(inv.id)} className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 shadow-md rounded-xl text-xs font-bold">
-                            Phát Hành
+                            Gửi hóa đơn
                           </button>
-                        ) : <span className="text-[11px] text-gray-400 italic">Không khả dụng</span>}
+                        ) : <span className="text-[11px] text-gray-400 italic">Đã xử lý</span>}
                       </td>
                     </tr>
                   ))

@@ -255,9 +255,9 @@ export default function DashboardPage() {
                   {/* THAO TÁC (SỬA, XÓA, ĐÃ BÁN) */}
                   <div className="col-span-3 md:col-span-2 flex justify-center items-center gap-1.5">
                     {/* Nút đánh dấu Đã bán / Mở lại */}
-                    {!isPending && !isRejected && (
+                    {!isPending && !isRejected && !isSold && (
                       <button
-                        onClick={() => isSold ? handleUpdateStatus(post.id, 'ACTIVE') : setSoldPost(post)}
+                        onClick={() => setSoldPost(post)}
                         className={`px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${
                           isSold 
                             ? 'bg-emerald-600 text-white hover:bg-emerald-700' 
@@ -265,24 +265,24 @@ export default function DashboardPage() {
                         }`}
                         title={isSold ? 'Mở lại tin bán' : 'Đánh dấu đã bán'}
                       >
-                        {isSold ? 'Mở bán' : 'Đã bán'}
+                        Đã bán
                       </button>
                     )}
 
-                    <Link 
+                    {!isSold && <Link 
                       href={`/dashboard/edit/${post.id}`}
                       className="p-2.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all shadow-sm" 
                       title="Sửa tin"
                     >
                       ✏️
-                    </Link>
-                    <button 
+                    </Link>}
+                    {!isSold && <button 
                       onClick={() => handleDelete(post.id, post.title)}
                       className="p-2.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-all shadow-sm" 
                       title="Xóa tin"
                     >
                       🗑️
-                    </button>
+                    </button>}
                   </div>
 
                 </div>

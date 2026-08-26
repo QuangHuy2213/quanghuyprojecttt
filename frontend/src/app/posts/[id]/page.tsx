@@ -13,6 +13,7 @@ export default function PostDetailPage() {
   const [post, setPost] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [selectedImage, setSelectedImage] = useState('');
 
   const [reportModal, setReportModal] = useState(false);
   const [reportReason, setReportReason] = useState('');
@@ -44,6 +45,7 @@ export default function PostDetailPage() {
         .then(res => res.json())
         .then(data => {
           setPost(data);
+          setSelectedImage(data.images?.[0]?.url || data.thumbnail || '');
           setIsLoading(false);
         })
         .catch(err => {
@@ -167,12 +169,13 @@ export default function PostDetailPage() {
           <div className="lg:col-span-8 space-y-6">
             
             {/* Khung Hình Ảnh */}
-            <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 group">
+            <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 group p-3">
               <img 
-                src={post.thumbnail || 'https://via.placeholder.com/1000x600?text=No+Image'} 
+                src={selectedImage || post.thumbnail || 'https://via.placeholder.com/1000x600?text=No+Image'} 
                 alt={post.title} 
-                className="w-full h-[400px] object-cover"
+                className="w-full h-[420px] object-cover rounded-xl"
               />
+              {(post.images?.length > 1) && <div className="mt-3 grid grid-cols-4 sm:grid-cols-6 gap-2">{post.images.map((image:any)=><button key={image.id} onClick={()=>setSelectedImage(image.url)} className={`overflow-hidden rounded-lg border-2 ${selectedImage===image.url?'border-blue-600':'border-transparent'}`}><img src={image.url} alt="Ảnh bất động sản" className="h-20 w-full object-cover"/></button>)}</div>}
             </div>
 
             {/* Khung Thông Tin Chính */}
