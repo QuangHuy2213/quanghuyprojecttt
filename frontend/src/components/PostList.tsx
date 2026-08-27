@@ -27,6 +27,18 @@ export default function PostList({ filters }: { filters: { keyword: string; city
   const [isLoading, setIsLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [favoritedIds, setFavoritedIds] = useState<number[]>([]);
+  const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({
+    show: false,
+    message: '',
+    type: 'success',
+  });
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ show: true, message, type });
+    window.setTimeout(() => {
+      setToast((prev) => ({ ...prev, show: false }));
+    }, 3000);
+  };
 
   useEffect(() => {
     const handleFavoriteRemoved = (event: any) => {
@@ -96,15 +108,17 @@ export default function PostList({ filters }: { filters: { keyword: string; city
   const handleFavorite = async (e: React.MouseEvent, postId: number) => {
     e.preventDefault(); 
     if (!user || !user.id) {
-      alert('Vui lòng đăng nhập để lưu tin nhé!');
+      showToast('Vui lòng đăng nhập để lưu tin.', 'error');
       return;
     }
 
     const isAlreadyFavorited = favoritedIds.includes(postId);
     if (isAlreadyFavorited) {
       setFavoritedIds(prev => prev.filter(id => id !== postId));
+      showToast('Đã bỏ tin khỏi danh sách đã lưu.');
     } else {
       setFavoritedIds(prev => [...prev, postId]);
+      showToast('Đã lưu tin vào danh sách yêu thích.');
     }
 
     try {
@@ -119,13 +133,45 @@ export default function PostList({ filters }: { filters: { keyword: string; city
   };
 
   if ((!posts || posts.length === 0) && !isLoading) {
-    return <div className="text-center text-gray-500 py-20 font-medium">Không tìm thấy bài viết phù hợp với tiêu chí lọc.</div>;
+    return (
+      <div className="rounded-[24px] border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-2xl">⌕</div>
+        <div className="mt-4 text-base font-black text-slate-800">Không tìm thấy bất động sản phù hợp</div>
+        <div className="mt-1 text-sm font-medium text-slate-500">Hãy thử thay đổi khu vực, mức giá hoặc diện tích.</div>
+      </div>
+    );
   }
 
   return (
-    <div>
+    <div className="relative">
+      <div
+        className={`fixed left-1/2 top-24 z-[100] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 transition-all duration-300 ${
+          toast.show
+            ? 'pointer-events-auto translate-y-0 opacity-100'
+            : 'pointer-events-none -translate-y-4 opacity-0'
+        }`}
+      >
+        <div className={`flex items-center gap-3 rounded-2xl border bg-white px-4 py-3.5 shadow-2xl ${
+          toast.type === 'error' ? 'border-rose-200' : 'border-emerald-200'
+        }`}>
+          <div className={`flex h-9 w-9 items-center justify-center rounded-xl font-black ${
+            toast.type === 'error' ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'
+          }`}>
+            {toast.type === 'error' ? '!' : '✓'}
+          </div>
+          <span className="text-sm font-extrabold text-slate-700">{toast.message}</span>
+        </div>
+      </div>
+
+      {isLoading && (
+        <div className="mb-5 flex items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" />
+          Đang cập nhật danh sách bất động sản...
+        </div>
+      )}
+
       {/* KHUNG GRID */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {posts.map((post: any) => {
           const isFavorited = favoritedIds.includes(post.id);
 
@@ -133,17 +179,17 @@ export default function PostList({ filters }: { filters: { keyword: string; city
             <Link 
               href={`/posts/${post.id}`} 
               key={post.id} 
-              className="flex flex-col bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100 overflow-hidden cursor-pointer group relative"
+              className="group relative flex cursor-pointer flex-col overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl"
             >
               {/* Ảnh bìa */}
-              <div className="relative aspect-[4/3] w-full overflow-hidden bg-gray-100">
-                <span className={`absolute left-2 top-2 z-10 rounded-full px-2.5 py-1 text-[10px] font-black text-white ${post.transactionType === 'RENT' ? 'bg-emerald-600' : 'bg-blue-600'}`}>{post.transactionType === 'RENT' ? 'CHO THUÊ' : 'MUA BÁN'}</span>
+              <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100">
+                <span className={`absolute left-2 top-2 z-10 rounded-xl px-2.5 py-1.5 text-[11px] font-black tracking-wide text-white shadow-sm ${post.transactionType === 'RENT' ? 'bg-emerald-600' : 'bg-blue-600'}`}>{post.transactionType === 'RENT' ? 'CHO THUÊ' : 'MUA BÁN'}</span>
                 {/* ĐÃ XÓA NHÃN "MUA BÁN" Ở ĐÂY */}
 
                 {/* Nút thả tim */}
                 <button 
                   onClick={(e) => handleFavorite(e, post.id)}
-                  className={`absolute top-2 right-2 z-10 p-2 bg-black/30 hover:bg-black/50 backdrop-blur-sm rounded-full transition-all active:scale-90 ${isFavorited ? 'text-red-500 bg-white/90 hover:bg-white' : 'text-white'}`}
+                  className={`absolute right-2.5 top-2.5 z-10 flex h-10 w-10 items-center justify-center rounded-xl border border-white/30 bg-slate-950/35 text-white shadow-lg backdrop-blur-md transition-all hover:bg-slate-950/55 active:scale-90 ${isFavorited ? 'border-rose-100 bg-white text-rose-500 hover:bg-white' : ''}`}
                   title={isFavorited ? "Bỏ lưu" : "Lưu tin này"}
                 >
                   <svg className="w-4 h-4 sm:w-5 sm:h-5" fill={isFavorited ? "currentColor" : "none"} stroke="currentColor" strokeWidth={isFavorited ? "0" : "2"} viewBox="0 0 24 24">
@@ -154,41 +200,41 @@ export default function PostList({ filters }: { filters: { keyword: string; city
                 <img
                   src={post.thumbnail || 'https://via.placeholder.com/400x300?text=No+Image'}
                   alt={post.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
               </div>
 
               {/* Thông tin chi tiết */}
-              <div className="p-3 sm:p-4 flex flex-col flex-grow">
+              <div className="flex flex-grow flex-col p-4">
                 {/* Tiêu đề */}
-                <h3 className="font-medium text-gray-800 line-clamp-2 leading-snug mb-2 group-hover:text-[#1877F2] transition-colors text-sm sm:text-[15px]" title={post.title}>
+                <h3 className="mb-3 line-clamp-2 min-h-[48px] text-[15px] font-black leading-6 text-slate-900 transition-colors group-hover:text-blue-700" title={post.title}>
                   {post.title}
                 </h3>
                 
                 {/* Giá và Diện tích */}
-                <div className="mt-auto flex items-baseline gap-2">
-                  <span className="text-red-500 font-bold text-sm sm:text-base whitespace-nowrap">
+                <div className="mt-auto flex flex-wrap items-baseline gap-2">
+                  <span className="whitespace-nowrap text-lg font-black text-rose-600">
                     {formatPrice(post.price)}
                   </span>
                   {post.area && (
-                    <span className="text-[11px] sm:text-xs text-gray-500 font-medium before:content-['•'] before:mr-1.5 sm:before:mr-2">
+                    <span className="text-sm font-bold text-slate-500 before:mr-2 before:content-['•']">
                       {Number(post.area)} m²
                     </span>
                   )}
                 </div>
 
                 {/* 🌟 HIỂN THỊ TRỰC TIẾP TÊN THẬT CỦA NGƯỜI ĐĂNG 🌟 */}
-                <div className="text-gray-500 text-[11px] sm:text-xs mt-1.5 flex items-center font-medium">
-                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-1 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                <div className="mt-3 flex items-center text-sm font-semibold text-slate-600">
+                  <svg className="mr-1.5 h-4 w-4 flex-shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
                   <span className="truncate">{post.sellerName || post.user?.fullName || 'Người dùng'}</span>
                 </div>
 
                 {/* VỊ TRÍ */}
-                <div className="text-gray-400 text-[11px] sm:text-xs mt-1.5 pt-2 border-t border-gray-100 flex items-center">
-                  <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-1.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                <div className="mt-3 flex items-center border-t border-slate-100 pt-3 text-sm text-slate-500">
+                  <svg className="mr-1.5 h-4 w-4 flex-shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
   
                   <span 
-                    className="truncate font-medium text-gray-500" 
+                    className="truncate font-semibold text-slate-500"
                     title={[post.addressDetail, post.districts?.name, post.cities?.name].filter(Boolean).join(', ')}
                   >
                   {/* Hàm filter(Boolean).join(', ') sẽ tự động nối các thông tin lại bằng dấu phẩy, cái nào trống nó sẽ tự động bỏ qua */}
@@ -203,11 +249,11 @@ export default function PostList({ filters }: { filters: { keyword: string; city
 
       {/* PHÂN TRANG */}
       {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-1.5 sm:gap-2 mt-12 flex-wrap">
+        <div className="mt-10 flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <button
             onClick={() => setPage((prev) => Math.max(1, prev - 1))}
             disabled={page === 1 || isLoading}
-            className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl border border-gray-200 bg-white text-gray-600 disabled:opacity-40 hover:bg-gray-50 transition-all font-medium text-xs sm:text-sm"
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-extrabold text-slate-600 transition-all hover:bg-slate-50 disabled:opacity-40"
           >
             Trước
           </button>
@@ -217,10 +263,10 @@ export default function PostList({ filters }: { filters: { keyword: string; city
               key={pageNumber}
               onClick={() => setPage(pageNumber)}
               disabled={isLoading}
-              className={`w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg sm:rounded-xl border font-medium text-xs sm:text-sm transition-all ${
+              className={`flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-extrabold transition-all ${
                 pageNumber === page
-                  ? 'bg-[#1877F2] text-white border-[#1877F2] shadow-md shadow-blue-500/20'
-                  : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                  ? 'border-blue-600 bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
               }`}
             >
               {pageNumber}
@@ -230,7 +276,7 @@ export default function PostList({ filters }: { filters: { keyword: string; city
           <button
             onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
             disabled={page === totalPages || isLoading}
-            className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl border border-gray-200 bg-white text-gray-600 disabled:opacity-40 hover:bg-gray-50 transition-all font-medium text-xs sm:text-sm"
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-extrabold text-slate-600 transition-all hover:bg-slate-50 disabled:opacity-40"
           >
             Sau
           </button>

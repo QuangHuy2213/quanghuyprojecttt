@@ -24,6 +24,19 @@ async function readJsonSafely(response: Response) {
 export default function Header() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    setIsDark(document.documentElement.classList.contains('dark'));
+  }, []);
+
+  const toggleTheme = () => {
+    const next = !document.documentElement.classList.contains('dark');
+    document.documentElement.classList.toggle('dark', next);
+    document.documentElement.style.colorScheme = next ? 'dark' : 'light';
+    localStorage.setItem('theme', next ? 'dark' : 'light');
+    setIsDark(next);
+  };
   
   // STATE QUẢN LÝ DROPDOWN
   const [showFavorites, setShowFavorites] = useState(false);
@@ -40,6 +53,21 @@ export default function Header() {
 
   // 🌟 STATE QUẢN LÝ POPUP CẢNH BÁO TỪ ADMIN
   const [warningPopup, setWarningPopup] = useState<any>(null);
+  const [headerToast, setHeaderToast] = useState<{
+    show: boolean;
+    message: string;
+    type: 'success' | 'error' | 'info';
+  }>({ show: false, message: '', type: 'info' });
+
+  const showHeaderToast = (
+    message: string,
+    type: 'success' | 'error' | 'info' = 'info'
+  ) => {
+    setHeaderToast({ show: true, message, type });
+    window.setTimeout(() => {
+      setHeaderToast((prev) => ({ ...prev, show: false }));
+    }, 3000);
+  };
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -187,7 +215,7 @@ export default function Header() {
     setShowUserMenu(false);
     setShowNotifications(false); 
     if (!user) {
-      alert('Vui lòng đăng nhập để xem danh sách đã lưu!');
+      showHeaderToast('Vui lòng đăng nhập để xem danh sách đã lưu.', 'error');
       router.push('/login');
       return;
     }
@@ -213,7 +241,7 @@ export default function Header() {
     setShowUserMenu(false);
     setShowFavorites(false); 
     if (!user) {
-      alert('Vui lòng đăng nhập để xem thông báo!');
+      showHeaderToast('Vui lòng đăng nhập để xem thông báo.', 'error');
       router.push('/login');
       return;
     }
@@ -268,11 +296,14 @@ export default function Header() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.message || 'Không thể gửi phản hồi giao dịch.');
       setPendingConfirmations(prev => prev.filter(item => item.id !== transactionId));
-      alert(isConfirmed
-        ? 'Đã xác nhận giao dịch. Bài đăng đã được đóng.'
-        : 'Đã gửi phản hồi không xác nhận. Giao dịch sẽ được chuyển cho admin đối soát.');
+      showHeaderToast(
+        isConfirmed
+          ? 'Đã xác nhận giao dịch. Bài đăng đã được đóng.'
+          : 'Đã gửi phản hồi không xác nhận. Giao dịch sẽ được chuyển cho admin đối soát.',
+        isConfirmed ? 'success' : 'info'
+      );
     } catch (error: any) {
-      alert(error.message || 'Không thể kết nối tới máy chủ.');
+      showHeaderToast(error.message || 'Không thể kết nối tới máy chủ.', 'error');
     } finally {
       setRespondingTransactionId(null);
     }
@@ -294,15 +325,41 @@ export default function Header() {
   };
 
   return (
-    <header className="bg-[#1877F2] text-white sticky top-0 z-50 shadow-md">
+    <header className="sticky top-0 z-50 border-b border-white/10 bg-slate-950/95 text-white shadow-lg shadow-slate-950/10 backdrop-blur-xl">
+      <div
+        className={`fixed left-1/2 top-24 z-[100000] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 transition-all duration-300 ${
+          headerToast.show
+            ? 'pointer-events-auto translate-y-0 opacity-100'
+            : 'pointer-events-none -translate-y-4 opacity-0'
+        }`}
+      >
+        <div className={`flex items-center gap-3 rounded-2xl border bg-white px-4 py-3.5 shadow-2xl ${
+          headerToast.type === 'error'
+            ? 'border-rose-200'
+            : headerToast.type === 'success'
+            ? 'border-emerald-200'
+            : 'border-blue-200'
+        }`}>
+          <div className={`flex h-9 w-9 items-center justify-center rounded-xl font-black ${
+            headerToast.type === 'error'
+              ? 'bg-rose-50 text-rose-600'
+              : headerToast.type === 'success'
+              ? 'bg-emerald-50 text-emerald-600'
+              : 'bg-blue-50 text-blue-600'
+          }`}>
+            {headerToast.type === 'error' ? '!' : headerToast.type === 'success' ? '✓' : 'i'}
+          </div>
+          <span className="text-sm font-extrabold leading-6 text-slate-700">{headerToast.message}</span>
+        </div>
+      </div>
       
       {/* ========================================================================= */}
       {/* 🌟 MODAL CẢNH BÁO GIAN LẬN (CHẶN TOÀN MÀN HÌNH - KHÔNG THỂ BẤM RA NGOÀI) */}
       {/* ========================================================================= */}
       {warningPopup && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 backdrop-blur-md px-4">
-          <div className="bg-white rounded-[2rem] shadow-[0_0_50px_rgba(239,68,68,0.3)] max-w-lg w-full overflow-hidden animate-fade-in-up border border-red-100">
-            <div className="bg-red-500 p-8 flex flex-col items-center text-center relative overflow-hidden">
+          <div className="w-full max-w-lg overflow-hidden rounded-[30px] border border-rose-100 bg-white shadow-[0_30px_100px_-25px_rgba(244,63,94,0.5)] animate-fade-in-up">
+            <div className="relative flex flex-col items-center overflow-hidden bg-gradient-to-br from-rose-600 to-red-700 p-8 text-center">
               {/* Hiệu ứng nền chớp đỏ */}
               <div className="absolute inset-0 bg-red-600 animate-pulse opacity-50"></div>
               <span className="text-6xl mb-3 relative z-10 drop-shadow-md">🚨</span>
@@ -324,7 +381,7 @@ export default function Header() {
 
               <button 
                 onClick={handleAcknowledgeWarning}
-                className="w-full bg-gray-900 hover:bg-black text-white font-bold py-4 rounded-xl shadow-xl transition-all active:scale-95 text-sm uppercase tracking-wide"
+                className="w-full rounded-2xl bg-slate-950 py-4 text-sm font-black uppercase tracking-wide text-white shadow-xl transition-all hover:bg-black active:scale-[0.98]"
               >
                 Tôi đã hiểu và cam kết tuân thủ
               </button>
@@ -333,15 +390,15 @@ export default function Header() {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
         
         {/* LOGO */}
         <div className="flex items-center gap-4">
           <Link href="/" className="flex items-center gap-2">
-            <div className="bg-white text-[#1877F2] font-extrabold text-2xl px-3.5 py-1 rounded-full tracking-tighter shadow-sm">
+            <div className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-3.5 py-1.5 text-xl font-black tracking-tighter text-white shadow-lg shadow-blue-500/20">
               NHÀ TỐT
             </div>
-            <span className="hidden sm:inline text-sm font-semibold border-l border-blue-400 pl-2 opacity-90">
+            <span className="hidden border-l border-slate-700 pl-3 text-sm font-bold text-slate-300 sm:inline">
               Kênh bất động sản
             </span>
           </Link>
@@ -349,13 +406,16 @@ export default function Header() {
 
         {/* NÚT TÍNH NĂNG BÊN PHẢI */}
         <div className="flex items-center gap-2.5">
+          <button onClick={toggleTheme} title={isDark ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'} aria-label="Đổi chế độ sáng tối" className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/10 text-lg text-slate-200 shadow-sm transition hover:rotate-12 hover:bg-white/20">
+            {isDark ? '☀️' : '🌙'}
+          </button>
           
           {/* ===================== NÚT TRÁI TIM ===================== */}
           <div className="relative">
             <button 
               onClick={toggleFavorites}
               className={`relative flex items-center justify-center w-10 h-10 rounded-full shadow-sm transition-all ${
-                showFavorites ? 'bg-white text-[#1877F2] ring-2 ring-white/50' : 'bg-white text-gray-700 hover:bg-gray-100'
+                showFavorites ? 'bg-blue-600 text-white ring-2 ring-blue-400/30' : 'border border-white/10 bg-white/10 text-slate-200 hover:bg-white/15'
               }`} 
               title="Tin đã lưu"
             >
@@ -371,9 +431,9 @@ export default function Header() {
             </button>
 
             {showFavorites && (
-              <div className="absolute top-full right-0 mt-3 w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden text-gray-800 flex flex-col z-50">
-                <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-                  <h3 className="font-bold text-gray-700">Tin đã lưu ({favoritePosts.length})</h3>
+              <div className="absolute right-0 top-full z-50 mt-3 flex w-96 flex-col overflow-hidden rounded-[22px] border border-slate-200 bg-white text-slate-800 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3.5">
+                  <h3 className="text-sm font-black text-slate-800">Tin đã lưu ({favoritePosts.length})</h3>
                   <button onClick={() => setShowFavorites(false)} className="text-gray-400 hover:text-red-500 text-2xl leading-none">&times;</button>
                 </div>
                 
@@ -419,7 +479,7 @@ export default function Header() {
             <button 
               onClick={toggleNotifications}
               className={`relative flex items-center justify-center w-10 h-10 rounded-full shadow-sm transition-all ${
-                showNotifications ? 'bg-white text-[#1877F2] ring-2 ring-white/50' : 'bg-white text-gray-700 hover:bg-gray-100'
+                showNotifications ? 'bg-blue-600 text-white ring-2 ring-blue-400/30' : 'border border-white/10 bg-white/10 text-slate-200 hover:bg-white/15'
               }`} 
               title="Thông báo"
             >
@@ -435,9 +495,9 @@ export default function Header() {
             </button>
 
             {showNotifications && (
-              <div className="absolute top-full right-0 mt-3 w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden text-gray-800 flex flex-col z-50">
-                <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-                  <h3 className="font-bold text-gray-700">Thông báo</h3>
+              <div className="absolute right-0 top-full z-50 mt-3 flex w-96 flex-col overflow-hidden rounded-[22px] border border-slate-200 bg-white text-slate-800 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3.5">
+                  <h3 className="text-sm font-black text-slate-800">Thông báo</h3>
                   <div className="flex items-center gap-4">
                     {unreadCount > 0 && (
                       <button onClick={handleMarkAllAsRead} className="text-[#1877F2] text-xs font-semibold hover:underline">
@@ -495,7 +555,7 @@ export default function Header() {
             )}
           </div>
 
-          <Link href="/chat" className="hidden md:flex items-center gap-2 bg-white text-gray-700 hover:bg-gray-100 px-4 py-2 rounded-full shadow-sm text-sm font-semibold transition-all">
+          <Link href="/chat" className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-4 py-2.5 text-sm font-extrabold text-slate-200 transition-all hover:bg-white/15 md:flex">
             <svg className="w-4 h-4 text-[#1877F2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
@@ -503,17 +563,17 @@ export default function Header() {
           </Link>
 
           {!user && (
-            <Link href="/login" className="bg-white text-gray-700 hover:bg-gray-100 px-4 py-2 rounded-full shadow-sm text-sm font-semibold transition-all">
+            <Link href="/login" className="rounded-xl border border-white/10 bg-white/10 px-4 py-2.5 text-sm font-extrabold text-white transition-all hover:bg-white/15">
               Đăng nhập
             </Link>
           )}
 
           {user && ['AGENT', 'ADMIN'].includes(user.role) ? (
-            <Link href="/create-post" className="bg-[#222222] hover:bg-black text-white text-sm font-bold px-5 py-2 rounded-full shadow-md transition-all">
+            <Link href="/create-post" className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5">
               ĐĂNG TIN
             </Link>
           ) : (
-            <button disabled title={user ? 'Nâng cấp tài khoản để đăng tin' : 'Đăng nhập và nâng cấp tài khoản để đăng tin'} className="cursor-not-allowed rounded-full bg-blue-400 px-5 py-2 text-sm font-bold text-blue-100 opacity-70 shadow-sm">
+            <button disabled title={user ? 'Nâng cấp tài khoản để đăng tin' : 'Đăng nhập và nâng cấp tài khoản để đăng tin'} className="cursor-not-allowed rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-extrabold text-slate-500 opacity-80">
               ĐĂNG TIN
             </button>
           )}
@@ -526,7 +586,7 @@ export default function Header() {
                 setShowFavorites(false); 
                 setShowNotifications(false); 
               }}
-              className="flex items-center gap-2 bg-white text-gray-700 hover:bg-gray-100 px-3 py-2 rounded-full shadow-sm transition-all"
+              className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-slate-200 transition-all hover:bg-white/15"
             >
               <UserAvatar user={user} className="w-6 h-6" />
               <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">

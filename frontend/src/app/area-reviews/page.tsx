@@ -1,34 +1,4 @@
 'use client';
-
-import React from 'react';
-import Header from '@/components/Header';
-
-export default function AreaReviewsPage() {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-gray-50 to-blue-100 flex flex-col">
-      <Header />
-      <main className="max-w-4xl mx-auto py-12 px-4 flex-grow w-full">
-        <div className="bg-white py-12 px-8 sm:px-12 shadow-2xl rounded-3xl border border-gray-100">
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-800">Đánh giá khu vực</h1>
-            <span className="bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full animate-pulse">Tính năng mới</span>
-          </div>
-          <p className="text-gray-500 text-sm mb-6">Khám phá và chia sẻ trải nghiệm thực tế về môi trường sống, tiện ích, an ninh tại các khu vực.</p>
-
-          <div className="bg-blue-50/60 p-6 rounded-2xl border border-blue-100 mb-8">
-            <h3 className="font-bold text-[#1877F2] text-base mb-1">💡 Chia sẻ góc nhìn của bạn</h3>
-            <p className="text-sm text-gray-600">Giúp cộng đồng tìm kiếm nhà ở có thêm thông tin khách quan về ngõ phố, giao thông hay tiện ích xung quanh.</p>
-          </div>
-
-          <div className="text-center py-12 text-gray-400">
-            <span className="text-5xl mb-3 block">🌳</span>
-            <p className="text-sm">Chưa có đánh giá khu vực nào được ghi nhận.</p>
-            <button onClick={() => alert('Tính năng thêm đánh giá khu vực đang được cập nhật!')} className="mt-4 bg-[#1877F2] text-white font-bold px-6 py-3 rounded-xl shadow-md hover:bg-blue-600 transition-all text-sm">
-              Viết đánh giá đầu tiên
-            </button>
-          </div>
-        </div>
-      </main>
-    </div>
-  );
-}
+import{useEffect,useState}from'react';import Header from'@/components/Header';import{apiUrl}from'@/services/api';
+const fields=[['security','An ninh'],['traffic','Giao thông'],['amenities','Tiện ích'],['environment','Môi trường'],['affordability','Chi phí']];
+export default function AreaReviews(){const[cities,setCities]=useState<any[]>([]),[districts,setDistricts]=useState<any[]>([]),[reviews,setReviews]=useState<any[]>([]),[form,setForm]=useState<any>({cityCode:'',districtCode:'',content:'',security:5,traffic:5,amenities:5,environment:5,affordability:5});const load=(d='')=>fetch(apiUrl(`community/area-reviews${d?`?district=${d}`:''}`)).then(r=>r.json()).then(x=>setReviews(Array.isArray(x)?x:[]));useEffect(()=>{fetch(apiUrl('cities')).then(r=>r.json()).then(setCities);load()},[]);useEffect(()=>{if(form.cityCode)fetch(apiUrl(`districts/${form.cityCode}`)).then(r=>r.json()).then(setDistricts)},[form.cityCode]);const save=async()=>{const r=await fetch(apiUrl('community/area-reviews'),{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${localStorage.getItem('access_token')}`},body:JSON.stringify(form)});const d=await r.json();if(!r.ok)return alert(d.message);setForm({...form,content:''});load(form.districtCode)};return <div className="min-h-screen bg-slate-50"><Header/><main className="mx-auto max-w-6xl px-4 py-10"><h1 className="text-3xl font-black">Đánh giá khu vực</h1><p className="mt-2 text-slate-500">Góc nhìn thực tế theo 5 tiêu chí giúp cộng đồng chọn nơi ở phù hợp.</p><div className="mt-8 grid gap-6 lg:grid-cols-[.8fr_1.2fr]"><section className="h-fit rounded-3xl bg-white p-6 shadow-sm"><h2 className="text-lg font-black">Chia sẻ trải nghiệm</h2><select value={form.cityCode} onChange={e=>setForm({...form,cityCode:e.target.value,districtCode:''})} className="mt-5 w-full rounded-xl border p-3"><option value="">Chọn tỉnh/thành</option>{cities.map(x=><option key={x.code} value={x.code}>{x.name}</option>)}</select><select value={form.districtCode} onChange={e=>{setForm({...form,districtCode:e.target.value});load(e.target.value)}} className="mt-3 w-full rounded-xl border p-3"><option value="">Chọn quận/huyện</option>{districts.map(x=><option key={x.code} value={x.code}>{x.name}</option>)}</select>{fields.map(([key,label])=><label key={key} className="mt-4 flex items-center justify-between text-sm font-bold">{label}<select value={form[key]} onChange={e=>setForm({...form,[key]:Number(e.target.value)})} className="rounded-lg border px-3 py-2">{[1,2,3,4,5].map(n=><option key={n}>{n}</option>)}</select></label>)}<textarea value={form.content} onChange={e=>setForm({...form,content:e.target.value})} placeholder="Điều bạn thích và chưa hài lòng..." className="mt-5 w-full rounded-xl border p-3" rows={4}/><button onClick={save} className="mt-3 w-full rounded-xl bg-blue-600 py-3 font-black text-white">Lưu đánh giá</button></section><section className="space-y-4">{reviews.length===0?<div className="rounded-3xl bg-white p-12 text-center text-slate-400">Chưa có đánh giá tại khu vực này.</div>:reviews.map(x=>{const avg=((x.security+x.traffic+x.amenities+x.environment+x.affordability)/5).toFixed(1);return <article key={x.id} className="rounded-3xl bg-white p-6 shadow-sm"><div className="flex justify-between"><strong>{x.user?.fullName}</strong><span className="font-black text-amber-500">★ {avg}/5</span></div><p className="mt-3 text-sm leading-6 text-slate-600">{x.content}</p><div className="mt-4 flex flex-wrap gap-2">{fields.map(([k,l])=><span key={k} className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">{l}: {x[k]}/5</span>)}</div></article>})}</section></div></main></div>}

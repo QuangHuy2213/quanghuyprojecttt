@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { apiUrl } from '../services/api';
 import UserAvatar from './UserAvatar';
@@ -9,6 +9,8 @@ export default function UserDropdown({ user, onLogout, onClose }: { user: any; o
   const [loading, setLoading] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false); // State bật/tắt modal xác nhận
   const [toastMessage, setToastMessage] = useState<string | null>(null); // State hiển thị thông báo kết quả
+  const [followStats, setFollowStats] = useState({ followers: 0, following: 0 });
+  useEffect(() => { if (user?.id) fetch(apiUrl(`community/follows/${user.id}?viewer=${user.id}`)).then(r=>r.json()).then(setFollowStats).catch(()=>{}); }, [user?.id]);
   
   const displayName = user?.fullName || 'Thành viên Nhà Tốt';
 
@@ -95,10 +97,10 @@ export default function UserDropdown({ user, onLogout, onClose }: { user: any; o
         </div>
       )}
 
-      <div className="absolute top-full right-0 mt-3 w-80 bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden z-50 text-gray-800 animate-fadeIn">
+      <div className="user-dropdown absolute top-full right-0 mt-3 w-80 bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden z-50 text-gray-800 animate-fadeIn">
         
         {/* THÔNG TIN USER */}
-        <div className="p-6 text-center bg-gradient-to-b from-blue-50/50 to-white border-b border-gray-100 relative">
+        <div className="user-dropdown-profile p-6 text-center bg-gradient-to-b from-blue-50/50 to-white border-b border-gray-100 relative">
           <div className="relative inline-block mx-auto mb-3">
             <UserAvatar user={user} className="w-20 h-20 shadow-md mx-auto" />
           </div>
@@ -127,14 +129,14 @@ export default function UserDropdown({ user, onLogout, onClose }: { user: any; o
           )}
 
           <div className="flex justify-center gap-6 mt-4 text-xs text-gray-500 font-medium">
-            <span>Người theo dõi <strong className="text-gray-800">0</strong></span>
-            <span>Đang theo dõi <strong className="text-gray-800">0</strong></span>
+            <span>Người theo dõi <strong className="text-gray-800">{followStats.followers}</strong></span>
+            <span>Đang theo dõi <strong className="text-gray-800">{followStats.following}</strong></span>
           </div>
         </div>
 
         {/* DANH SÁCH TIỆN ÍCH */}
         <div className="px-3 py-3">
-          <div className="text-[11px] font-bold text-gray-400 uppercase px-3 mb-1 tracking-wider">Tiện ích</div>
+          <div className="text-[11px] font-bold text-gray-400 uppercase px-3 mb-1 tracking-wider">Người dùng</div>
           
           <div className="space-y-0.5">
             {/* 🌟 MỤC MỚI: LỊCH SỬ GIAO DỊCH */}
@@ -154,10 +156,11 @@ export default function UserDropdown({ user, onLogout, onClose }: { user: any; o
               <span className="text-gray-300 text-sm">›</span>
             </Link>
 
-            <Link href="/settings" onClick={onClose} className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors group">
+            <Link href="/account-settings" onClick={onClose} className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors group">
               <div className="flex items-center gap-3"><span>⚙️</span><span className="text-sm font-semibold text-gray-700">Cài đặt tài khoản</span></div><span className="text-gray-300">›</span>
             </Link>
 
+            <div className="px-3 pb-1 pt-3 text-[11px] font-bold uppercase tracking-wider text-gray-400">Tiện ích</div>
             <Link href="/saved-searches" onClick={onClose} className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors group">
               <div className="flex items-center gap-3">
                 <span className="text-gray-400 group-hover:text-[#1877F2] transition-colors">🔖</span>

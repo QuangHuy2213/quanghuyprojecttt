@@ -6,3 +6,69 @@
 }
 
 body { font-family: var(--font-geist-sans); }
+
+html { color-scheme: light; }
+html.dark { color-scheme: dark; }
+body, body * { transition-property: background-color, border-color, color, fill, stroke; transition-duration: 180ms; }
+
+.dark body { background: #020617 !important; color: #e2e8f0; }
+.dark [class*="bg-white"] { background-color: #0f172a !important; }
+.dark [class*="bg-slate-50"],
+.dark [class*="bg-slate-100"],
+.dark [class*="bg-gray-50"],
+.dark [class*="bg-gray-100"] { background-color: #111827 !important; }
+.dark [class*="text-slate-900"],
+.dark [class*="text-slate-800"],
+.dark [class*="text-gray-900"],
+.dark [class*="text-gray-800"],
+.dark [class*="text-gray-700"] { color: #f1f5f9 !important; }
+.dark [class*="text-slate-700"],
+.dark [class*="text-slate-600"],
+.dark [class*="text-gray-600"],
+.dark [class*="text-gray-500"] { color: #cbd5e1 !important; }
+.dark [class*="text-slate-500"],
+.dark [class*="text-slate-400"],
+.dark [class*="text-gray-400"] { color: #94a3b8 !important; }
+.dark [class*="border-slate-"],
+.dark [class*="border-gray-"],
+.dark [class*="border-white"] { border-color: #334155 !important; }
+.dark input, .dark textarea, .dark select { background-color: #111827 !important; border-color: #334155 !important; color: #f8fafc !important; }
+.dark input::placeholder, .dark textarea::placeholder { color: #64748b; }
+.dark table thead, .dark table tbody, .dark table tr { border-color: #334155; }
+.dark .shadow-sm, .dark .shadow-md, .dark .shadow-lg, .dark .shadow-xl, .dark .shadow-2xl { --tw-shadow-color: rgb(0 0 0 / 0.35); }
+
+.dark .search-panel-header {
+  background: linear-gradient(110deg, #0f172a 0%, #111827 55%, #172554 100%) !important;
+  border-color: #334155 !important;
+}
+.dark .search-save-button {
+  background: #172554 !important;
+  border-color: #1d4ed8 !important;
+  color: #bfdbfe !important;
+}
+.dark .search-save-button:hover { background: #1e3a8a !important; }
+
+/* User menu uses a light Tailwind gradient which background-color overrides
+   cannot replace. Keep the profile area readable when the root theme is dark. */
+.dark .user-dropdown {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+  color: #e2e8f0 !important;
+}
+.dark .user-dropdown-profile {
+  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%) !important;
+  border-color: #334155 !important;
+}
+.dark .user-dropdown-profile h3,
+.dark .user-dropdown-profile strong {
+  color: #f8fafc !important;
+}
+.dark .user-dropdown-profile p,
+.dark .user-dropdown-profile > div:last-child {
+  color: #94a3b8 !important;
+}
+
+.dark .user-page-shell {
+  background: #020617 !important;
+  background-image: none !important;
+}

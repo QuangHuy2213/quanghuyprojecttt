@@ -1,25 +1,52 @@
 'use client';
 
-import React from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import Header from '@/components/Header';
+import { apiUrl } from '@/services/api';
 
-export default function MyReviewsPage() {
+export default function MyReviews() {
+  const [items, setItems] = useState<any[]>([]);
+  const load = useCallback(async () => {
+    const response = await fetch(apiUrl('community/my-reviews'), {
+      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
+    });
+    const data = await response.json();
+    setItems(Array.isArray(data) ? data : []);
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const remove = async (id: number) => {
+    await fetch(apiUrl(`community/reviews/${id}`), {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
+    });
+    await load();
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-gray-50 to-blue-100 flex flex-col">
+    <div className="user-page-shell min-h-screen bg-slate-50">
       <Header />
-      <main className="max-w-4xl mx-auto py-12 px-4 flex-grow w-full">
-        <div className="bg-white py-12 px-8 sm:px-12 shadow-2xl rounded-3xl border border-gray-100">
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-800 mb-2">Đánh giá từ tôi</h1>
-          <p className="text-gray-500 text-sm mb-6">Quản lý các nhận xét và đánh giá bạn đã viết cho các tin đăng hoặc người bán.</p>
-
-          <div className="text-center py-16 text-gray-400">
-            <span className="text-5xl mb-3 block">⭐</span>
-            <p className="text-sm">Bạn chưa gửi đánh giá nào.</p>
-            <Link href="/" className="inline-block mt-4 bg-[#1877F2] text-white font-bold px-6 py-3 rounded-xl shadow-md hover:bg-blue-600 transition-all text-sm">
-              Khám phá ngay
-            </Link>
-          </div>
+      <main className="mx-auto max-w-4xl px-4 py-10">
+        <h1 className="text-3xl font-black text-slate-900">Đánh giá từ tôi</h1>
+        <p className="mt-2 text-slate-500">Các nhận xét bạn đã chia sẻ về bài đăng và người bán.</p>
+        <div className="mt-7 space-y-4">
+          {items.length === 0 ? (
+            <div className="rounded-3xl bg-white p-12 text-center text-slate-400">Bạn chưa viết đánh giá nào.</div>
+          ) : items.map((item) => (
+            <article key={item.id} className="flex gap-4 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+              <img src={item.post?.thumbnail || 'https://via.placeholder.com/120'} alt={item.post?.title || 'Ảnh bài đăng'} className="h-20 w-24 rounded-2xl object-cover" />
+              <div className="flex-1">
+                <Link href={`/posts/${item.postId}`} className="font-black text-slate-900 hover:text-blue-600">{item.post?.title}</Link>
+                <div className="mt-1 text-amber-500">{'★'.repeat(item.rating)}{'☆'.repeat(5 - item.rating)}</div>
+                <p className="mt-2 text-sm text-slate-600">{item.content}</p>
+              </div>
+              <button type="button" onClick={() => remove(item.id)} className="self-start text-xs font-bold text-rose-500">Xóa</button>
+            </article>
+          ))}
         </div>
       </main>
     </div>
