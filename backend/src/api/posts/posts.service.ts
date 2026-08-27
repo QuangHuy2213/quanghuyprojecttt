@@ -101,6 +101,20 @@ export class PostsService {
     });
   }
 
+  async getComments(postId: number) {
+    return this.prisma.comment.findMany({ where: { postId, parentId: null }, include: { user: { select: { id: true, fullName: true, avatarUrl: true } }, _count: { select: { likes: true } }, replies: { include: { user: { select: { id: true, fullName: true, avatarUrl: true } }, _count: { select: { likes: true } } }, orderBy: { createdAt: 'asc' } } }, orderBy: { createdAt: 'desc' } });
+  }
+
+  async createComment(postId: number, userId: string, content: string, parentId?: number) {
+    const cleanContent = content?.trim();
+    if (!cleanContent) throw new BadRequestException('Nội dung bình luận không được để trống.');
+    if (cleanContent.length > 1000) throw new BadRequestException('Bình luận tối đa 1000 ký tự.');
+    if (parentId) { const parent = await this.prisma.comment.findFirst({ where: { id: parentId, postId } }); if (!parent) throw new BadRequestException('Bình luận gốc không tồn tại.'); }
+    return this.prisma.comment.create({ data: { postId, userId, content: cleanContent, parentId: parentId || null }, include: { user: { select: { id: true, fullName: true, avatarUrl: true } }, _count: { select: { likes: true } } } });
+  }
+
+  async toggleCommentLike(commentId: number, userId: string) { const where = { userId_commentId: { userId, commentId } }; const found = await this.prisma.commentLike.findUnique({ where }); if (found) { await this.prisma.commentLike.delete({ where }); } else { await this.prisma.commentLike.create({ data: { userId, commentId } }); } return { liked: !found, count: await this.prisma.commentLike.count({ where: { commentId } }) }; }
+
   async createPost(data: CreatePostDto) {
     await this.validateLocation(data.city, data.district);
 

@@ -83,6 +83,12 @@ model User {
 
   notifications Notification[]
   reports       Report[]
+  comments      Comment[]
+  commentLikes  CommentLike[]
+  postReviews   PostReview[]
+  areaReviews   AreaReview[]
+  following     Follow[] @relation("UserFollowing")
+  followers     Follow[] @relation("UserFollowers")
 
   // Mối quan hệ với bảng Transaction
   boughtTransactions Transaction[] @relation("BuyerTransactions")
@@ -118,6 +124,72 @@ model Favorite {
   post posts @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@unique([userId, postId])
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  content   String
+  userId    String
+  postId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      posts    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parentId  Int?
+  parent    Comment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Comment[] @relation("CommentReplies")
+  likes     CommentLike[]
+  createdAt DateTime @default(now())
+
+  @@index([postId, createdAt])
+}
+
+model CommentLike {
+  userId String
+  commentId Int
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@id([userId, commentId])
+}
+
+model PostReview {
+  id Int @id @default(autoincrement())
+  rating Int
+  content String
+  userId String
+  postId Int
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post posts @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([userId, postId])
+}
+
+model AreaReview {
+  id Int @id @default(autoincrement())
+  userId String
+  cityCode String
+  districtCode String
+  security Int
+  traffic Int
+  amenities Int
+  environment Int
+  affordability Int
+  content String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([userId, districtCode])
+  @@index([districtCode])
+}
+
+model Follow {
+  followerId String
+  followingId String
+  follower User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@id([followerId, followingId])
+  @@index([followingId])
 }
 
 // --- BẢNG TIN NHẮN (CHAT) ---
@@ -288,6 +360,8 @@ model posts {
   favorites  Favorite[]
   reports    Report[]
   transactions Transaction[]
+  comments     Comment[]
+  reviews      PostReview[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt

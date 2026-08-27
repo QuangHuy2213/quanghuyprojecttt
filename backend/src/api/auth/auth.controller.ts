@@ -51,6 +51,12 @@ export class AuthController {
     return this.authService.updateProfile(req.user.userId, body);
   }
 
+  @Patch('change-password')
+  @UseGuards(AuthGuard('jwt'))
+  async changePassword(@Req() req: any, @Body() body: { currentPassword: string; newPassword: string }) {
+    return this.authService.changePassword(req.user.userId, body.currentPassword, body.newPassword);
+  }
+
   // 🌟 ĐÃ CẬP NHẬT: Sử dụng AuthGuard('jwt') trực tiếp
   @Patch('upgrade-to-agent')
   @UseGuards(AuthGuard('jwt')) 

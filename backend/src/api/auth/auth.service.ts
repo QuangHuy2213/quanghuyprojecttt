@@ -130,6 +130,18 @@ export class AuthService {
       throw new BadRequestException('Email hoặc số điện thoại đã được sử dụng.');
     }
   }
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    if (!currentPassword) throw new BadRequestException('Vui lòng nhập mật khẩu hiện tại.');
+    if (!newPassword || newPassword.length < 6) throw new BadRequestException('Mật khẩu mới phải có ít nhất 6 ký tự.');
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Không tìm thấy tài khoản.');
+    if (!user.password) throw new BadRequestException('Tài khoản Google không có mật khẩu cũ. Hãy dùng chức năng quên mật khẩu để thiết lập mật khẩu.');
+    if (!await bcrypt.compare(currentPassword, user.password)) throw new UnauthorizedException('Mật khẩu hiện tại không đúng.');
+    if (await bcrypt.compare(newPassword, user.password)) throw new BadRequestException('Mật khẩu mới phải khác mật khẩu hiện tại.');
+    await this.prisma.user.update({ where: { id: userId }, data: { password: await bcrypt.hash(newPassword, 10) } });
+    return { message: 'Đổi mật khẩu thành công.' };
+  }
  async upgradeToAgent(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

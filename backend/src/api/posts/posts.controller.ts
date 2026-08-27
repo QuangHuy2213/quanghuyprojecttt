@@ -38,6 +38,21 @@ export class PostsController {
     return this.postsService.findOnePost(Number(id));
   }
 
+  @Get(':id/comments')
+  async getComments(@Param('id') id: string) {
+    return this.postsService.getComments(Number(id));
+  }
+
+  @Post(':id/comments')
+  @UseGuards(AuthGuard('jwt'))
+  async createComment(@Param('id') id: string, @Body() body: { content: string; parentId?: number }, @Req() req: any) {
+    return this.postsService.createComment(Number(id), req.user.userId, body.content, body.parentId);
+  }
+
+  @Post('comments/:id/like')
+  @UseGuards(AuthGuard('jwt'))
+  async likeComment(@Param('id') id: string, @Req() req: any) { return this.postsService.toggleCommentLike(Number(id), req.user.userId); }
+
   @Post()
   @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Tạo bài đăng mới' })

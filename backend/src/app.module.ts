@@ -10,8 +10,9 @@ import { AdminModule } from './api/admin/admin.module';
 import { PaymentModule } from './payment/payment.module';
 import { TransactionModule } from './api/transaction/transaction.module';
 import { ChatModule } from './api/chat/chat.module';
+import { CommunityModule } from './api/community/community.module';
 @Module({
-  imports: [AuthModule, NotificationModule, AdminModule, PaymentModule, TransactionModule, ChatModule],
+  imports: [AuthModule, NotificationModule, AdminModule, PaymentModule, TransactionModule, ChatModule, CommunityModule],
   controllers: [AppController, PostsController],
   providers: [AppService, PostsService, PrismaService],
 })

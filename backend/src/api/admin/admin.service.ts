@@ -180,6 +180,12 @@ export class AdminService {
       }
     });
 
+    if (status === 'ACTIVE' && updatedPost.userId) {
+      const followers = await this.prisma.follow.findMany({ where: { followingId: updatedPost.userId }, select: { followerId: true } });
+      if (followers.length) {
+        await this.prisma.notification.createMany({ data: followers.map(item => ({ userId: item.followerId, title: 'Người bạn theo dõi vừa đăng tin mới', content: `Bài “${updatedPost.title}” vừa được đăng. Hãy xem ngay!`, type: 'POST_UPDATE' as const })) });
+      }
+    }
     return updatedPost;
   }
 
