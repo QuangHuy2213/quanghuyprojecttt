@@ -55,7 +55,7 @@ function PaymentResultContent() {
               {paymentType === 'UPGRADE' ? (
                 <>
                   <p className="text-gray-500 text-sm mb-8 leading-relaxed">
-                    Chúc mừng bạn đã nâng cấp thành công lên tài khoản <strong className="text-amber-600">Môi Giới (Agent)</strong>. Gói dịch vụ của bạn có hiệu lực trong 3 tháng. Giờ đây bạn có thể bắt đầu đăng tin không giới hạn.
+                    Chúc mừng bạn đã nâng cấp tài khoản thành công. Gói dịch vụ của bạn có hiệu lực trong 3 tháng. Giờ đây bạn có thể bắt đầu đăng tin không giới hạn.
                   </p>
                   <Link 
                     href="/create-post" 

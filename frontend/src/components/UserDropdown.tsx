@@ -72,7 +72,7 @@ export default function UserDropdown({ user, onLogout, onClose }: { user: any; o
             <div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4 shadow-inner">
               ⭐
             </div>
-            <h3 className="text-lg font-black text-gray-900 mb-2">Nâng cấp tài khoản Môi giới?</h3>
+            <h3 className="text-lg font-black text-gray-900 mb-2">Nâng cấp tài khoản để đăng tin?</h3>
             <p className="text-xs text-gray-500 leading-relaxed mb-6">
               Mở khóa tính năng đăng tin không giới hạn với gói <strong className="text-amber-600">299.000 VNĐ / 3 tháng</strong>. Thanh toán an toàn qua cổng VNPAY.
             </p>
@@ -122,7 +122,7 @@ export default function UserDropdown({ user, onLogout, onClose }: { user: any; o
               onClick={() => setShowConfirmModal(true)}
               className="w-full mt-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-extrabold py-2.5 px-4 rounded-xl text-xs hover:from-amber-600 hover:to-orange-600 transition-all shadow-md shadow-orange-500/25 flex items-center justify-center gap-2"
             >
-              <span>⭐</span> Nâng cấp lên Môi giới
+              <span>⭐</span> Nâng cấp tài khoản để đăng tin
             </button>
           )}
 

@@ -35,6 +35,8 @@ export default function Header() {
   const [isLoadingFavs, setIsLoadingFavs] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]); 
   const [unreadCount, setUnreadCount] = useState(0); 
+  const [pendingConfirmations, setPendingConfirmations] = useState<any[]>([]);
+  const [respondingTransactionId, setRespondingTransactionId] = useState<string | null>(null);
 
   // 🌟 STATE QUẢN LÝ POPUP CẢNH BÁO TỪ ADMIN
   const [warningPopup, setWarningPopup] = useState<any>(null);
@@ -44,6 +46,8 @@ export default function Header() {
     const token = localStorage.getItem('access_token'); 
     let warningSyncTimer: number | undefined;
     let syncUnreadWarning: (() => void) | undefined;
+    let confirmationSyncTimer: number | undefined;
+    let syncPendingConfirmations: (() => void) | undefined;
 
     if (storedUser) {
       const parsedUser = JSON.parse(storedUser);
@@ -99,6 +103,19 @@ export default function Header() {
         };
         warningSyncTimer = window.setInterval(syncUnreadWarning, 2500);
         window.addEventListener('focus', syncUnreadWarning);
+
+        syncPendingConfirmations = () => {
+          fetch(apiUrl('transactions/pending-confirmations'), {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: 'no-store',
+          })
+            .then(readJsonSafely)
+            .then(data => setPendingConfirmations(Array.isArray(data) ? data : []))
+            .catch(err => console.error('Lỗi đồng bộ yêu cầu xác nhận', err));
+        };
+        syncPendingConfirmations();
+        confirmationSyncTimer = window.setInterval(syncPendingConfirmations, 2500);
+        window.addEventListener('focus', syncPendingConfirmations);
       }
 
       const channel = supabase
@@ -121,6 +138,7 @@ export default function Header() {
               else {
                 setNotifications(prev => [newNotif, ...prev]); 
                 setUnreadCount(prev => prev + 1); 
+                syncPendingConfirmations?.();
               }
             }
           }
@@ -130,6 +148,8 @@ export default function Header() {
       return () => {
         if (warningSyncTimer) window.clearInterval(warningSyncTimer);
         if (syncUnreadWarning) window.removeEventListener('focus', syncUnreadWarning);
+        if (confirmationSyncTimer) window.clearInterval(confirmationSyncTimer);
+        if (syncPendingConfirmations) window.removeEventListener('focus', syncPendingConfirmations);
         supabase.removeChannel(channel);
       };
     }
@@ -235,6 +255,29 @@ export default function Header() {
     }
   };
 
+  const handleTransactionResponse = async (transactionId: string, isConfirmed: boolean) => {
+    const token = localStorage.getItem('access_token');
+    if (!token) return;
+    setRespondingTransactionId(transactionId);
+    try {
+      const response = await fetch(apiUrl(`transactions/${transactionId}/verify`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ isConfirmed }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || 'Không thể gửi phản hồi giao dịch.');
+      setPendingConfirmations(prev => prev.filter(item => item.id !== transactionId));
+      alert(isConfirmed
+        ? 'Đã xác nhận giao dịch. Bài đăng đã được đóng.'
+        : 'Đã gửi phản hồi không xác nhận. Giao dịch sẽ được chuyển cho admin đối soát.');
+    } catch (error: any) {
+      alert(error.message || 'Không thể kết nối tới máy chủ.');
+    } finally {
+      setRespondingTransactionId(null);
+    }
+  };
+
   // 🌟 HÀM XÁC NHẬN ĐÃ ĐỌC CẢNH BÁO TỪ ADMIN
   const handleAcknowledgeWarning = async () => {
     if (!warningPopup) return;
@@ -299,7 +342,7 @@ export default function Header() {
               NHÀ TỐT
             </div>
             <span className="hidden sm:inline text-sm font-semibold border-l border-blue-400 pl-2 opacity-90">
-              Kênh môi giới
+              Kênh bất động sản
             </span>
           </Link>
         </div>
@@ -406,7 +449,24 @@ export default function Header() {
                 </div>
                 
                 <div className="max-h-[60vh] overflow-y-auto">
-                  {notifications.length === 0 ? (
+                  {pendingConfirmations.map((transaction) => (
+                    <div key={transaction.id} className="border-b border-blue-100 bg-blue-50/70 p-4">
+                      <div className="flex gap-3">
+                        <div className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl bg-blue-600 text-lg text-white">✓</div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-sm font-black text-gray-900">Yêu cầu xác nhận giao dịch</h4>
+                          <p className="mt-1 text-xs leading-relaxed text-gray-600">
+                            <strong>{transaction.seller?.fullName || 'Người đăng tin'}</strong> xác nhận đã giao dịch bài “{transaction.post?.title}” với bạn.
+                          </p>
+                          <div className="mt-3 flex gap-2">
+                            <button disabled={respondingTransactionId === transaction.id} onClick={() => handleTransactionResponse(transaction.id, true)} className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50">Xác nhận</button>
+                            <button disabled={respondingTransactionId === transaction.id} onClick={() => handleTransactionResponse(transaction.id, false)} className="flex-1 rounded-lg bg-white px-3 py-2 text-xs font-bold text-rose-600 ring-1 ring-rose-200 hover:bg-rose-50 disabled:opacity-50">Không xác nhận</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {notifications.length === 0 && pendingConfirmations.length === 0 ? (
                     <div className="p-8 text-center text-gray-400 text-sm flex flex-col items-center">
                       <span className="text-3xl mb-2">🔕</span>
                       Bạn chưa có thông báo nào
