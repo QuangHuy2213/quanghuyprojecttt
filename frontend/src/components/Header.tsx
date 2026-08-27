@@ -42,6 +42,8 @@ export default function Header() {
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     const token = localStorage.getItem('access_token'); 
+    let warningSyncTimer: number | undefined;
+    let syncUnreadWarning: (() => void) | undefined;
 
     if (storedUser) {
       const parsedUser = JSON.parse(storedUser);
@@ -83,6 +85,22 @@ export default function Header() {
       }
 
       // 4. LẮNG NGHE THÔNG BÁO MỚI TỪ SUPABASE (REALTIME)
+      if (token) {
+        syncUnreadWarning = () => {
+          fetch(apiUrl('notifications/unread-warnings'), {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: 'no-store',
+          })
+            .then(readJsonSafely)
+            .then(data => {
+              if (data?.id) setWarningPopup((current: any) => current?.id === data.id ? current : data);
+            })
+            .catch(err => console.error('Lỗi đồng bộ cảnh báo', err));
+        };
+        warningSyncTimer = window.setInterval(syncUnreadWarning, 2500);
+        window.addEventListener('focus', syncUnreadWarning);
+      }
+
       const channel = supabase
         .channel(`global_notifications_${parsedUser.id}`)
         .on('postgres_changes', { 
@@ -92,7 +110,8 @@ export default function Header() {
           }, 
           (payload) => {
             const newNotif = payload.new;
-            if (String(newNotif.user_id) === String(parsedUser.id)) {
+            const notificationUserId = newNotif.user_id ?? newNotif.userId;
+            if (String(notificationUserId) === String(parsedUser.id)) {
               
               // 🌟 NẾU LÀ CẢNH BÁO TỪ ADMIN -> BẬT MODAL LÊN NGAY LẬP TỨC
               if (newNotif.type === 'WARNING_POPUP') {
@@ -109,6 +128,8 @@ export default function Header() {
         .subscribe();
 
       return () => {
+        if (warningSyncTimer) window.clearInterval(warningSyncTimer);
+        if (syncUnreadWarning) window.removeEventListener('focus', syncUnreadWarning);
         supabase.removeChannel(channel);
       };
     }
