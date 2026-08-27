@@ -246,6 +246,22 @@ export class TransactionService {
     });
   }
 
+  async getPendingBuyerConfirmations(userId: string) {
+    return this.prisma.transaction.findMany({
+      where: {
+        buyerId: userId,
+        status: 'VERIFYING',
+        sellerConfirmed: true,
+        buyerConfirmed: null,
+      },
+      include: {
+        post: { select: { id: true, title: true, thumbnail: true, price: true } },
+        seller: { select: { fullName: true, phoneNumber: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+  }
+
   async getUserInvoices(userId: string) {
     const invoices = await this.prisma.invoice.findMany({
       where: { userId },

@@ -49,6 +49,13 @@ export class TransactionController {
   }
 
   @UseGuards(AuthGuard('jwt'))
+  @Get('pending-confirmations')
+  async getPendingConfirmations(@Req() req: AuthenticatedRequest) {
+    const userId = req.user.userId || req.user.sub;
+    return this.transactionService.getPendingBuyerConfirmations(userId as string);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
   @Get('my-invoices')
   async getMyInvoices(@Req() req: AuthenticatedRequest) {
     const userId = req.user.userId || req.user.sub;
