@@ -508,9 +508,15 @@ export default function Header() {
             </Link>
           )}
 
-          <Link href="/create-post" className="bg-[#222222] hover:bg-black text-white text-sm font-bold px-5 py-2 rounded-full shadow-md transition-all">
-            ĐĂNG TIN
-          </Link>
+          {user && ['AGENT', 'ADMIN'].includes(user.role) ? (
+            <Link href="/create-post" className="bg-[#222222] hover:bg-black text-white text-sm font-bold px-5 py-2 rounded-full shadow-md transition-all">
+              ĐĂNG TIN
+            </Link>
+          ) : (
+            <button disabled title={user ? 'Nâng cấp tài khoản để đăng tin' : 'Đăng nhập và nâng cấp tài khoản để đăng tin'} className="cursor-not-allowed rounded-full bg-blue-400 px-5 py-2 text-sm font-bold text-blue-100 opacity-70 shadow-sm">
+              ĐĂNG TIN
+            </button>
+          )}
 
           {/* MENU NGƯỜI DÙNG */}
           <div className="relative">

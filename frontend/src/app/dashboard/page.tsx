@@ -14,6 +14,7 @@ export default function DashboardPage() {
   const [soldPost, setSoldPost] = useState<any>(null);
   const [buyerPhone, setBuyerPhone] = useState('');
   const [isSubmittingSold, setIsSubmittingSold] = useState(false);
+  const canCreatePost = user && ['AGENT', 'ADMIN'].includes(user.role);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -147,7 +148,9 @@ export default function DashboardPage() {
             </p>
           </div>
           <Link 
-            href="/create-post" 
+            href={canCreatePost ? '/create-post' : '#'}
+            onClick={(event) => { if (!canCreatePost) event.preventDefault(); }}
+            aria-disabled={!canCreatePost}
             className="bg-[#1877F2] hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-2xl transition-all shadow-lg shadow-blue-500/25 flex items-center gap-2 text-sm whitespace-nowrap"
           >
             <span className="text-lg leading-none">+</span> Đăng tin mới
@@ -159,7 +162,7 @@ export default function DashboardPage() {
             <div className="text-6xl mb-4">📝</div>
             <h2 className="text-xl font-extrabold text-gray-800 mb-2">Bạn chưa đăng tin nào</h2>
             <p className="text-gray-500 mb-6 text-sm">Hãy khởi tạo bài đăng đầu tiên của bạn để tiếp cận hàng triệu khách hàng.</p>
-            <Link href="/create-post" className="inline-block bg-[#1877F2] text-white font-bold px-6 py-3 rounded-2xl shadow-lg shadow-blue-500/25 hover:bg-blue-600 transition-all text-sm">
+            <Link href={canCreatePost ? '/create-post' : '#'} onClick={(event) => { if (!canCreatePost) event.preventDefault(); }} aria-disabled={!canCreatePost} className={`inline-block font-bold px-6 py-3 rounded-2xl shadow-lg transition-all text-sm ${canCreatePost ? 'bg-[#1877F2] text-white shadow-blue-500/25 hover:bg-blue-600' : 'cursor-not-allowed bg-gray-200 text-gray-400 shadow-none'}`}>
               Tiến hành đăng tin ngay
             </Link>
           </div>

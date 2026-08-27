@@ -54,6 +54,11 @@ export default function CreatePostPage() {
     }
 
     const parsedUser = JSON.parse(storedUser);
+    if (!['AGENT', 'ADMIN'].includes(parsedUser.role)) {
+      showToast('Bạn cần nâng cấp tài khoản để đăng tin!', 'error');
+      setTimeout(() => router.replace('/'), 1500);
+      return;
+    }
     setUser(parsedUser);
 
     if (parsedUser.role === 'AGENT' || parsedUser.role === 'ADMIN') {
