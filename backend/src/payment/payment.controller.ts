@@ -81,7 +81,7 @@ export class PaymentController {
   @Get('vnpay-return')
   async vnpayReturn(@Query() query: any, @Res() res: Response) {
     const result = await this.paymentService.processReturn(query);
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = (process.env.FRONTEND_URL || 'https://nguyenducquanghuy.vercel.app').replace(/\/+$/, '');
     
     // Gắn thêm type (INVOICE hoặc UPGRADE) để Frontend biết hiển thị chữ gì cho phù hợp
     if (result.success) {
