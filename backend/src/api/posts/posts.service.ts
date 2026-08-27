@@ -107,11 +107,27 @@ export class PostsService {
     if (data.userId) {
       const user = await this.prisma.user.findUnique({
         where: { id: data.userId },
-        select: { id: true },
+        select: { id: true, role: true, isLocked: true, agentExpiresAt: true },
       });
 
       if (!user) {
         throw new BadRequestException('Người dùng không tồn tại hoặc phiên đăng nhập đã hết hạn.');
+      }
+    }
+
+    if (data.userId) {
+      const account = await this.prisma.user.findUnique({
+        where: { id: data.userId },
+        select: { role: true, isLocked: true, agentExpiresAt: true },
+      });
+      if (account?.isLocked) {
+        throw new BadRequestException('Tài khoản đang bị khóa và không thể đăng tin.');
+      }
+      const hasPostingAccess = account?.role === 'ADMIN' || (
+        account?.role === 'AGENT' && (!account.agentExpiresAt || account.agentExpiresAt > new Date())
+      );
+      if (!hasPostingAccess) {
+        throw new BadRequestException('Bạn cần nâng cấp tài khoản để đăng tin.');
       }
     }
 

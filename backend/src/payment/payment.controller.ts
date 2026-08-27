@@ -15,6 +15,25 @@ export class PaymentController {
     return user.sub || user.userId || user.id; 
   }
 
+  private getBackendUrl(req: Request): string {
+    const forwardedHost = req.headers['x-forwarded-host'];
+    const forwardedProto = req.headers['x-forwarded-proto'];
+    const host = (Array.isArray(forwardedHost) ? forwardedHost[0] : forwardedHost) || req.get('host');
+    const protocol = (Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto)?.split(',')[0].trim() || req.protocol;
+
+    if (!host) {
+      return (process.env.BACKEND_URL || 'http://localhost:3001').replace(/\/+$/, '');
+    }
+
+    return `${protocol}://${host}`.replace(/\/+$/, '');
+  }
+
+  private getClientIp(req: Request): string {
+    const forwarded = req.headers['x-forwarded-for'];
+    const value = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+    return value?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
+  }
+
   // =======================================================
   // API 1: Tạo URL Thanh Toán - Nâng cấp môi giới
   // =======================================================
@@ -22,12 +41,11 @@ export class PaymentController {
   @Post('upgrade-agent')
   async createUpgradePayment(@Req() req: Request) {
     const userId = this.getUserId(req);
-    const ipAddr = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
-    
-    const backendUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3001}`;
+    const ipAddr = this.getClientIp(req);
+    const backendUrl = this.getBackendUrl(req);
     const returnUrl = `${backendUrl}/payments/vnpay-return`;
 
-    const paymentUrl = this.paymentService.createPaymentUrl(userId, ipAddr as string, returnUrl);
+    const paymentUrl = this.paymentService.createPaymentUrl(userId, ipAddr, returnUrl);
     
     return { paymentUrl };
   }
@@ -42,16 +60,15 @@ export class PaymentController {
     @Body('invoiceId') invoiceId: string
   ) {
     const userId = this.getUserId(req);
-    const ipAddr = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
-    
-    const backendUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3001}`;
+    const ipAddr = this.getClientIp(req);
+    const backendUrl = this.getBackendUrl(req);
     const returnUrl = `${backendUrl}/payments/vnpay-return`;
 
     // Gọi Service mới
     const paymentUrl = await this.paymentService.createInvoicePaymentUrl(
       invoiceId, 
       userId, 
-      ipAddr as string, 
+      ipAddr,
       returnUrl
     );
     

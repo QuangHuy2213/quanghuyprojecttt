@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { PostsService } from './posts.service';
 import { CreatePostDto, PostsQueryDto, ToggleFavoriteDto, UpdatePostDto } from './dto/posts.dto';
@@ -38,10 +39,11 @@ export class PostsController {
   }
 
   @Post()
+  @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Tạo bài đăng mới' })
   @ApiBody({ type: CreatePostDto })
-  async createNewPost(@Body() body: CreatePostDto) {
-    return this.postsService.createPost(body);
+  async createNewPost(@Body() body: CreatePostDto, @Req() req: any) {
+    return this.postsService.createPost({ ...body, userId: req.user.userId });
   }
 
   @Post(':id/favorite')
