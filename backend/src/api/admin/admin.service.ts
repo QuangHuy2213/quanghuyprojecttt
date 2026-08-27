@@ -27,8 +27,48 @@ export class AdminService {
       _sum: { calculatedFee: true },
     });
     const totalRevenue = successfulTransactions._sum.calculatedFee || 0;
+
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    const chartStart = new Date(monthStart);
+    chartStart.setMonth(chartStart.getMonth() - 5);
+
+    const [successCount, paidRevenue, outstandingRevenue, paidInvoices,
+      pendingInvoices, paidThisMonth, recentPaidInvoices] = await Promise.all([
+      this.prisma.transaction.count({ where: { status: 'SUCCESS' } }),
+      this.prisma.invoice.aggregate({ where: { status: 'PAID' }, _sum: { amount: true } }),
+      this.prisma.invoice.aggregate({ where: { status: { in: ['DRAFT', 'PENDING_PAYMENT', 'OVERDUE'] } }, _sum: { amount: true } }),
+      this.prisma.invoice.count({ where: { status: 'PAID' } }),
+      this.prisma.invoice.count({ where: { status: { in: ['DRAFT', 'PENDING_PAYMENT', 'OVERDUE'] } } }),
+      this.prisma.invoice.aggregate({ where: { status: 'PAID', paidAt: { gte: monthStart } }, _sum: { amount: true } }),
+      this.prisma.invoice.findMany({ where: { status: 'PAID', paidAt: { gte: chartStart } }, select: { amount: true, paidAt: true } }),
+    ]);
+
+    const monthlyRevenue = Array.from({ length: 6 }, (_, index) => {
+      const date = new Date(chartStart.getFullYear(), chartStart.getMonth() + index, 1);
+      return { key: `${date.getFullYear()}-${date.getMonth()}`, label: `T${date.getMonth() + 1}`, amount: 0 };
+    });
+    for (const invoice of recentPaidInvoices) {
+      if (!invoice.paidAt) continue;
+      const key = `${invoice.paidAt.getFullYear()}-${invoice.paidAt.getMonth()}`;
+      const bucket = monthlyRevenue.find(item => item.key === key);
+      if (bucket) bucket.amount += Number(invoice.amount);
+    }
     
-    return { totalUsers, pendingPosts, activePosts, totalRevenue };
+    return {
+      totalUsers,
+      pendingPosts,
+      activePosts,
+      successfulTransactions: successCount,
+      totalRevenue: Number(paidRevenue._sum.amount || 0),
+      projectedRevenue: Number(totalRevenue),
+      outstandingRevenue: Number(outstandingRevenue._sum.amount || 0),
+      revenueThisMonth: Number(paidThisMonth._sum.amount || 0),
+      paidInvoices,
+      pendingInvoices,
+      monthlyRevenue: monthlyRevenue.map(({ label, amount }) => ({ label, amount })),
+    };
   }
 
   // --- LOGIC LẤY & ĐỔI QUYỀN USER ---
