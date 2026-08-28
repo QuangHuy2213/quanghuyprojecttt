@@ -96,7 +96,7 @@ const SwipeableContactItem = ({ contact, openEmailModal, openConfirmModal, setDe
             {contact.status === 'PENDING' && (
               <>
                 <button onClick={() => openEmailModal(contact)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-sm font-extrabold text-blue-700 transition-all hover:bg-blue-100">
-                  ✉️ Gửi Email
+                  ✉️ Gửi thư
                 </button>
                 <button onClick={() => openConfirmModal(contact.id)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-3 text-sm font-extrabold text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5">
                   ✓ Đánh dấu xử lý
@@ -154,7 +154,7 @@ export default function AdminContactsPage() {
       contactId: contact.id,
       email: contact.email,
       subject: `Phản hồi yêu cầu: ${contact.subject}`,
-      message: `Chào ${contact.fullName},\n\nNhà Tốt đã nhận được yêu cầu của bạn về vấn đề: "${contact.subject}".\n\n[Nhập nội dung phản hồi của bạn vào đây...]\n\nTrân trọng,\nĐội ngũ Admin Nhà Tốt.`
+      message: `Chào ${contact.fullName},\n\nNhà Tốt đã nhận được yêu cầu của bạn về vấn đề: "${contact.subject}".\n\n[Nhập nội dung phản hồi của bạn vào đây...]\n\nTrân trọng,\nĐội ngũ quản trị Nhà Tốt.`
     });
   };
 
@@ -207,14 +207,14 @@ export default function AdminContactsPage() {
       });
 
       if (res.ok) {
-        showToast('Gửi Email phản hồi thành công!');
+        showToast('Gửi thư phản hồi thành công!');
         setContacts(contacts.map(c => c.id === emailModal.contactId ? { ...c, status: 'REPLIED' } : c));
         setEmailModal({ ...emailModal, isOpen: false }); 
       } else {
-        showToast('Gửi Email thất bại, vui lòng thử lại.', 'error');
+        showToast('Gửi thư thất bại, vui lòng thử lại.', 'error');
       }
     } catch (error) {
-      showToast('Lỗi máy chủ, không thể gửi email!', 'error');
+      showToast('Lỗi máy chủ, không thể gửi thư!', 'error');
     } finally {
       setIsSending(false);
     }
@@ -278,7 +278,7 @@ export default function AdminContactsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-[28px] border border-white/30 bg-white shadow-[0_30px_90px_-25px_rgba(15,23,42,0.55)] animate-fade-in-up">
             <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50/50 p-6">
-              <h3 className="flex items-center gap-2 text-xl font-black text-slate-900">✉️ Soạn Email Phản Hồi</h3>
+              <h3 className="flex items-center gap-2 text-xl font-black text-slate-900">✉️ Soạn thư phản hồi</h3>
               <button onClick={() => setEmailModal({ ...emailModal, isOpen: false })} className="text-gray-400 hover:text-red-500 font-bold text-2xl">&times;</button>
             </div>
             <form onSubmit={handleSendEmail} className="p-6 flex-1 overflow-y-auto">
@@ -299,7 +299,7 @@ export default function AdminContactsPage() {
               <div className="pt-6 flex gap-3">
                 <button type="button" onClick={() => setEmailModal({ ...emailModal, isOpen: false })} className="flex-1 bg-gray-100 text-gray-600 font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors">Hủy bỏ</button>
                 <button type="submit" disabled={isSending} className="flex-1 bg-[#1877F2] text-white font-bold py-3.5 rounded-xl hover:bg-blue-600 transition-colors shadow-md shadow-blue-500/30 flex items-center justify-center gap-2 disabled:opacity-70">
-                  {isSending ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Đang gửi...</> : '✈️ Gửi Email ngay'}
+                  {isSending ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Đang gửi...</> : '✈️ Gửi thư ngay'}
                 </button>
               </div>
             </form>

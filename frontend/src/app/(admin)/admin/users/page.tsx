@@ -364,7 +364,7 @@ export default function AdminUsersPage() {
               </svg>
               <input
                 type="text"
-                placeholder="Tìm theo tên hoặc email..."
+                placeholder="Tìm theo tên hoặc thư điện tử..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="h-12 w-full rounded-2xl border border-slate-300 bg-slate-50 pl-11 pr-4 text-sm font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 hover:border-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
@@ -409,7 +409,7 @@ export default function AdminUsersPage() {
                       </svg>
                     </div>
                     <p className="mt-4 text-base font-extrabold text-slate-800">Không tìm thấy người dùng</p>
-                    <p className="mt-1 text-sm font-medium text-slate-500">Thử tìm kiếm bằng tên hoặc địa chỉ email khác.</p>
+                    <p className="mt-1 text-sm font-medium text-slate-500">Thử tìm kiếm bằng tên hoặc địa chỉ thư điện tử khác.</p>
                   </td>
                 </tr>
               ) : (
@@ -432,7 +432,7 @@ export default function AdminUsersPage() {
                               <span className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-bold text-rose-600">Đã khóa</span>
                             )}
                           </div>
-                          <div className="mt-1 max-w-[240px] truncate font-mono text-xs font-semibold text-slate-500">ID: {user.id}</div>
+                          <div className="mt-1 max-w-[240px] truncate font-mono text-xs font-semibold text-slate-500">Mã: {user.id}</div>
                         </div>
                       </div>
                     </td>
@@ -468,7 +468,11 @@ export default function AdminUsersPage() {
                           ? 'border-blue-200 bg-blue-50 text-blue-700'
                           : 'border-slate-200 bg-slate-100 text-slate-700'
                       } ${user.isLocked ? 'opacity-60' : ''}`}>
-                        {user.role}
+                        {user.role === 'ADMIN'
+                          ? 'Quản trị viên'
+                          : user.role === 'AGENT'
+                            ? 'Môi giới'
+                            : 'Người dùng'}
                       </span>
                     </td>
 
@@ -561,7 +565,7 @@ export default function AdminUsersPage() {
 
             <form onSubmit={handleSave} className="space-y-5 p-6 sm:p-7">
               <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">Địa chỉ Email <span className="text-rose-500">*</span></label>
+                <label className="mb-2 block text-sm font-bold text-slate-700">Địa chỉ thư điện tử <span className="text-rose-500">*</span></label>
                 <input
                   type="email"
                   required
@@ -617,9 +621,9 @@ export default function AdminUsersPage() {
                   onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                   className="h-12 w-full cursor-pointer rounded-2xl border border-slate-300 bg-slate-50 px-4 text-sm font-semibold text-slate-800 outline-none transition-all focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
                 >
-                  <option value="USER">USER (Người dùng thường)</option>
-                  <option value="AGENT">AGENT (Môi giới bất động sản)</option>
-                  <option value="ADMIN">ADMIN (Quản trị viên tối cao)</option>
+                  <option value="USER">Người dùng thường</option>
+                  <option value="AGENT">Môi giới bất động sản</option>
+                  <option value="ADMIN">Quản trị viên</option>
                 </select>
               </div>
 

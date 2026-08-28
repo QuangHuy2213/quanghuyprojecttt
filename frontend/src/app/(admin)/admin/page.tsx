@@ -90,7 +90,7 @@ export default function AdminDashboard() {
           </div>
           <div>
             <div className="text-base font-black text-rose-800">
-              Không thể tải Dashboard
+              Không thể tải bảng điều khiển
             </div>
             <div className="mt-1 text-sm font-semibold leading-6 text-rose-700">
               {error}
@@ -204,7 +204,7 @@ export default function AdminDashboard() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="text-xs font-extrabold uppercase tracking-[0.14em] text-blue-600">
-                Revenue Analytics
+                Phân tích doanh thu
               </div>
               <h2 className="mt-1 text-xl font-black text-slate-950">
                 Doanh thu 6 tháng
@@ -265,7 +265,7 @@ export default function AdminDashboard() {
         {/* MONEY OVERVIEW */}
         <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
           <div className="text-xs font-extrabold uppercase tracking-[0.14em] text-blue-600">
-            Financial Overview
+            Tổng quan tài chính
           </div>
           <h2 className="mt-1 text-xl font-black text-slate-950">
             Dòng tiền nền tảng

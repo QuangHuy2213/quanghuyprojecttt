@@ -10,7 +10,7 @@ type AuthState = 'checking' | 'authorized' | 'denied';
 const menuItems = [
   {
     name: 'Tổng quan',
-    subtitle: 'Dashboard hệ thống',
+    subtitle: 'Bảng điều khiển hệ thống',
     path: '/admin',
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -183,7 +183,7 @@ export default function AdminLayout({
     menuItems[0];
 
   return (
-    <div className="flex min-h-screen bg-slate-100/80 font-sans text-slate-800">
+    <div className="admin-shell flex min-h-screen bg-slate-100/80 font-sans text-slate-800">
       {/* SIDEBAR */}
       <aside className="sticky top-0 z-30 flex h-screen w-72 flex-shrink-0 flex-col border-r border-slate-700/60 bg-gradient-to-b from-[#0f172a] via-[#111827] to-[#0b1220] text-white shadow-[12px_0_40px_-20px_rgba(15,23,42,0.38)]">
         <div className="border-b border-slate-700/60 px-6 py-6">
@@ -195,7 +195,7 @@ export default function AdminLayout({
 
           <div className="mt-4 flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.14em] text-slate-400">
             <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-            Admin Console
+            Bảng quản trị
           </div>
         </div>
 
@@ -265,7 +265,7 @@ export default function AdminLayout({
                 {adminUser?.fullName || 'Quản trị viên'}
               </div>
               <div className="mt-0.5 text-xs font-bold text-sky-300">
-                Administrator
+                Quản trị viên
               </div>
             </div>
           </div>
@@ -299,7 +299,7 @@ export default function AdminLayout({
           <div className="flex items-center justify-between gap-5">
             <div className="min-w-0">
               <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.14em] text-blue-600">
-                <span>Admin</span>
+                <span>Quản trị</span>
                 <span className="text-slate-300">/</span>
                 <span className="truncate text-slate-400">
                   {activeItem.subtitle}
@@ -362,7 +362,7 @@ export default function AdminLayout({
               </div>
 
               <h3 className="mt-5 text-xl font-black text-slate-900">
-                Đăng xuất khỏi Admin?
+                Đăng xuất khỏi trang quản trị?
               </h3>
 
               <p className="mt-2 text-sm font-medium leading-6 text-slate-600">

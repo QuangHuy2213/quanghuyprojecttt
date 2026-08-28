@@ -65,7 +65,7 @@ const SwipeableReportItem = ({ report, handleResolveAndRemovePost, handleIgnoreR
         <div className="md:w-1/4 flex-shrink-0">
           <div className="mb-2 text-sm font-extrabold text-slate-500">Người báo cáo</div>
           <div className="text-xl font-black tracking-tight text-slate-900">{report.user?.fullName || 'Ẩn danh'}</div>
-          <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-slate-600"><span>📧</span> {report.user?.email || 'N/A'}</div>
+          <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-slate-600"><span>📧</span> {report.user?.email || 'Chưa có'}</div>
           <div className="mt-2 text-sm font-medium text-slate-400">{new Date(report.createdAt).toLocaleString('vi-VN')}</div>
         </div>
 

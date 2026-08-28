@@ -18,7 +18,9 @@ body, body * { transition-property: background-color, border-color, color, fill,
 .dark [class*="bg-gray-50"],
 .dark [class*="bg-gray-100"] { background-color: #111827 !important; }
 .dark [class*="text-slate-900"],
+.dark [class*="text-slate-950"],
 .dark [class*="text-slate-800"],
+.dark [class*="text-black"],
 .dark [class*="text-gray-900"],
 .dark [class*="text-gray-800"],
 .dark [class*="text-gray-700"] { color: #f1f5f9 !important; }
@@ -71,4 +73,14 @@ body, body * { transition-property: background-color, border-color, color, fill,
 .dark .user-page-shell {
   background: #020617 !important;
   background-image: none !important;
+}
+
+/* Admin cards use light gradients whose background-image is not affected by
+   Tailwind's background-color overrides. Keep their text readable in dark mode. */
+.dark .admin-shell [class*="from-white"][class*="via-slate-50"],
+.dark .admin-shell [class*="from-white"][class*="to-slate-50"],
+.dark .admin-shell [class*="from-white"][class*="to-blue-50"],
+.dark .admin-shell [class*="from-white"][class*="to-rose-50"],
+.dark .admin-shell [class*="from-slate-50"][class*="to-blue-50"] {
+  background-image: linear-gradient(to right, #0f172a, #111827, #172033) !important;
 }
