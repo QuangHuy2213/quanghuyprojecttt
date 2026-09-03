@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { apiUrl } from '@/services/api';
+import { apiFetch } from '@/services/api';
 import Link from 'next/link';
 
 const statusLabel: Record<string, string> = {
@@ -150,7 +150,7 @@ function AdminWarningModal({
     setIsSending(true);
     try {
       const token = localStorage.getItem('access_token');
-      const res = await fetch(apiUrl('notifications/admin/send-warning'), {
+      const res = await apiFetch('notifications/admin/send-warning', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -322,8 +322,8 @@ export default function AdminTransactionsPage() {
 
     try {
       const [txRes, invRes] = await Promise.all([
-        fetch(apiUrl('admin/transactions'), { headers }),
-        fetch(apiUrl('transactions/invoices/admin/all'), { headers }),
+        apiFetch('admin/transactions', { headers }),
+        apiFetch('transactions/invoices/admin/all', { headers }),
       ]);
 
       if (txRes.ok) setTransactions(await txRes.json());
@@ -354,7 +354,7 @@ export default function AdminTransactionsPage() {
       async () => {
         try {
           const token = localStorage.getItem('access_token');
-          const res = await fetch(apiUrl(`admin/transactions/${transactionId}/resolve`), {
+          const res = await apiFetch(`admin/transactions/${transactionId}/resolve`, {
             method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',
@@ -393,7 +393,7 @@ export default function AdminTransactionsPage() {
       async () => {
         try {
           const token = localStorage.getItem('access_token');
-          const res = await fetch(apiUrl(`transactions/admin/${transactionId}`), {
+          const res = await apiFetch(`transactions/admin/${transactionId}`, {
             method: 'DELETE',
             headers: { Authorization: `Bearer ${token}` },
           });
@@ -423,7 +423,7 @@ export default function AdminTransactionsPage() {
       async () => {
         try {
           const token = localStorage.getItem('access_token');
-          const res = await fetch(apiUrl(`transactions/invoices/admin/${invoiceId}/issue`), {
+          const res = await apiFetch(`transactions/invoices/admin/${invoiceId}/issue`, {
             method: 'PATCH',
             headers: { Authorization: `Bearer ${token}` },
           });

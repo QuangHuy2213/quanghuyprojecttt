@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { apiUrl } from '@/services/api';
+import { apiFetch } from '@/services/api';
 import Link from 'next/link';
 
 // 🌟 BƯỚC 1: TẠO COMPONENT THÔNG MINH CHO TỪNG BÁO CÁO (HỖ TRỢ KÉO/VUỐT ĐỂ XÓA)
@@ -157,7 +157,7 @@ export default function AdminReportsPage() {
 
   const fetchReports = () => {
     setLoading(true);
-    fetch(apiUrl('admin/reports'))
+    apiFetch('admin/reports')
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) setReports(data);
@@ -186,7 +186,7 @@ export default function AdminReportsPage() {
 
     try {
       if (type === 'resolve') {
-        const res = await fetch(apiUrl(`admin/reports/${reportId}/post/${postId}`), {
+        const res = await apiFetch(`admin/reports/${reportId}/post/${postId}`, {
           method: 'DELETE',
         });
 
@@ -198,7 +198,7 @@ export default function AdminReportsPage() {
           showToast('Có lỗi xảy ra khi xóa!', 'error');
         }
       } else {
-        const res = await fetch(apiUrl(`admin/reports/${reportId}/status`), {
+        const res = await apiFetch(`admin/reports/${reportId}/status`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'IGNORED' }),
@@ -220,7 +220,7 @@ export default function AdminReportsPage() {
   // Xóa hẳn dòng báo cáo khỏi database
   const handleDeleteReport = async () => {
     try {
-      const res = await fetch(apiUrl(`admin/reports/${deleteModal.id}`), {
+      const res = await apiFetch(`admin/reports/${deleteModal.id}`, {
         method: 'DELETE',
       });
 

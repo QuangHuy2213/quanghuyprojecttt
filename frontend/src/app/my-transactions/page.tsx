@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import Header from '@/components/Header';
-import { apiUrl } from '@/services/api';
+import { apiFetch } from '@/services/api';
 
 const txLabels: Record<string, string> = {
   VERIFYING: 'Chờ xác nhận',
@@ -94,11 +94,11 @@ export default function TransactionsAndInvoicesPage() {
 
     try {
       const [transactionsRes, invoicesRes] = await Promise.all([
-        fetch(apiUrl('transactions/my-transactions'), {
+        apiFetch('transactions/my-transactions', {
           headers,
           cache: 'no-store',
         }),
-        fetch(apiUrl('transactions/my-invoices'), {
+        apiFetch('transactions/my-invoices', {
           headers,
           cache: 'no-store',
         }),
@@ -162,8 +162,8 @@ export default function TransactionsAndInvoicesPage() {
 
     try {
       const token = localStorage.getItem('access_token');
-      const res = await fetch(
-        apiUrl(`transactions/${cancelModal.id}/request-cancel`),
+      const res = await apiFetch(
+        `transactions/${cancelModal.id}/request-cancel`,
         {
           method: 'PATCH',
           headers: {
@@ -217,8 +217,8 @@ export default function TransactionsAndInvoicesPage() {
 
     try {
       const token = localStorage.getItem('access_token');
-      const res = await fetch(
-        apiUrl(`transactions/${actionModal.id}/respond-cancel`),
+      const res = await apiFetch(
+        `transactions/${actionModal.id}/respond-cancel`,
         {
           method: 'PATCH',
           headers: {
@@ -261,7 +261,7 @@ export default function TransactionsAndInvoicesPage() {
   const pay = async (id: string) => {
     try {
       const token = localStorage.getItem('access_token');
-      const res = await fetch(apiUrl('payments/pay-invoice'), {
+      const res = await apiFetch('payments/pay-invoice', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

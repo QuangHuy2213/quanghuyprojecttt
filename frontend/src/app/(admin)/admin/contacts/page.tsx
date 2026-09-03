@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { apiUrl } from '@/services/api';
+import { apiFetch } from '@/services/api';
 
 // 🌟 BƯỚC 1: TẠO COMPONENT THÔNG MINH CHO TỪNG BỨC THƯ (HỖ TRỢ KÉO/VUỐT)
 const SwipeableContactItem = ({ contact, openEmailModal, openConfirmModal, setDeleteModal }: any) => {
@@ -133,7 +133,7 @@ export default function AdminContactsPage() {
 
   const fetchContacts = () => {
     setLoading(true);
-    fetch(apiUrl('admin/contacts'))
+    apiFetch('admin/contacts')
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) setContacts(data);
@@ -160,7 +160,7 @@ export default function AdminContactsPage() {
 
   const handleMarkAsReplied = async () => {
     try {
-      const res = await fetch(apiUrl(`admin/contacts/${confirmModal.id}/status`), {
+      const res = await apiFetch(`admin/contacts/${confirmModal.id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'REPLIED' }),
@@ -180,7 +180,7 @@ export default function AdminContactsPage() {
 
   const handleDeleteContact = async () => {
     try {
-      const res = await fetch(apiUrl(`admin/contacts/${deleteModal.id}`), {
+      const res = await apiFetch(`admin/contacts/${deleteModal.id}`, {
         method: 'DELETE',
       });
 
@@ -200,7 +200,7 @@ export default function AdminContactsPage() {
     e.preventDefault();
     setIsSending(true);
     try {
-      const res = await fetch(apiUrl('admin/contacts/reply'), {
+      const res = await apiFetch('admin/contacts/reply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(emailModal),

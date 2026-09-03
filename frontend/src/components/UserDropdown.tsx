@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { apiUrl } from '../services/api';
+import { apiFetch } from '../services/api';
 import UserAvatar from './UserAvatar';
 
 export default function UserDropdown({ user, onLogout, onClose }: { user: any; onLogout: () => void; onClose: () => void }) {
@@ -10,7 +10,7 @@ export default function UserDropdown({ user, onLogout, onClose }: { user: any; o
   const [showConfirmModal, setShowConfirmModal] = useState(false); // State bật/tắt modal xác nhận
   const [toastMessage, setToastMessage] = useState<string | null>(null); // State hiển thị thông báo kết quả
   const [followStats, setFollowStats] = useState({ followers: 0, following: 0 });
-  useEffect(() => { if (user?.id) fetch(apiUrl(`community/follows/${user.id}?viewer=${user.id}`)).then(r=>r.json()).then(setFollowStats).catch(()=>{}); }, [user?.id]);
+  useEffect(() => { if (user?.id) apiFetch(`community/follows/${user.id}?viewer=${user.id}`).then(r=>r.json()).then(setFollowStats).catch(()=>{}); }, [user?.id]);
   
   const displayName = user?.fullName || 'Thành viên Nhà Tốt';
 
@@ -26,7 +26,7 @@ export default function UserDropdown({ user, onLogout, onClose }: { user: any; o
       }
       
       // Gọi API khởi tạo thanh toán VNPAY
-      const res = await fetch(apiUrl('payments/upgrade-agent'), {
+      const res = await apiFetch('payments/upgrade-agent', {
         method: 'POST',
         headers: { 
           'Authorization': `Bearer ${token}`,

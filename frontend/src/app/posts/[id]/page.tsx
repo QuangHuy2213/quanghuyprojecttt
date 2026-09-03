@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Header from '../../../components/Header'; 
-import { apiUrl } from '../../../services/api';
+import { apiFetch } from '../../../services/api';
 
 export default function PostDetailPage() {
   const params = useParams();
@@ -48,21 +48,21 @@ export default function PostDetailPage() {
       const updatedHistory = [Number(id), ...viewedPosts.filter((item: number) => item !== Number(id))].slice(0, 20);
       localStorage.setItem('viewed_posts', JSON.stringify(updatedHistory));
 
-      fetch(apiUrl(`posts/${id}`))
+      apiFetch(`posts/${id}`)
         .then(res => res.json())
         .then(data => {
           setPost(data);
           setSelectedImage(data.images?.[0]?.url || data.thumbnail || '');
           setIsLoading(false);
           const sellerId = data.user?.id || data.userId;
-          fetch(apiUrl(`community/follows/${sellerId}?viewer=${JSON.parse(localStorage.getItem('user') || '{}').id || ''}`)).then(r=>r.json()).then(setFollowInfo);
+          apiFetch(`community/follows/${sellerId}?viewer=${JSON.parse(localStorage.getItem('user') || '{}').id || ''}`).then(r=>r.json()).then(setFollowInfo);
         })
         .catch(err => {
           console.error("Lỗi:", err);
           setIsLoading(false);
         });
-      fetch(apiUrl(`posts/${id}/comments`)).then(res => res.json()).then(data => setComments(Array.isArray(data) ? data : [])).catch(() => {});
-      fetch(apiUrl(`community/posts/${id}/reviews`)).then(res=>res.json()).then(data=>setReviews(Array.isArray(data)?data:[])).catch(()=>{});
+      apiFetch(`posts/${id}/comments`).then(res => res.json()).then(data => setComments(Array.isArray(data) ? data : [])).catch(() => {});
+      apiFetch(`community/posts/${id}/reviews`).then(res=>res.json()).then(data=>setReviews(Array.isArray(data)?data:[])).catch(()=>{});
     }
   }, [id]);
 
@@ -72,16 +72,16 @@ export default function PostDetailPage() {
     if (!commentText.trim()) return;
     setCommenting(true);
     try {
-      const response = await fetch(apiUrl(`posts/${id}/comments`), { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` }, body: JSON.stringify({ content: commentText, parentId: replyingTo }) });
+      const response = await apiFetch(`posts/${id}/comments`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` }, body: JSON.stringify({ content: commentText, parentId: replyingTo }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Không thể gửi bình luận.');
-      const refreshed = await fetch(apiUrl(`posts/${id}/comments`)).then(r=>r.json()); setComments(refreshed); setCommentText(''); setReplyingTo(null); showToast('Đã đăng bình luận.', 'success');
+      const refreshed = await apiFetch(`posts/${id}/comments`).then(r=>r.json()); setComments(refreshed); setCommentText(''); setReplyingTo(null); showToast('Đã đăng bình luận.', 'success');
     } catch (error: any) { showToast(error.message, 'error'); } finally { setCommenting(false); }
   };
-  const likeComment = async (commentId:number) => { if(!currentUser)return router.push('/login');await fetch(apiUrl(`posts/comments/${commentId}/like`),{method:'POST',headers:{Authorization:`Bearer ${localStorage.getItem('access_token')}`}});const refreshed=await fetch(apiUrl(`posts/${id}/comments`)).then(r=>r.json());setComments(refreshed); };
+  const likeComment = async (commentId:number) => { if(!currentUser)return router.push('/login');await apiFetch(`posts/comments/${commentId}/like`,{method:'POST',headers:{Authorization:`Bearer ${localStorage.getItem('access_token')}`}});const refreshed=await apiFetch(`posts/${id}/comments`).then(r=>r.json());setComments(refreshed); };
 
-  const toggleFollow = async () => { if(!currentUser)return router.push('/login');const sellerId=post.user?.id||post.userId;const r=await fetch(apiUrl(`community/follows/${sellerId}`),{method:'POST',headers:{Authorization:`Bearer ${localStorage.getItem('access_token')}`}});const d=await r.json();if(r.ok)setFollowInfo(x=>({followers:x.followers+(d.following?1:-1),isFollowing:d.following})); };
-  const saveReview = async () => { if(!currentUser)return router.push('/login');const r=await fetch(apiUrl(`community/posts/${id}/reviews`),{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${localStorage.getItem('access_token')}`},body:JSON.stringify(review)});const d=await r.json();if(!r.ok)return showToast(d.message,'error');setReview({rating:5,content:''});const all=await fetch(apiUrl(`community/posts/${id}/reviews`)).then(x=>x.json());setReviews(all);showToast('Đã lưu đánh giá.','success'); };
+  const toggleFollow = async () => { if(!currentUser)return router.push('/login');const sellerId=post.user?.id||post.userId;const r=await apiFetch(`community/follows/${sellerId}`,{method:'POST',headers:{Authorization:`Bearer ${localStorage.getItem('access_token')}`}});const d=await r.json();if(r.ok)setFollowInfo(x=>({followers:x.followers+(d.following?1:-1),isFollowing:d.following})); };
+  const saveReview = async () => { if(!currentUser)return router.push('/login');const r=await apiFetch(`community/posts/${id}/reviews`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${localStorage.getItem('access_token')}`},body:JSON.stringify(review)});const d=await r.json();if(!r.ok)return showToast(d.message,'error');setReview({rating:5,content:''});const all=await apiFetch(`community/posts/${id}/reviews`).then(x=>x.json());setReviews(all);showToast('Đã lưu đánh giá.','success'); };
 
   const formatPrice = (price: number) => {
     if (!price || price === 0) return 'Thoả thuận';
@@ -103,7 +103,7 @@ export default function PostDetailPage() {
 
     setIsReporting(true);
     try {
-      const res = await fetch(apiUrl('reports'), {
+      const res = await apiFetch('reports', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

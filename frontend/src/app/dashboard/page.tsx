@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
-import { apiUrl } from '@/services/api';
+import { apiFetch } from '@/services/api';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -30,7 +30,7 @@ export default function DashboardPage() {
 
   const fetchMyPosts = async (userId: string) => {
     try {
-      const res = await fetch(apiUrl(`posts/user/${userId}`));
+      const res = await apiFetch(`posts/user/${userId}`);
       const data = await res.json();
       setMyPosts(data);
     } catch (err) {
@@ -45,7 +45,7 @@ export default function DashboardPage() {
     if (!isConfirm) return;
 
     try {
-      await fetch(apiUrl(`posts/${postId}/delete`), {
+      await apiFetch(`posts/${postId}/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id })
@@ -67,7 +67,7 @@ export default function DashboardPage() {
 
     // Gọi API lưu xuống Database
     try {
-      await fetch(apiUrl(`posts/${postId}`), {
+      await apiFetch(`posts/${postId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, status: newStatus })
@@ -85,7 +85,7 @@ export default function DashboardPage() {
     setIsSubmittingSold(true);
     try {
       const token = localStorage.getItem('access_token');
-      const res = await fetch(apiUrl(`transactions/posts/${soldPost.id}/mark-sold`), {
+      const res = await apiFetch(`transactions/posts/${soldPost.id}/mark-sold`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ buyerPhone }),

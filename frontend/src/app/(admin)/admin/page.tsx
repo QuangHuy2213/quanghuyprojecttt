@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { apiUrl } from '@/services/api';
+import { apiFetch } from '@/services/api';
 
 type Stats = {
   totalUsers: number;
@@ -47,7 +47,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     const token = localStorage.getItem('access_token');
 
-    fetch(apiUrl('admin/stats'), {
+    apiFetch('admin/stats', {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',
     })

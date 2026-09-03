@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { apiUrl } from '@/services/api';
+import { apiFetch } from '@/services/api';
 
 export default function AdminPostsPage() {
   const [posts, setPosts] = useState<any[]>([]);
@@ -23,7 +23,7 @@ export default function AdminPostsPage() {
   // 1. Tải danh sách bài chờ duyệt
   const fetchPendingPosts = () => {
     setLoading(true);
-    fetch(apiUrl('admin/posts/pending'))
+    apiFetch('admin/posts/pending')
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) setPosts(data);
@@ -45,7 +45,7 @@ export default function AdminPostsPage() {
   // 2.1. Xác nhận Duyệt bài gọi API
   const confirmApprove = async () => {
     try {
-      const res = await fetch(apiUrl(`admin/posts/${approveData.id}/review`), {
+      const res = await apiFetch(`admin/posts/${approveData.id}/review`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'ACTIVE' }),
@@ -73,7 +73,7 @@ export default function AdminPostsPage() {
     if (!rejectData.id || !rejectData.reason.trim()) return;
 
     try {
-      const res = await fetch(apiUrl(`admin/posts/${rejectData.id}/review`), {
+      const res = await apiFetch(`admin/posts/${rejectData.id}/review`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'HIDDEN', reason: rejectData.reason }),

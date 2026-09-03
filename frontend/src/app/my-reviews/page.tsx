@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import Header from '@/components/Header';
-import { apiUrl } from '@/services/api';
+import { apiFetch } from '@/services/api';
 
 export default function MyReviews() {
   const [items, setItems] = useState<any[]>([]);
   const load = useCallback(async () => {
-    const response = await fetch(apiUrl('community/my-reviews'), {
+    const response = await apiFetch('community/my-reviews', {
       headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
     });
     const data = await response.json();
@@ -20,7 +20,7 @@ export default function MyReviews() {
   }, [load]);
 
   const remove = async (id: number) => {
-    await fetch(apiUrl(`community/reviews/${id}`), {
+    await apiFetch(`community/reviews/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` },
     });

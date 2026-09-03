@@ -2,7 +2,7 @@
 
 import { useEffect, Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { apiUrl } from '@/services/api';
+import { apiFetch } from '@/services/api';
 
 // 1. TÁCH LOGIC XỬ LÝ RA MỘT COMPONENT CON
 function CallbackContent() {
@@ -34,7 +34,7 @@ function CallbackContent() {
   const completeGoogleProfile = async () => {
     if (!/^0\d{9}$/.test(phone)) return setError('Số điện thoại phải gồm 10 số và bắt đầu bằng 0.');
     const token = localStorage.getItem('access_token');
-    const res = await fetch(apiUrl('auth/profile'), { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ phoneNumber: phone }) });
+    const res = await apiFetch('auth/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ phoneNumber: phone }) });
     const data = await res.json();
     if (!res.ok) return setError(data.message || 'Không thể cập nhật số điện thoại.');
     localStorage.setItem('user', JSON.stringify(data));

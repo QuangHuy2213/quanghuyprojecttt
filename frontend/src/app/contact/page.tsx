@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Header from '@/components/Header'; // Dùng @/ để tránh lỗi đường dẫn nhé
-import { apiUrl } from '@/services/api'; 
+import { apiFetch } from '@/services/api'; 
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({ name: '', phone: '', email: '', subject: '', message: '' });
@@ -33,7 +33,7 @@ export default function ContactPage() {
     setIsLoading(true);
 
     try {
-      const res = await fetch(apiUrl('contacts'), {
+      const res = await apiFetch('contacts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

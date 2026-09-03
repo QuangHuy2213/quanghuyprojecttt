@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import UserDropdown from './UserDropdown';
-import { apiUrl } from '../services/api';
+import { apiFetch } from '../services/api';
 import { supabase } from '../services/supabase'; 
 import UserAvatar from './UserAvatar';
 
@@ -82,7 +82,7 @@ export default function Header() {
       setUser(parsedUser);
 
       // 1. TẢI DANH SÁCH YÊU THÍCH
-      fetch(apiUrl(`posts/favorites/${parsedUser.id}`))
+      apiFetch(`posts/favorites/${parsedUser.id}`)
         .then(readJsonSafely)
         .then(data => {
           if (Array.isArray(data)) setFavoritePosts(data);
@@ -91,7 +91,7 @@ export default function Header() {
 
       if (token) {
         // 2. TẢI DANH SÁCH THÔNG BÁO THƯỜNG
-        fetch(apiUrl('notifications'), {
+        apiFetch('notifications', {
           headers: { Authorization: `Bearer ${token}` }
         })
         .then(readJsonSafely)
@@ -106,7 +106,7 @@ export default function Header() {
         .catch(err => console.error('Lỗi tải thông báo', err));
 
         // 🌟 3. KIỂM TRA CẢNH BÁO CHƯA ĐỌC LÚC MỞ TRANG
-        fetch(apiUrl('notifications/unread-warnings'), {
+        apiFetch('notifications/unread-warnings', {
           headers: { Authorization: `Bearer ${token}` }
         })
         .then(readJsonSafely)
@@ -119,7 +119,7 @@ export default function Header() {
       // 4. LẮNG NGHE THÔNG BÁO MỚI TỪ SUPABASE (REALTIME)
       if (token) {
         syncUnreadWarning = () => {
-          fetch(apiUrl('notifications/unread-warnings'), {
+          apiFetch('notifications/unread-warnings', {
             headers: { Authorization: `Bearer ${token}` },
             cache: 'no-store',
           })
@@ -133,7 +133,7 @@ export default function Header() {
         window.addEventListener('focus', syncUnreadWarning);
 
         syncPendingConfirmations = () => {
-          fetch(apiUrl('transactions/pending-confirmations'), {
+          apiFetch('transactions/pending-confirmations', {
             headers: { Authorization: `Bearer ${token}` },
             cache: 'no-store',
           })
@@ -226,7 +226,7 @@ export default function Header() {
     if (willShow) {
       setIsLoadingFavs(true);
       try {
-        const res = await fetch(apiUrl(`posts/favorites/${user.id}`));
+        const res = await apiFetch(`posts/favorites/${user.id}`);
         const data = await readJsonSafely(res);
         if (Array.isArray(data)) setFavoritePosts(data);
       } catch (error) {
@@ -257,7 +257,7 @@ export default function Header() {
     window.dispatchEvent(new CustomEvent('favoriteRemoved', { detail: { postId } }));
 
     try {
-      await fetch(apiUrl(`posts/${postId}/favorite`), {
+      await apiFetch(`posts/${postId}/favorite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id }),
@@ -272,7 +272,7 @@ export default function Header() {
     if (!token) return;
 
     try {
-      await fetch(apiUrl('notifications/read-all'), {
+      await apiFetch('notifications/read-all', {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -288,7 +288,7 @@ export default function Header() {
     if (!token) return;
     setRespondingTransactionId(transactionId);
     try {
-      const response = await fetch(apiUrl(`transactions/${transactionId}/verify`), {
+      const response = await apiFetch(`transactions/${transactionId}/verify`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ isConfirmed }),
@@ -314,7 +314,7 @@ export default function Header() {
     if (!warningPopup) return;
     try {
       const token = localStorage.getItem('access_token');
-      await fetch(apiUrl(`notifications/${warningPopup.id}/read`), {
+      await apiFetch(`notifications/${warningPopup.id}/read`, {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${token}` }
       });

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Header from '@/components/Header';
-import { apiUrl } from '@/services/api';
+import { apiFetch } from '@/services/api';
 
 export default function EditPostPage() {
   const router = useRouter();
@@ -58,13 +58,13 @@ export default function EditPostPage() {
     }
 
     // Lấy danh sách Tỉnh/Thành
-    fetch(apiUrl('/cities'))
+    apiFetch('/cities')
       .then(res => res.json())
       .then(data => setCities(Array.isArray(data) ? data : (data?.data || [])));
 
     // Lấy chi tiết bài viết cần sửa
     if (postId) {
-      fetch(apiUrl(`posts/${postId}`))
+      apiFetch(`posts/${postId}`)
         .then(res => res.json())
         .then(data => {
           if (data) {
@@ -94,7 +94,7 @@ export default function EditPostPage() {
   // Lấy Quận/Huyện khi Tỉnh/Thành thay đổi
   useEffect(() => {
     if (formData.city) {
-      fetch(apiUrl(`/districts/${formData.city}`))
+      apiFetch(`/districts/${formData.city}`)
         .then(res => res.json())
         .then(data => setDistricts(Array.isArray(data) ? data : (data?.data || [])));
     } else {
@@ -113,7 +113,7 @@ export default function EditPostPage() {
       };
       
       // Gọi API cập nhật (PATCH)
-      const res = await fetch(apiUrl(`posts/${postId}`), {
+      const res = await apiFetch(`posts/${postId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

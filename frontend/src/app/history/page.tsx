@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Header from '@/components/Header';
-import { apiUrl } from '@/services/api';
+import { apiFetch } from '@/services/api';
 
 export default function HistoryPage() {
   const [historyPosts, setHistoryPosts] = useState<any[]>([]);
@@ -13,7 +13,7 @@ export default function HistoryPage() {
     if (historyIds.length > 0) {
       Promise.all(
         historyIds.map((id: number) => 
-          fetch(apiUrl(`posts/${id}`)).then(res => res.json()).catch(() => null)
+          apiFetch(`posts/${id}`).then(res => res.json()).catch(() => null)
         )
       ).then(data => setHistoryPosts(data.filter(Boolean)));
     }

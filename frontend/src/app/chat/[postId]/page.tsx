@@ -16,7 +16,7 @@ import {
 import Header from '@/components/Header';
 
 import { supabase } from '@/services/supabase';
-import { apiUrl } from '@/services/api';
+import { apiFetch } from '@/services/api';
 
 // =====================================================
 // CONSTANTS
@@ -331,10 +331,8 @@ function ChatContent() {
               'access_token'
             );
 
-          const res = await fetch(
-            apiUrl(
-              `transactions/check?user1=${currentUser.id}&user2=${activeChat.id}&postId=${postId || activeChat.postId || ''}`
-            ),
+          const res = await apiFetch(
+            `transactions/check?user1=${currentUser.id}&user2=${activeChat.id}&postId=${postId || activeChat.postId || ''}`,
             {
               headers: {
                 Authorization:
@@ -529,8 +527,8 @@ function ChatContent() {
             'access_token'
           );
 
-        const aiResponse = await fetch(
-          apiUrl('chat/send'),
+        const aiResponse = await apiFetch(
+          'chat/send',
           {
             method: 'POST',
 
@@ -553,8 +551,8 @@ function ChatContent() {
           }
         );
         if (aiResponse.ok) {
-          const checkResponse = await fetch(
-            apiUrl(`transactions/check?user1=${currentUser.id}&user2=${activeChat.id}&postId=${activeChat.postId || postId || ''}`),
+          const checkResponse = await apiFetch(
+            `transactions/check?user1=${currentUser.id}&user2=${activeChat.id}&postId=${activeChat.postId || postId || ''}`,
             { headers: { Authorization: `Bearer ${token}` } },
           );
           if (checkResponse.ok) setTransaction(await checkResponse.json());
@@ -602,10 +600,8 @@ function ChatContent() {
             'access_token'
           );
 
-        const res = await fetch(
-          apiUrl(
-            `transactions/${transaction.id}/verify`
-          ),
+        const res = await apiFetch(
+          `transactions/${transaction.id}/verify`,
           {
             method: 'PATCH',
 

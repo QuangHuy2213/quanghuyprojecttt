@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Header from '../components/Header';
 import PostList from '../components/PostList';
 import Footer from '../components/Footer';
-import { apiUrl } from '../services/api';
+import { apiFetch } from '../services/api';
 
 type HomeToast = {
   show: boolean;
@@ -57,7 +57,7 @@ export default function HomePage() {
   });
 
   useEffect(() => {
-    fetch(apiUrl('cities'))
+    apiFetch('cities')
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data)) setCities(data);
@@ -67,7 +67,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (filters.city) {
-      fetch(apiUrl(`districts/${filters.city}`))
+      apiFetch(`districts/${filters.city}`)
         .then((res) => res.json())
         .then((data) => {
           if (Array.isArray(data)) setDistricts(data);

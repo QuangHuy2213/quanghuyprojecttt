@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { apiUrl } from '../services/api';
+import { apiFetch } from '../services/api';
 
 // --- Hàm format giá tiền ---
 const formatPrice = (price: any) => {
@@ -60,7 +60,7 @@ export default function PostList({ filters }: { filters: { keyword: string; city
 
   const fetchUserFavorites = async (userId: string) => {
     try {
-      const res = await fetch(apiUrl(`posts/favorites/${userId}`));
+      const res = await apiFetch(`posts/favorites/${userId}`);
       const data = await res.json();
       if (Array.isArray(data)) {
         setFavoritedIds(data.map((post: any) => post.id));
@@ -81,7 +81,7 @@ export default function PostList({ filters }: { filters: { keyword: string; city
       if (filters.area) url += `&area=${filters.area}`;
       if (filters.transactionType) url += `&transactionType=${filters.transactionType}`;
 
-      const res = await fetch(apiUrl(url));
+      const res = await apiFetch(url);
       const result = await res.json();
 
       const dataArray = result?.data ?? (Array.isArray(result) ? result : []);
@@ -122,7 +122,7 @@ export default function PostList({ filters }: { filters: { keyword: string; city
     }
 
     try {
-      await fetch(apiUrl(`posts/${postId}/favorite`), {
+      await apiFetch(`posts/${postId}/favorite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id })

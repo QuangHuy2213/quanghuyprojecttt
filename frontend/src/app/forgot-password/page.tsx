@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { apiUrl } from '../../services/api';
+import { apiFetch } from '../../services/api';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -27,7 +27,7 @@ export default function ForgotPasswordPage() {
     setIsLoading(true);
 
     try {
-      const res = await fetch(apiUrl('auth/forgot-password'), {
+      const res = await apiFetch('auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),

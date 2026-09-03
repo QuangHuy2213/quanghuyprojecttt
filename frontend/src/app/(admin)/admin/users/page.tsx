@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { apiUrl } from '@/services/api';
+import { apiFetch } from '@/services/api';
 
 type PopupKind = 'success' | 'error' | 'warning' | 'confirm';
 
@@ -145,7 +145,7 @@ export default function AdminUsersPage() {
     setLoading(true);
     const token = localStorage.getItem('access_token');
 
-    fetch(apiUrl('admin/users'), {
+    apiFetch('admin/users', {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
@@ -187,7 +187,7 @@ export default function AdminUsersPage() {
 
     try {
       const isCreate = modalMode === 'create';
-      const url = isCreate ? apiUrl('admin/users') : apiUrl(`admin/users/${editingId}`);
+      const url = isCreate ? 'admin/users' : `admin/users/${editingId}`;
       const method = isCreate ? 'POST' : 'PATCH';
       const token = localStorage.getItem('access_token');
 
@@ -202,7 +202,7 @@ export default function AdminUsersPage() {
         };
       }
 
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
@@ -246,7 +246,7 @@ export default function AdminUsersPage() {
       async () => {
         try {
           const token = localStorage.getItem('access_token');
-          const res = await fetch(apiUrl(`admin/users/${user.id}`), {
+          const res = await apiFetch(`admin/users/${user.id}`, {
             method: 'PATCH',
             headers: {
               'Content-Type': 'application/json',
@@ -286,7 +286,7 @@ export default function AdminUsersPage() {
       async () => {
         try {
           const token = localStorage.getItem('access_token');
-          const res = await fetch(apiUrl(`admin/users/${userId}`), {
+          const res = await apiFetch(`admin/users/${userId}`, {
             method: 'DELETE',
             headers: { Authorization: `Bearer ${token}` },
           });

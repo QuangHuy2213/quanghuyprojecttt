@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '../../components/Header';
-import { apiUrl } from '../../services/api';
+import { apiFetch } from '../../services/api';
 
 export default function CreatePostPage() {
   const router = useRouter();
@@ -65,13 +65,13 @@ export default function CreatePostPage() {
       setFormData(prev => ({ ...prev, posterType: 'BROKER' }));
     }
 
-    fetch(apiUrl('cities')).then(res => res.json()).then(data => setCities(Array.isArray(data) ? data : (data?.data || [])));
+    apiFetch('cities').then(res => res.json()).then(data => setCities(Array.isArray(data) ? data : (data?.data || [])));
   }, [router]);
 
   // Lấy Quận/Huyện
   useEffect(() => {
     if (formData.city) {
-      fetch(apiUrl(`districts/${formData.city}`)).then(res => res.json()).then(data => setDistricts(Array.isArray(data) ? data : (data?.data || [])));
+      apiFetch(`districts/${formData.city}`).then(res => res.json()).then(data => setDistricts(Array.isArray(data) ? data : (data?.data || [])));
     } else {
       setDistricts([]);
       setFormData(prev => ({ ...prev, district: '' }));
@@ -175,7 +175,7 @@ export default function CreatePostPage() {
       };
       
       const token = localStorage.getItem('access_token') || localStorage.getItem('token');
-      const res = await fetch(apiUrl('posts'), {
+      const res = await apiFetch('posts', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

@@ -3,7 +3,7 @@
 import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { apiUrl } from '../../services/api';
+import { apiFetch } from '../../services/api';
 
 // =====================================================================
 // 1. COMPONENT CON: CHỨA LOGIC XỬ LÝ URL VÀ GIAO DIỆN FORM
@@ -52,7 +52,7 @@ function ResetPasswordContent() {
     setIsLoading(true);
 
     try {
-      const res = await fetch(apiUrl('auth/reset-password'), {
+      const res = await apiFetch('auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, newPassword }),

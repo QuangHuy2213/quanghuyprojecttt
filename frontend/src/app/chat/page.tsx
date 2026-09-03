@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import { supabase } from '@/services/supabase';
-import { apiUrl } from '@/services/api';
+import { apiFetch } from '@/services/api';
 
 const DEFAULT_AVATAR = 'https://i.imgur.com/L1nYE9z.jpg';
 
@@ -170,7 +170,7 @@ function ChatApp() {
     const checkTransaction = async () => {
       try {
         const token = localStorage.getItem('access_token');
-        const res = await fetch(apiUrl(`transactions/check?user1=${currentUser.id}&user2=${activeChat.id}&postId=${activeChat.postId}`), {
+        const res = await apiFetch(`transactions/check?user1=${currentUser.id}&user2=${activeChat.id}&postId=${activeChat.postId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.ok) setTransaction(await res.json());
@@ -242,7 +242,7 @@ function ChatApp() {
     // BƯỚC 2: Gửi báo cho Backend quét AI
     try {
       const token = localStorage.getItem('access_token');
-      const res = await fetch(apiUrl('chat/send'), {
+      const res = await apiFetch('chat/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ postId: activeChat.postId, receiverId: activeChat.id, content: textToSend })
@@ -250,7 +250,7 @@ function ChatApp() {
 
       // 🌟 BƯỚC 3: Nếu AI quét xong, NGAY LẬP TỨC gọi API check lại giao dịch để bật Popup cho người gửi
       if (res.ok) {
-        const checkRes = await fetch(apiUrl(`transactions/check?user1=${currentUser.id}&user2=${activeChat.id}&postId=${activeChat.postId}`), {
+        const checkRes = await apiFetch(`transactions/check?user1=${currentUser.id}&user2=${activeChat.id}&postId=${activeChat.postId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         
@@ -271,7 +271,7 @@ function ChatApp() {
     setIsVerifying(true);
     try {
       const token = localStorage.getItem('access_token');
-      const res = await fetch(apiUrl(`transactions/${transaction.id}/verify`), {
+      const res = await apiFetch(`transactions/${transaction.id}/verify`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ isConfirmed })

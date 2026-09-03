@@ -7,7 +7,7 @@ export const apiUrl = (path: string) => {
 
   if (
     typeof window !== 'undefined' &&
-    window.location.hostname === 'localhost'
+    ['localhost', '127.0.0.1'].includes(window.location.hostname)
   ) {
     return `${LOCAL_API}${cleanPath}`;
   }
@@ -63,6 +63,21 @@ export const apiFetch = async (
   const headers = new Headers(
     options.headers || {}
   );
+
+  const isFormData =
+    typeof FormData !== 'undefined' &&
+    options.body instanceof FormData;
+
+  if (
+    options.body &&
+    !isFormData &&
+    !headers.has('Content-Type')
+  ) {
+    headers.set(
+      'Content-Type',
+      'application/json'
+    );
+  }
 
   if (clientId) {
     headers.set(
