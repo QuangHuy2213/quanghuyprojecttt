@@ -366,3 +366,159 @@ model posts {
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 }
+
+// ============================================================
+// SECURITY TOOL
+// ============================================================
+
+enum SecurityAction {
+  ALLOW
+  ALERT
+  BLOCK
+}
+
+enum SecuritySeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AttackType {
+  SQL_INJECTION
+  XSS
+  BRUTE_FORCE
+  API_ABUSE
+  UNAUTHORIZED_ACCESS
+  SUSPICIOUS_REQUEST
+}
+
+// Lưu lịch sử các hành vi tấn công
+model SecurityEvent {
+  id Int @id @default(autoincrement())
+
+  ipAddress String? @db.VarChar(64)
+
+  // clientKey giúp nhận diện client kể cả khi IP thay đổi
+  clientKey String? @db.VarChar(128)
+
+  // Có thể null vì attacker chưa chắc đã đăng nhập
+  userId String?
+
+  userAgent String?
+  method    String @db.VarChar(10)
+  path      String
+
+  attackType AttackType
+  severity   SecuritySeverity
+  riskScore  Int
+
+  action SecurityAction
+
+  reason String?
+
+  createdAt DateTime @default(now())
+
+  @@index([ipAddress])
+  @@index([clientKey])
+  @@index([userId])
+  @@index([attackType])
+  @@index([createdAt])
+  @@map("security_events")
+}
+
+// Theo dõi số lần vi phạm
+model ClientViolation {
+  id Int @id @default(autoincrement())
+
+  clientKey String @unique @db.VarChar(128)
+
+  ipAddress String? @db.VarChar(64)
+
+  violationCount Int @default(0)
+  totalRisk      Int @default(0)
+
+  lastAttackType AttackType?
+
+  firstViolationAt DateTime @default(now())
+  lastViolationAt  DateTime @updatedAt
+
+  @@index([ipAddress])
+  @@map("security_client_violations")
+}
+
+// Danh sách IP / client đang bị khóa
+model BlockedIp {
+  id Int @id @default(autoincrement())
+
+  ipAddress String? @db.VarChar(64)
+
+  clientKey String? @db.VarChar(128)
+
+  reason String
+
+  violationCount Int @default(0)
+  totalRisk      Int @default(0)
+
+  isActive Boolean @default(true)
+
+  blockedAt DateTime @default(now())
+  expiresAt DateTime?
+
+  @@index([ipAddress])
+  @@index([clientKey])
+  @@index([isActive])
+  @@map("security_blocked_ips")
+}
+model SecurityStats {
+  id            Int      @id @default(1)
+  totalRequests Int      @default(0)
+  updatedAt     DateTime @updatedAt
+
+  @@map("security_stats")
+}
+model SecurityRateLimit {
+  id Int @id @default(autoincrement())
+
+  clientKey String @db.VarChar(128)
+  endpoint  String @db.VarChar(255)
+
+  requestCount Int @default(0)
+
+  windowStart DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([clientKey, endpoint])
+  @@index([clientKey])
+  @@index([windowStart])
+  @@map("security_rate_limits")
+}
+model SecurityLoginAttempt {
+  id Int @id @default(autoincrement())
+
+  // Client thực hiện đăng nhập
+  clientKey String @db.VarChar(128)
+
+  // Hash email/username, không lưu password
+  identifierHash String @db.VarChar(64)
+
+  // Endpoint đăng nhập
+  endpoint String @db.VarChar(255)
+
+  // Số lần đăng nhập thất bại
+  failedCount Int @default(0)
+
+  // Thời điểm bắt đầu cửa sổ theo dõi
+  windowStart DateTime @default(now())
+
+  // Nếu bị chặn đăng nhập tạm thời
+  blockedUntil DateTime?
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([clientKey, identifierHash, endpoint])
+  @@index([clientKey])
+  @@index([identifierHash])
+  @@index([blockedUntil])
+  @@map("security_login_attempts")
+}
