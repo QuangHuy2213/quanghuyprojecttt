@@ -86,11 +86,9 @@ export const apiFetch = async (
     );
   }
 
-  return fetch(
-    apiUrl(path),
-    {
-      ...options,
-      headers,
-    }
-  );
+  return fetch(apiUrl(path), {
+  ...options,
+  headers,
+  cache: options.cache ?? 'no-store',
+});
 };
