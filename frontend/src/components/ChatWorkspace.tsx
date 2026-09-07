@@ -31,8 +31,20 @@ const mergeMessages = (items: Message[]) =>
 
 async function jsonRequest<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await apiFetch(path, options);
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.message || 'Không thể tải dữ liệu.');
+  const body = await response.text();
+  let data;
+  try {
+    data = body.trim() ? JSON.parse(body) : null;
+  } catch {
+    throw new Error(`Máy chủ trả dữ liệu không hợp lệ (HTTP ${response.status}).`);
+  }
+  if (!response.ok) {
+    throw new Error(data?.message || `Không thể tải dữ liệu (HTTP ${response.status}).`);
+  }
+  // Nest returns an empty body for a nullable transaction when no agreement exists.
+  if (data === null && !path.startsWith('transactions/check?')) {
+    throw new Error('Máy chủ trả phản hồi trống. Vui lòng thử lại.');
+  }
   return data;
 }
 
