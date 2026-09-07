@@ -171,9 +171,15 @@ export class ChatService {
 
   async threads(userId: string) {
     const rows = await this.prisma.$queryRaw<Array<{ id: number }>>`
-      SELECT DISTINCT ON (CASE WHEN sender_id = ${userId} THEN receiver_id ELSE sender_id END, post_id) id
-      FROM messages WHERE sender_id = ${userId} OR receiver_id = ${userId}
-      ORDER BY CASE WHEN sender_id = ${userId} THEN receiver_id ELSE sender_id END, post_id, id DESC`;
+      SELECT DISTINCT ON (peer_id, post_id) id
+      FROM (
+        SELECT id, post_id,
+          CASE WHEN sender_id = ${userId}
+            THEN receiver_id ELSE sender_id END AS peer_id
+        FROM messages
+        WHERE sender_id = ${userId} OR receiver_id = ${userId}
+      ) AS conversation_messages
+      ORDER BY peer_id, post_id, id DESC`;
     const messages = await this.prisma.message.findMany({
       where: { id: { in: rows.map((row) => row.id) } },
       include: {
