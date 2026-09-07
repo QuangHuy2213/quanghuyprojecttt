@@ -14,8 +14,8 @@ export class AdminService {
   private transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASSWORD,
+      user: process.env.MAIL_USER,
+      pass: process.env.MAIL_APP_PASSWORD,
     },
   });
 
@@ -298,7 +298,7 @@ export class AdminService {
     message: string,
   ) {
     await this.transporter.sendMail({
-      from: '"Nhà Tốt Support" <quanghuy22130504@gmail.com>',
+      from: `"Nhà Tốt Support" <${process.env.MAIL_USER}>`,
       to: emailTo,
       subject: subject,
       html: `
