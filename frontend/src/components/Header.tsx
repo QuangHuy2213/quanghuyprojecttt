@@ -579,6 +579,7 @@ export default function Header() {
           )}
 
           {/* MENU NGƯỜI DÙNG */}
+          {user && (
           <div className="relative">
             <button 
               onClick={() => { 
@@ -602,6 +603,7 @@ export default function Header() {
               />
             )}
           </div>
+          )}
 
         </div>
       </div>
