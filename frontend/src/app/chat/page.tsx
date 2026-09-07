@@ -156,6 +156,7 @@ function ChatApp() {
   // 3. Load nội dung tin nhắn chi tiết & Realtime & Escrow
   useEffect(() => {
     if (!currentUser || !activeChat) return;
+    const controller = new AbortController();
 
     const loadMessages = async () => {
       const { data } = await supabase
@@ -170,10 +171,15 @@ function ChatApp() {
     const checkTransaction = async () => {
       try {
         const token = localStorage.getItem('access_token');
+        if (!token || controller.signal.aborted) return;
         const res = await apiFetch(`transactions/check?user1=${currentUser.id}&user2=${activeChat.id}&postId=${activeChat.postId}`, {
+          signal: controller.signal,
           headers: { Authorization: `Bearer ${token}` }
         });
-        if (res.ok) setTransaction(await res.json());
+        if (res.ok) {
+          const data = await res.json();
+          if (!controller.signal.aborted) setTransaction(data);
+        }
       } catch (error) {}
     };
 
@@ -212,8 +218,8 @@ function ChatApp() {
         }
       }).subscribe();
 
-    return () => { supabase.removeChannel(channel); };
-  }, [currentUser, activeChat]);
+    return () => { controller.abort(); supabase.removeChannel(channel); };
+  }, [currentUser?.id, activeChat?.id, activeChat?.postId]);
 
   // Cuộn xuống tin nhắn mới nhất
   useEffect(() => {

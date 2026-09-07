@@ -57,26 +57,30 @@ export default function HomePage() {
   });
 
   useEffect(() => {
-    apiFetch('cities')
+    const controller = new AbortController();
+    apiFetch('cities', { signal: controller.signal })
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data)) setCities(data);
+        if (!controller.signal.aborted && Array.isArray(data)) setCities(data);
       })
-      .catch((err) => console.error('Lỗi tải tỉnh thành:', err));
+      .catch((err) => { if (!controller.signal.aborted) console.error('Lỗi tải tỉnh thành:', err); });
+    return () => controller.abort();
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
     if (filters.city) {
-      apiFetch(`districts/${filters.city}`)
+      apiFetch(`districts/${filters.city}`, { signal: controller.signal })
         .then((res) => res.json())
         .then((data) => {
-          if (Array.isArray(data)) setDistricts(data);
+          if (!controller.signal.aborted && Array.isArray(data)) setDistricts(data);
         })
-        .catch((err) => console.error('Lỗi tải quận huyện:', err));
+        .catch((err) => { if (!controller.signal.aborted) console.error('Lỗi tải quận huyện:', err); });
     } else {
       setDistricts([]);
       setFilters((prev) => ({ ...prev, district: '' }));
     }
+    return () => controller.abort();
   }, [filters.city]);
 
   const showToast = (

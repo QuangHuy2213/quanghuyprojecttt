@@ -4,7 +4,8 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import UserDropdown from './UserDropdown';
-import { apiFetch } from '../services/api';
+import { apiFetch, clearApiCache } from '../services/api';
+import { subscribeApiPolling } from '../services/polling';
 import { supabase } from '../services/supabase'; 
 import UserAvatar from './UserAvatar';
 
@@ -24,6 +25,7 @@ async function readJsonSafely(response: Response) {
 export default function Header() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
@@ -70,131 +72,90 @@ export default function Header() {
   };
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    const token = localStorage.getItem('access_token'); 
-    let warningSyncTimer: number | undefined;
-    let syncUnreadWarning: (() => void) | undefined;
-    let confirmationSyncTimer: number | undefined;
-    let syncPendingConfirmations: (() => void) | undefined;
-
-    if (storedUser) {
-      const parsedUser = JSON.parse(storedUser);
-      setUser(parsedUser);
-
-      // 1. TẢI DANH SÁCH YÊU THÍCH
-      apiFetch(`posts/favorites/${parsedUser.id}`)
-        .then(readJsonSafely)
-        .then(data => {
-          if (Array.isArray(data)) setFavoritePosts(data);
-        })
-        .catch(err => console.error('Lỗi tải danh sách yêu thích', err));
-
-      if (token) {
-        // 2. TẢI DANH SÁCH THÔNG BÁO THƯỜNG
-        apiFetch('notifications', {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        .then(readJsonSafely)
-        .then(data => {
-          if (Array.isArray(data)) {
-            // Loại bỏ WARNING_POPUP ra khỏi danh sách thông báo chuông
-            const normalNotifs = data.filter((n: any) => n.type !== 'WARNING_POPUP');
-            setNotifications(normalNotifs);
-            setUnreadCount(normalNotifs.filter((n: any) => !n.isRead && !n.is_read).length);
-          }
-        })
-        .catch(err => console.error('Lỗi tải thông báo', err));
-
-        // 🌟 3. KIỂM TRA CẢNH BÁO CHƯA ĐỌC LÚC MỞ TRANG
-        apiFetch('notifications/unread-warnings', {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        .then(readJsonSafely)
-        .then(data => {
-          if (data && data.id) setWarningPopup(data);
-        })
-        .catch(err => console.error('Lỗi kiểm tra cảnh báo', err));
+    const syncUser = () => {
+      const stored = localStorage.getItem('user');
+      const accessToken = localStorage.getItem('access_token');
+      try {
+        const nextUser = stored && accessToken ? JSON.parse(stored) : null;
+        setUser(nextUser?.id ? nextUser : null);
+        setToken(nextUser?.id ? accessToken : null);
+      } catch {
+        setUser(null);
+        setToken(null);
       }
-
-      // 4. LẮNG NGHE THÔNG BÁO MỚI TỪ SUPABASE (REALTIME)
-      if (token) {
-        syncUnreadWarning = () => {
-          apiFetch('notifications/unread-warnings', {
-            headers: { Authorization: `Bearer ${token}` },
-            cache: 'no-store',
-          })
-            .then(readJsonSafely)
-            .then(data => {
-              if (data?.id) setWarningPopup((current: any) => current?.id === data.id ? current : data);
-            })
-            .catch(err => console.error('Lỗi đồng bộ cảnh báo', err));
-        };
-        warningSyncTimer = window.setInterval(syncUnreadWarning, 2500);
-        window.addEventListener('focus', syncUnreadWarning);
-
-        syncPendingConfirmations = () => {
-          apiFetch('transactions/pending-confirmations', {
-            headers: { Authorization: `Bearer ${token}` },
-            cache: 'no-store',
-          })
-            .then(readJsonSafely)
-            .then(data => setPendingConfirmations(Array.isArray(data) ? data : []))
-            .catch(err => console.error('Lỗi đồng bộ yêu cầu xác nhận', err));
-        };
-        syncPendingConfirmations();
-        confirmationSyncTimer = window.setInterval(syncPendingConfirmations, 2500);
-        window.addEventListener('focus', syncPendingConfirmations);
-      }
-
-      const channel = supabase
-        .channel(`global_notifications_${parsedUser.id}`)
-        .on('postgres_changes', { 
-            event: 'INSERT', 
-            schema: 'public', 
-            table: 'notifications' 
-          }, 
-          (payload) => {
-            const newNotif = payload.new;
-            const notificationUserId = newNotif.user_id ?? newNotif.userId;
-            if (String(notificationUserId) === String(parsedUser.id)) {
-              
-              // 🌟 NẾU LÀ CẢNH BÁO TỪ ADMIN -> BẬT MODAL LÊN NGAY LẬP TỨC
-              if (newNotif.type === 'WARNING_POPUP') {
-                setWarningPopup(newNotif);
-              } 
-              // Nếu là thông báo thường -> Thêm vào chuông
-              else {
-                setNotifications(prev => [newNotif, ...prev]); 
-                setUnreadCount(prev => prev + 1); 
-                syncPendingConfirmations?.();
-              }
-            }
-          }
-        )
-        .subscribe();
-
-      return () => {
-        if (warningSyncTimer) window.clearInterval(warningSyncTimer);
-        if (syncUnreadWarning) window.removeEventListener('focus', syncUnreadWarning);
-        if (confirmationSyncTimer) window.clearInterval(confirmationSyncTimer);
-        if (syncPendingConfirmations) window.removeEventListener('focus', syncPendingConfirmations);
-        supabase.removeChannel(channel);
-      };
-    }
+      setShowUserMenu(false);
+    };
+    syncUser();
+    window.addEventListener('user-updated', syncUser);
+    window.addEventListener('storage', syncUser);
+    return () => {
+      window.removeEventListener('user-updated', syncUser);
+      window.removeEventListener('storage', syncUser);
+    };
   }, []);
 
   useEffect(() => {
-    const syncUser = () => {
-      const stored = localStorage.getItem('user');
-      setUser(stored ? JSON.parse(stored) : null);
+    setFavoritePosts([]);
+    setNotifications([]);
+    setUnreadCount(0);
+    setWarningPopup(null);
+    setPendingConfirmations([]);
+    if (!user?.id || !token) return;
+    const userId = user.id;
+    const controller = new AbortController();
+    apiFetch(`posts/favorites/${userId}`, { signal: controller.signal })
+      .then(readJsonSafely)
+      .then(data => {
+        if (!controller.signal.aborted && Array.isArray(data)) setFavoritePosts(data);
+      })
+      .catch(err => { if (!controller.signal.aborted) console.error('Lỗi tải danh sách yêu thích', err); });
+
+    const notificationsSync = subscribeApiPolling('notifications', token, data => {
+      if (!Array.isArray(data)) return;
+      const normalNotifs = data.filter((n: any) => n.type !== 'WARNING_POPUP');
+      setNotifications(normalNotifs);
+      setUnreadCount(normalNotifs.filter((n: any) => !n.isRead && !n.is_read).length);
+    });
+    const warningsSync = subscribeApiPolling('notifications/unread-warnings', token, data => {
+      const warning = data as { id?: string } | null;
+      setWarningPopup((current: any) => warning?.id ? (current?.id === warning.id ? current : warning) : null);
+    });
+    const confirmationsSync = subscribeApiPolling('transactions/pending-confirmations', token, data => {
+      setPendingConfirmations(Array.isArray(data) ? data : []);
+    });
+
+    const channel = supabase
+      .channel(`global_notifications_${userId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, payload => {
+        if (controller.signal.aborted || localStorage.getItem('access_token') !== token) return;
+        const newNotif = payload.new;
+        if (String(newNotif.user_id ?? newNotif.userId) !== String(userId)) return;
+        if (newNotif.type === 'WARNING_POPUP') {
+          setWarningPopup(newNotif);
+        } else {
+          // Realtime keeps the UI immediate; polling recovers missed events.
+          setNotifications(prev => [newNotif, ...prev.filter(n => n.id !== newNotif.id)]);
+          setUnreadCount(prev => prev + 1);
+          confirmationsSync.refresh();
+        }
+      })
+      .subscribe();
+
+    return () => {
+      controller.abort();
+      notificationsSync.stop();
+      warningsSync.stop();
+      confirmationsSync.stop();
+      supabase.removeChannel(channel);
     };
-    window.addEventListener('user-updated', syncUser);
-    return () => window.removeEventListener('user-updated', syncUser);
-  }, []);
+  }, [user?.id, token]);
 
   const handleLogout = () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('user');
+    clearApiCache();
+    window.dispatchEvent(new Event('user-updated'));
+    setToken(null);
     setUser(null);
     setShowUserMenu(false);
     setShowFavorites(false);
@@ -203,6 +164,7 @@ export default function Header() {
     setNotifications([]);
     setUnreadCount(0);
     setWarningPopup(null);
+    setPendingConfirmations([]);
     router.push('/');
   };
 
@@ -272,10 +234,11 @@ export default function Header() {
     if (!token) return;
 
     try {
-      await apiFetch('notifications/read-all', {
+      const response = await apiFetch('notifications/read-all', {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${token}` }
       });
+      await readJsonSafely(response);
       setNotifications(prev => prev.map(n => ({ ...n, isRead: true, is_read: true })));
       setUnreadCount(0);
     } catch (error) {
@@ -314,10 +277,11 @@ export default function Header() {
     if (!warningPopup) return;
     try {
       const token = localStorage.getItem('access_token');
-      await apiFetch(`notifications/${warningPopup.id}/read`, {
+      const response = await apiFetch(`notifications/${warningPopup.id}/read`, {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${token}` }
       });
+      await readJsonSafely(response);
       setWarningPopup(null); // Tắt Modal
     } catch (err) {
       console.error('Lỗi khi xác nhận cảnh báo', err);

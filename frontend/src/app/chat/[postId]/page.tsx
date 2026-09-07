@@ -323,6 +323,7 @@ function ChatContent() {
       return;
     }
 
+    const controller = new AbortController();
     const checkTransaction =
       async () => {
         try {
@@ -331,9 +332,11 @@ function ChatContent() {
               'access_token'
             );
 
+          if (!token) return;
           const res = await apiFetch(
             `transactions/check?user1=${currentUser.id}&user2=${activeChat.id}&postId=${postId || activeChat.postId || ''}`,
             {
+              signal: controller.signal,
               headers: {
                 Authorization:
                   `Bearer ${token}`,
@@ -345,11 +348,13 @@ function ChatContent() {
             const data =
               await res.json();
 
+            if (controller.signal.aborted) return;
             setTransaction(
               data || null
             );
           }
         } catch (error) {
+          if (controller.signal.aborted) return;
           console.log(
             'Không thể kiểm tra giao dịch:',
             error
@@ -358,9 +363,12 @@ function ChatContent() {
       };
 
     checkTransaction();
+    return () => controller.abort();
   }, [
     currentUser?.id,
     activeChat?.id,
+    activeChat?.postId,
+    postId,
   ]);
 
   // ===================================================

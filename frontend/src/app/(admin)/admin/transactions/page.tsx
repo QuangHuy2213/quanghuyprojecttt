@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '@/services/api';
+import { startPolling } from '@/services/polling';
 import Link from 'next/link';
 
 const statusLabel: Record<string, string> = {
@@ -312,35 +313,47 @@ export default function AdminTransactionsPage() {
 
   // Lấy dữ liệu.
   // Chỉ hiển thị loading toàn trang ở lần tải đầu tiên.
-  // Những lần tự đồng bộ sau đó chạy nền để tránh trang bị quay lại màn hình loading mỗi 15 giây.
-  const fetchData = async (showFullLoader = false) => {
+  // Những lần tự đồng bộ sau đó chạy nền, chỉ khi tab đang hiển thị.
+  const fetchData = useCallback(async (showFullLoader = false, signal?: AbortSignal) => {
     if (showFullLoader) setLoading(true);
     else setRefreshing(true);
 
     const token = localStorage.getItem('access_token');
+    if (!token) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
     const headers = { Authorization: `Bearer ${token}` };
 
     try {
       const [txRes, invRes] = await Promise.all([
-        apiFetch('admin/transactions', { headers }),
-        apiFetch('transactions/invoices/admin/all', { headers }),
+        apiFetch('admin/transactions', { headers, signal }),
+        apiFetch('transactions/invoices/admin/all', { headers, signal }),
       ]);
 
-      if (txRes.ok) setTransactions(await txRes.json());
-      if (invRes.ok) setInvoices(await invRes.json());
+      const nextTransactions = txRes.ok ? await txRes.json() : null;
+      const nextInvoices = invRes.ok ? await invRes.json() : null;
+      if (signal?.aborted) return;
+      if (nextTransactions) setTransactions(nextTransactions);
+      if (nextInvoices) setInvoices(nextInvoices);
     } catch (error) {
-      console.error('Lỗi tải dữ liệu:', error);
+      if (!signal?.aborted) console.error('Lỗi tải dữ liệu:', error);
     } finally {
       if (showFullLoader) setLoading(false);
       else setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchData(true);
-    const timer = setInterval(() => fetchData(false), 15000);
-    return () => clearInterval(timer);
-  }, []);
+    let first = true;
+    if (!localStorage.getItem('access_token') || !localStorage.getItem('user')) setLoading(false);
+    const poller = startPolling(async signal => {
+      await fetchData(first, signal);
+      first = false;
+    });
+    return poller.stop;
+  }, [fetchData]);
 
   // --- Xử lý Giao dịch ---
   const handleResolveDispute = (transactionId: string, action: 'APPROVE' | 'CANCEL') => {

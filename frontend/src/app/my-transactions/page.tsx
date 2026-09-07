@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import Header from '@/components/Header';
 import { apiFetch } from '@/services/api';
+import { startPolling } from '@/services/polling';
 
 const txLabels: Record<string, string> = {
   VERIFYING: 'Chờ xác nhận',
@@ -71,7 +72,7 @@ export default function TransactionsAndInvoicesPage() {
     sending: false,
   });
 
-  const load = useCallback(async (showFullLoader = false) => {
+  const load = useCallback(async (showFullLoader = false, signal?: AbortSignal) => {
     if (showFullLoader) setLoading(true);
     else setRefreshing(true);
 
@@ -95,24 +96,24 @@ export default function TransactionsAndInvoicesPage() {
     try {
       const [transactionsRes, invoicesRes] = await Promise.all([
         apiFetch('transactions/my-transactions', {
+          signal,
           headers,
           cache: 'no-store',
         }),
         apiFetch('transactions/my-invoices', {
+          signal,
           headers,
           cache: 'no-store',
         }),
       ]);
 
-      if (transactionsRes.ok) {
-        setTransactions(await transactionsRes.json());
-      }
-
-      if (invoicesRes.ok) {
-        setInvoices(await invoicesRes.json());
-      }
+      const nextTransactions = transactionsRes.ok ? await transactionsRes.json() : null;
+      const nextInvoices = invoicesRes.ok ? await invoicesRes.json() : null;
+      if (signal?.aborted) return;
+      if (nextTransactions) setTransactions(nextTransactions);
+      if (nextInvoices) setInvoices(nextInvoices);
     } catch (error) {
-      console.error('Lỗi tải dữ liệu giao dịch:', error);
+      if (!signal?.aborted) console.error('Lỗi tải dữ liệu giao dịch:', error);
     } finally {
       if (showFullLoader) setLoading(false);
       else setRefreshing(false);
@@ -120,13 +121,13 @@ export default function TransactionsAndInvoicesPage() {
   }, []);
 
   useEffect(() => {
-    load(true);
-
-    const timer = setInterval(() => {
-      load(false);
-    }, 15000);
-
-    return () => clearInterval(timer);
+    let first = true;
+    if (!localStorage.getItem('access_token') || !localStorage.getItem('user')) setLoading(false);
+    const poller = startPolling(async signal => {
+      await load(first, signal);
+      first = false;
+    });
+    return poller.stop;
   }, [load]);
 
   const notify = (

@@ -49,6 +49,7 @@ export default function PostList({ filters }: { filters: PostFilters }) {
   const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadVersion, setReloadVersion] = useState(0);
   const [user, setUser] = useState<any>(null);
   const [favoritedIds, setFavoritedIds] = useState<number[]>([]);
   const [toast, setToast] = useState<ToastState>({
@@ -104,7 +105,7 @@ export default function PostList({ filters }: { filters: PostFilters }) {
     try {
       const storedUser = localStorage.getItem('user');
 
-      if (!storedUser) {
+      if (!storedUser || !localStorage.getItem('access_token')) {
         return () => {
           controller.abort();
         };
@@ -267,7 +268,9 @@ export default function PostList({ filters }: { filters: PostFilters }) {
 
           if (res.status === 429) {
             setLoadError(
-              result?.message ||
+              result?.retry_after
+                ? `Bạn gửi quá nhiều yêu cầu. Vui lòng thử lại sau ${result.retry_after} giây.`
+                : result?.message ||
                 'Bạn gửi quá nhiều yêu cầu. Vui lòng thử lại sau.',
             );
             return;
@@ -329,7 +332,7 @@ export default function PostList({ filters }: { filters: PostFilters }) {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [postsUrl]);
+  }, [postsUrl, reloadVersion]);
 
   const handleFavorite = async (
     e: React.MouseEvent,
@@ -454,7 +457,7 @@ export default function PostList({ filters }: { filters: PostFilters }) {
 
         <button
           type="button"
-          onClick={() => window.location.reload()}
+          onClick={() => setReloadVersion(version => version + 1)}
           className="mt-5 rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-extrabold text-white transition hover:bg-rose-700"
         >
           Thử lại
