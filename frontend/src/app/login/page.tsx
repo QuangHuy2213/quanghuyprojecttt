@@ -26,10 +26,7 @@ export default function LoginPage() {
     type: 'success',
   });
 
-  const showToast = (
-    message: string,
-    type: 'success' | 'error',
-  ) => {
+  const showToast = (message: string, type: 'success' | 'error') => {
     setToast({
       show: true,
       message,
@@ -49,9 +46,7 @@ export default function LoginPage() {
   // LOGIN
   // =========================================================
 
-  const handleSubmit = async (
-    e: React.FormEvent,
-  ) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (isLoading) {
@@ -65,21 +60,18 @@ export default function LoginPage() {
       // 1. Gọi Security Tool
       // 2. Thêm X-Client-Id
       // 3. Security Tool mới forward sang NestJS
-      const res = await apiFetch(
-        '/auth/login',
-        {
-          method: 'POST',
+      const res = await apiFetch('/auth/login', {
+        method: 'POST',
 
-          headers: {
-            'Content-Type': 'application/json',
-          },
-
-          body: JSON.stringify({
-            email,
-            password,
-          }),
+        headers: {
+          'Content-Type': 'application/json',
         },
-      );
+
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      });
 
       let data: any = {};
 
@@ -96,13 +88,10 @@ export default function LoginPage() {
       if (!res.ok) {
         // Brute Force / Rate Limit
         if (res.status === 429) {
-          const retryAfter =
-            data.retry_after;
+          const retryAfter = data.retry_after;
 
           if (retryAfter) {
-            const minutes = Math.ceil(
-              Number(retryAfter) / 60,
-            );
+            const minutes = Math.ceil(Number(retryAfter) / 60);
 
             showToast(
               data.message ||
@@ -111,8 +100,7 @@ export default function LoginPage() {
             );
           } else {
             showToast(
-              data.message ||
-                'Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau.',
+              data.message || 'Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau.',
               'error',
             );
           }
@@ -122,31 +110,19 @@ export default function LoginPage() {
 
         // Client/IP bị Security Gateway khóa
         if (res.status === 403) {
-          showToast(
-            data.message ||
-              'Yêu cầu đã bị hệ thống bảo mật ngăn chặn.',
-            'error',
-          );
+          showToast(data.message || 'Yêu cầu đã bị hệ thống bảo mật ngăn chặn.', 'error');
 
           return;
         }
 
         // Sai email/password
         if (res.status === 401) {
-          showToast(
-            data.message ||
-              'Tài khoản không đúng hoặc không tồn tại!',
-            'error',
-          );
+          showToast(data.message || 'Tài khoản không đúng hoặc không tồn tại!', 'error');
 
           return;
         }
 
-        showToast(
-          data.message ||
-            'Đăng nhập thất bại. Vui lòng thử lại!',
-          'error',
-        );
+        showToast(data.message || 'Đăng nhập thất bại. Vui lòng thử lại!', 'error');
 
         return;
       }
@@ -156,44 +132,25 @@ export default function LoginPage() {
       // =====================================================
 
       if (!data.access_token) {
-        showToast(
-          'Máy chủ không trả về token đăng nhập.',
-          'error',
-        );
+        showToast('Máy chủ không trả về token đăng nhập.', 'error');
 
         return;
       }
 
-      localStorage.setItem(
-        'access_token',
-        data.access_token,
-      );
+      localStorage.setItem('access_token', data.access_token);
 
-      localStorage.setItem(
-        'user',
-        JSON.stringify(data.user),
-      );
+      localStorage.setItem('user', JSON.stringify(data.user));
 
-      showToast(
-        'Đăng nhập thành công! Đang chuyển hướng...',
-        'success',
-      );
+      window.dispatchEvent(new Event('user-updated'));
+      showToast('Đăng nhập thành công! Đang chuyển hướng...', 'success');
 
       setTimeout(() => {
         router.push('/');
       }, 1500);
-
     } catch (err) {
-      console.error(
-        '[LOGIN ERROR]',
-        err,
-      );
+      console.error('[LOGIN ERROR]', err);
 
-      showToast(
-        'Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại mạng!',
-        'error',
-      );
-
+      showToast('Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại mạng!', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -201,7 +158,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-[#f4f7f6] flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
-
       {/* =====================================================
           CSS ANIMATIONS
       ===================================================== */}
@@ -263,13 +219,11 @@ export default function LoginPage() {
       ===================================================== */}
 
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 pointer-events-none">
-
         <div className="absolute top-[-10%] left-[10%] w-96 h-96 bg-[#1877F2] rounded-full mix-blend-multiply filter blur-[100px] opacity-40 animate-blob" />
 
         <div className="absolute top-[20%] right-[10%] w-96 h-96 bg-purple-400 rounded-full mix-blend-multiply filter blur-[100px] opacity-40 animate-blob animation-delay-2000" />
 
         <div className="absolute bottom-[-10%] left-[30%] w-96 h-96 bg-pink-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-40 animate-blob animation-delay-4000" />
-
       </div>
 
       {/* =====================================================
@@ -300,18 +254,10 @@ export default function LoginPage() {
             font-semibold
             text-sm
             border border-white/20
-            ${
-              toast.type === 'error'
-                ? 'bg-red-500/90'
-                : 'bg-[#1877F2]/90'
-            }
+            ${toast.type === 'error' ? 'bg-red-500/90' : 'bg-[#1877F2]/90'}
           `}
         >
-          <span className="text-lg">
-            {toast.type === 'error'
-              ? '⚠️'
-              : '✨'}
-          </span>
+          <span className="text-lg">{toast.type === 'error' ? '⚠️' : '✨'}</span>
 
           {toast.message}
         </div>
@@ -322,18 +268,17 @@ export default function LoginPage() {
       ===================================================== */}
 
       <div className="relative z-10 sm:mx-auto sm:w-full sm:max-w-lg px-4 animate-fade-in-up">
-
         <div className="bg-white/70 backdrop-blur-2xl py-12 px-8 shadow-[0_8px_30px_rgb(0,0,0,0.08)] rounded-[2.5rem] border border-white sm:px-12 transition-all hover:shadow-[0_8px_40px_rgb(0,0,0,0.12)]">
-
           {/* =================================================
               LOGO
           ================================================= */}
 
           <div className="text-center mb-10">
-
             <Link
               href="/"
-              className="inline-block bg-gradient-to-r from-[#1877F2] to-blue-500 text-white font-extrabold text-xl px-6 py-2.5 rounded-2xl shadow-lg shadow-blue-500/30 tracking-tight transform hover:scale-105 transition-all"
+              className="inline-block bg-gradient-to-r from-[#1877F2] to-blue-500 text-white
+                font-extrabold text-xl px-6 py-2.5 rounded-2xl shadow-lg
+                shadow-blue-500/30 tracking-tight transform hover:scale-105 transition-all"
             >
               NHÀ TỐT
             </Link>
@@ -343,33 +288,24 @@ export default function LoginPage() {
             </h2>
 
             <p className="mt-3 text-sm text-gray-500 font-medium">
-              Đăng nhập để tiếp tục hành trình tìm kiếm
-              ngôi nhà mơ ước
+              Đăng nhập để tiếp tục hành trình tìm kiếm ngôi nhà mơ ước
             </p>
-
           </div>
 
           {/* =================================================
               LOGIN FORM
           ================================================= */}
 
-          <form
-            className="space-y-6"
-            onSubmit={handleSubmit}
-          >
-
+          <form className="space-y-6" onSubmit={handleSubmit}>
             {/* EMAIL */}
 
             <div>
-
               <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">
                 Email của bạn
               </label>
 
               <div className="relative group">
-
                 <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-gray-400 group-focus-within:text-[#1877F2] transition-colors duration-300">
-
                   <svg
                     className="w-5 h-5"
                     fill="none"
@@ -383,7 +319,6 @@ export default function LoginPage() {
                       d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"
                     />
                   </svg>
-
                 </span>
 
                 <input
@@ -391,29 +326,25 @@ export default function LoginPage() {
                   type="email"
                   autoComplete="email"
                   placeholder="hello@nhatot.com"
-                  className="w-full bg-white/50 border border-gray-200 rounded-2xl pl-12 pr-4 py-4 text-sm text-gray-800 focus:outline-none focus:ring-4 focus:ring-[#1877F2]/10 focus:border-[#1877F2] focus:bg-white transition-all duration-300 placeholder-gray-400 font-medium"
+                  className="w-full bg-white/50 border border-gray-200 rounded-2xl pl-12 pr-4 py-4
+                    text-sm text-gray-800 focus:outline-none focus:ring-4
+                    focus:ring-[#1877F2]/10 focus:border-[#1877F2] focus:bg-white
+                    transition-all duration-300 placeholder-gray-400 font-medium"
                   value={email}
-                  onChange={(e) =>
-                    setEmail(e.target.value)
-                  }
+                  onChange={(e) => setEmail(e.target.value)}
                 />
-
               </div>
-
             </div>
 
             {/* PASSWORD */}
 
             <div>
-
               <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">
                 Mật khẩu
               </label>
 
               <div className="relative group">
-
                 <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-gray-400 group-focus-within:text-[#1877F2] transition-colors duration-300">
-
                   <svg
                     className="w-5 h-5"
                     fill="none"
@@ -427,7 +358,6 @@ export default function LoginPage() {
                       d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
                     />
                   </svg>
-
                 </span>
 
                 <input
@@ -435,26 +365,23 @@ export default function LoginPage() {
                   type="password"
                   autoComplete="current-password"
                   placeholder="••••••••"
-                  className="w-full bg-white/50 border border-gray-200 rounded-2xl pl-12 pr-4 py-4 text-sm text-gray-800 focus:outline-none focus:ring-4 focus:ring-[#1877F2]/10 focus:border-[#1877F2] focus:bg-white transition-all duration-300 placeholder-gray-400 font-medium"
+                  className="w-full bg-white/50 border border-gray-200 rounded-2xl pl-12 pr-4 py-4
+                    text-sm text-gray-800 focus:outline-none focus:ring-4
+                    focus:ring-[#1877F2]/10 focus:border-[#1877F2] focus:bg-white
+                    transition-all duration-300 placeholder-gray-400 font-medium"
                   value={password}
-                  onChange={(e) =>
-                    setPassword(e.target.value)
-                  }
+                  onChange={(e) => setPassword(e.target.value)}
                 />
-
               </div>
 
               <div className="flex justify-end mt-3">
-
                 <Link
                   href="/forgot-password"
                   className="text-xs font-bold text-[#1877F2] hover:text-blue-700 transition-colors"
                 >
                   Quên mật khẩu?
                 </Link>
-
               </div>
-
             </div>
 
             {/* LOGIN BUTTON */}
@@ -462,9 +389,13 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full mt-2 flex items-center justify-center gap-2 py-4 px-4 rounded-2xl shadow-lg shadow-blue-500/30 text-sm font-bold text-white bg-gradient-to-r from-[#1877F2] to-blue-600 hover:from-blue-600 hover:to-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/20 disabled:opacity-70 disabled:cursor-not-allowed transform hover:-translate-y-0.5 transition-all duration-300 active:scale-[0.98]"
+              className="w-full mt-2 flex items-center justify-center gap-2 py-4 px-4 rounded-2xl
+                shadow-lg shadow-blue-500/30 text-sm font-bold text-white bg-gradient-to-r
+                from-[#1877F2] to-blue-600 hover:from-blue-600 hover:to-blue-700
+                focus:outline-none focus:ring-4 focus:ring-blue-500/20 disabled:opacity-70
+                disabled:cursor-not-allowed transform hover:-translate-y-0.5
+                transition-all duration-300 active:scale-[0.98]"
             >
-
               {isLoading ? (
                 <>
                   <svg
@@ -487,15 +418,12 @@ export default function LoginPage() {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     />
                   </svg>
-
                   Đang xử lý...
                 </>
               ) : (
                 'Đăng nhập'
               )}
-
             </button>
-
           </form>
 
           {/* =================================================
@@ -503,25 +431,19 @@ export default function LoginPage() {
           ================================================= */}
 
           <div className="mt-6">
-
             <div className="relative">
-
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-gray-200" />
               </div>
 
               <div className="relative flex justify-center text-sm">
-
                 <span className="px-3 bg-[#fdfdfd] text-gray-400 font-semibold rounded-full">
                   Hoặc đăng nhập bằng
                 </span>
-
               </div>
-
             </div>
 
             <div className="mt-6">
-
               {/*
                 Google OAuth tạm thời đi trực tiếp backend.
                 /auth/google và callback đang được whitelist
@@ -530,14 +452,12 @@ export default function LoginPage() {
 
               <a
                 href="https://quanghuy-backend.onrender.com/auth/google"
-                className="w-full flex items-center justify-center gap-3 py-3.5 px-4 rounded-2xl shadow-sm border border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300 text-sm font-bold text-gray-700 transition-all duration-300 active:scale-[0.98]"
+                className="w-full flex items-center justify-center gap-3 py-3.5 px-4 rounded-2xl
+                  shadow-sm border border-gray-200 bg-white hover:bg-gray-50
+                  hover:border-gray-300 text-sm font-bold text-gray-700 transition-all
+                  duration-300 active:scale-[0.98]"
               >
-
-                <svg
-                  className="w-5 h-5"
-                  viewBox="0 0 24 24"
-                >
-
+                <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                     fill="#4285F4"
@@ -557,15 +477,10 @@ export default function LoginPage() {
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 0 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                     fill="#EA4335"
                   />
-
                 </svg>
-
                 Đăng nhập với Google
-
               </a>
-
             </div>
-
           </div>
 
           {/* =================================================
@@ -573,7 +488,6 @@ export default function LoginPage() {
           ================================================= */}
 
           <div className="mt-10 text-center text-sm border-t border-gray-100/60 pt-6">
-
             <span className="text-gray-500 font-medium">
               Chưa có tài khoản trên Nhà Tốt?{' '}
             </span>
@@ -584,13 +498,9 @@ export default function LoginPage() {
             >
               Đăng ký ngay
             </Link>
-
           </div>
-
         </div>
-
       </div>
-
     </div>
   );
 }

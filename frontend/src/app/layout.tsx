@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { InboxProvider } from '@/components/InboxProvider';
 
 export const metadata: Metadata = {
   title: 'Nhà Tốt - Nền tảng Bất động sản hàng đầu',
-  description:
-    'Tìm kiếm, mua bán và cho thuê ngôi nhà mơ ước của bạn tại Nhà Tốt.',
+  description: 'Tìm kiếm, mua bán và cho thuê ngôi nhà mơ ước của bạn tại Nhà Tốt.',
 };
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
@@ -16,9 +16,11 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
       data-scroll-behavior="smooth"
       suppressHydrationWarning
     >
-      <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className="min-h-full bg-slate-100 text-slate-900 selection:bg-blue-100 selection:text-blue-900">
-        {children}
+        <InboxProvider>{children}</InboxProvider>
       </body>
     </html>
   );

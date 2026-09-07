@@ -1,299 +1,316 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
+import { useInbox } from '@/components/InboxProvider';
+import { transactionLabels } from '@/components/TransactionPrompt';
 import { apiFetch } from '@/services/api';
+import { startPolling } from '@/services/polling';
+
+type Listing = {
+  id: number;
+  title: string;
+  thumbnail?: string;
+  price: string;
+  status: string;
+  approvedAt?: string;
+  createdAt: string;
+  transactions: {
+    id: string;
+    status: string;
+    buyer: { fullName: string; phoneNumber?: string };
+  }[];
+};
 
 export default function DashboardPage() {
-  const router = useRouter();
-  const [user, setUser] = useState<any>(null);
-  const [myPosts, setMyPosts] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [soldPost, setSoldPost] = useState<any>(null);
+  const { user, token } = useInbox();
+  const [posts, setPosts] = useState<Listing[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
+  const [soldPost, setSoldPost] = useState<Listing | null>(null);
   const [buyerPhone, setBuyerPhone] = useState('');
-  const [isSubmittingSold, setIsSubmittingSold] = useState(false);
-  const canCreatePost = user && ['AGENT', 'ADMIN'].includes(user.role);
+  const [busy, setBusy] = useState(false);
+
+  const load = async (id: string, signal?: AbortSignal) => {
+    const response = await apiFetch(`posts/user/${id}`, { signal });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Không thể tải tin đăng.');
+    if (!signal?.aborted) {
+      setPosts(data);
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (!storedUser) {
-      alert('Vui lòng đăng nhập để vào trang quản lý!');
-      router.push('/login');
-    } else {
-      const parsedUser = JSON.parse(storedUser);
-      setUser(parsedUser);
-      fetchMyPosts(parsedUser.id);
-    }
-  }, [router]);
-
-  const fetchMyPosts = async (userId: string) => {
-    try {
-      const res = await apiFetch(`posts/user/${userId}`);
-      const data = await res.json();
-      setMyPosts(data);
-    } catch (err) {
-      console.error('Lỗi khi tải danh sách tin của bạn:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleDelete = async (postId: number, postTitle: string) => {
-    const isConfirm = window.confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn bài đăng: "${postTitle}" không?`);
-    if (!isConfirm) return;
-
-    try {
-      await apiFetch(`posts/${postId}/delete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id })
-      });
-      setMyPosts(prev => prev.filter(post => post.id !== postId));
-      alert('Đã xóa bài viết thành công!');
-    } catch (err) {
-      console.error('Lỗi khi xóa bài:', err);
-      alert('Có lỗi xảy ra khi xóa bài!');
-    }
-  };
-
-  // HÀM ĐỔI TRẠNG THÁI (BẬT/TẮT HOẶC ĐÃ BÁN)
-  const handleUpdateStatus = async (postId: number, newStatus: string) => {
-    // Cập nhật giao diện ngay lập tức
-    setMyPosts(prev => prev.map(post => 
-      post.id === postId ? { ...post, status: newStatus } : post
-    ));
-
-    // Gọi API lưu xuống Database
-    try {
-      await apiFetch(`posts/${postId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, status: newStatus })
-      });
-    } catch (err) {
-      console.error('Lỗi cập nhật trạng thái:', err);
-    }
-  };
-
-  const handleMarkSold = async () => {
-    if (!soldPost || !/^0\d{9}$/.test(buyerPhone)) {
-      alert('Vui lòng nhập số điện thoại khách hàng gồm 10 số, bắt đầu bằng 0.');
+    if (!user || !token) {
+      setLoading(false);
+      setPosts([]);
       return;
     }
-    setIsSubmittingSold(true);
+    const poller = startPolling(async (signal) => {
+      try {
+        await load(user.id, signal);
+      } catch (error) {
+        if (!signal.aborted) {
+          setMessage(error instanceof Error ? error.message : 'Không thể tải tin.');
+          setLoading(false);
+        }
+      }
+    });
+    window.addEventListener('transactions-updated', poller.refresh);
+    return () => {
+      poller.stop();
+      window.removeEventListener('transactions-updated', poller.refresh);
+    };
+  }, [user?.id, token]);
+
+  const mutate = async (path: string, method: string, body: object) => {
+    const response = await apiFetch(path, { method, body: JSON.stringify(body) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Không thể thực hiện thao tác.');
+    return data;
+  };
+
+  const changeStatus = async (post: Listing) => {
+    setBusy(true);
     try {
-      const token = localStorage.getItem('access_token');
-      const res = await apiFetch(`transactions/posts/${soldPost.id}/mark-sold`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ buyerPhone }),
+      await mutate(`posts/${post.id}`, 'PATCH', {
+        status: post.status === 'ACTIVE' ? 'HIDDEN' : 'ACTIVE',
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Không thể gửi yêu cầu xác nhận.');
-      alert('Đã gửi thông báo xác nhận tới khách hàng. Tin sẽ chuyển sang Đã bán khi khách xác nhận.');
-      setSoldPost(null);
-      setBuyerPhone('');
-    } catch (error: any) {
-      alert(error.message);
+      await load(user!.id);
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : 'Không thể thay đổi trạng thái.',
+      );
     } finally {
-      setIsSubmittingSold(false);
+      setBusy(false);
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="user-page-shell min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1877F2]"></div>
-      </div>
-    );
-  }
+  const remove = async (post: Listing) => {
+    if (!window.confirm(`Xóa tin “${post.title}”?`)) return;
+    setBusy(true);
+    try {
+      await mutate(`posts/${post.id}/delete`, 'POST', {});
+      await load(user!.id);
+      setMessage('Đã xóa tin.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Không thể xóa tin.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const markSold = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!soldPost) return;
+    setBusy(true);
+    try {
+      await mutate(`transactions/posts/${soldPost.id}/mark-sold`, 'POST', { buyerPhone });
+      setSoldPost(null);
+      setMessage(
+        'Đã gửi yêu cầu tới khách hàng. Tin chưa chuyển sang đã bán cho tới khi khách xác nhận.',
+      );
+      await load(user!.id);
+      window.dispatchEvent(new Event('transactions-updated'));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Không thể báo đã bán.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
-    <div className="user-page-shell min-h-screen bg-[#f8fafc]">
+    <div className="min-h-screen bg-slate-50">
       <Header />
-
-      {soldPost && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-4">
-          <div className="w-full max-w-md rounded-3xl bg-white p-7 shadow-2xl">
-            <h2 className="text-xl font-black text-gray-900">Xác nhận đã giao dịch</h2>
-            <p className="mt-2 text-sm text-gray-500">Nhập số điện thoại tài khoản khách mua. Hệ thống sẽ gửi yêu cầu để khách xác nhận trước khi đóng tin và tạo hóa đơn nháp.</p>
-            <input
-              autoFocus
-              inputMode="numeric"
-              maxLength={10}
-              value={buyerPhone}
-              onChange={(e) => setBuyerPhone(e.target.value.replace(/\D/g, ''))}
-              placeholder="Ví dụ: 0912345678"
-              className="mt-5 w-full rounded-xl border border-gray-200 px-4 py-3 text-gray-900 outline-none focus:border-blue-500"
-            />
-            <div className="mt-5 flex gap-3">
-              <button onClick={() => { setSoldPost(null); setBuyerPhone(''); }} className="flex-1 rounded-xl bg-gray-100 py-3 text-sm font-bold text-gray-600">Hủy</button>
-              <button disabled={isSubmittingSold} onClick={handleMarkSold} className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-bold text-white disabled:opacity-50">
-                {isSubmittingSold ? 'Đang gửi...' : 'Gửi xác nhận'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      <main className="max-w-6xl mx-auto px-4 py-10">
-        {/* TIÊU ĐỀ & NÚT ĐĂNG TIN */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+      <main className="mx-auto max-w-6xl px-4 py-8">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight">Quản lý tin đăng</h1>
-            <p className="text-gray-500 mt-1 text-sm">
-              Bạn đang có tổng cộng <span className="font-extrabold text-[#1877F2]">{myPosts.length}</span> tin trên hệ thống.
+            <h1 className="text-3xl font-bold text-slate-900">Quản lý tin đăng</h1>
+            <p className="mt-2 text-sm text-slate-500">
+              Theo dõi duyệt tin, thỏa thuận và xác nhận đã bán.
             </p>
           </div>
-          <Link 
-            href={canCreatePost ? '/create-post' : '#'}
-            onClick={(event) => { if (!canCreatePost) event.preventDefault(); }}
-            aria-disabled={!canCreatePost}
-            className="bg-[#1877F2] hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-2xl transition-all shadow-lg shadow-blue-500/25 flex items-center gap-2 text-sm whitespace-nowrap"
-          >
-            <span className="text-lg leading-none">+</span> Đăng tin mới
-          </Link>
-        </div>
-
-        {myPosts.length === 0 ? (
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-16 text-center">
-            <div className="text-6xl mb-4">📝</div>
-            <h2 className="text-xl font-extrabold text-gray-800 mb-2">Bạn chưa đăng tin nào</h2>
-            <p className="text-gray-500 mb-6 text-sm">Hãy khởi tạo bài đăng đầu tiên của bạn để tiếp cận hàng triệu khách hàng.</p>
-            <Link href={canCreatePost ? '/create-post' : '#'} onClick={(event) => { if (!canCreatePost) event.preventDefault(); }} aria-disabled={!canCreatePost} className={`inline-block font-bold px-6 py-3 rounded-2xl shadow-lg transition-all text-sm ${canCreatePost ? 'bg-[#1877F2] text-white shadow-blue-500/25 hover:bg-blue-600' : 'cursor-not-allowed bg-gray-200 text-gray-400 shadow-none'}`}>
-              Tiến hành đăng tin ngay
+          {user && ['AGENT', 'ADMIN'].includes(user.role || '') && (
+            <Link
+              href="/create-post"
+              className="rounded-xl bg-blue-600 px-5 py-3 font-bold text-white"
+            >
+              Đăng tin mới
             </Link>
+          )}
+        </div>
+        {message && (
+          <div
+            role="status"
+            className="mb-4 flex justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm"
+          >
+            <p>{message}</p>
+            <button aria-label="Đóng" onClick={() => setMessage('')}>
+              ×
+            </button>
           </div>
+        )}
+        {!user ? (
+          <Link href="/login" className="text-blue-600">
+            Đăng nhập để quản lý tin
+          </Link>
+        ) : loading ? (
+          <p>Đang tải...</p>
         ) : (
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="grid grid-cols-12 gap-4 p-5 bg-gray-50/70 font-bold text-gray-400 text-[11px] uppercase tracking-wider border-b border-gray-100">
-              <div className="col-span-6 md:col-span-5">Thông tin bài đăng</div>
-              <div className="hidden md:block col-span-2 text-center">Mức giá</div>
-              <div className="col-span-3 md:col-span-3 text-center">Trạng thái & Kiểm duyệt</div>
-              <div className="col-span-3 md:col-span-2 text-center">Thao tác</div>
-            </div>
-
-            {myPosts.map((post) => {
-              const status = post.status; // ACTIVE, HIDDEN, PENDING, REJECTED, SOLD
-              const isVisible = status === 'ACTIVE';
-              const isPending = status === 'PENDING';
-              const isRejected = status === 'REJECTED'; // Giả định trạng thái bị từ chối từ admin
-              const isSold = status === 'SOLD';
-
-              // Kiểm tra xem có bị khóa nút bật/tắt không (Ví dụ: Đang chờ duyệt hoặc bị từ chối)
-              const isToggleDisabled = isPending || isRejected;
-
+          <div className="space-y-3">
+            {!posts.length && (
+              <p className="rounded-xl bg-white p-8 text-center text-slate-500">
+                Bạn chưa có tin đăng.
+              </p>
+            )}
+            {posts.map((post) => {
+              const reservation = post.transactions[0];
+              const locked = !!reservation || post.status === 'SOLD';
+              const label = reservation
+                ? transactionLabels[reservation.status]
+                : {
+                    ACTIVE: 'Đang hiển thị',
+                    PENDING: 'Chờ duyệt',
+                    HIDDEN: post.approvedAt ? 'Đang ẩn' : 'Chưa được duyệt',
+                    SOLD: 'Đã bán',
+                  }[post.status] || post.status;
               return (
-                <div key={post.id} className="grid grid-cols-12 gap-4 p-5 border-b border-gray-50 items-center hover:bg-gray-50/50 transition-colors">
-                  
-                  {/* THÔNG TIN BÀI ĐĂNG (Đã xóa mã tin) */}
-                  <div className="col-span-6 md:col-span-5 flex gap-4 items-center">
-                    <img 
-                      src={post.thumbnail || 'https://via.placeholder.com/150'} 
-                      alt={post.title} 
-                      className="w-20 h-20 object-cover rounded-2xl border border-gray-100 flex-shrink-0 shadow-sm" 
+                <article
+                  key={post.id}
+                  className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5
+                    sm:flex-row sm:items-center"
+                >
+                  {post.thumbnail && (
+                    <img
+                      src={post.thumbnail}
+                      alt=""
+                      className="h-24 w-32 rounded-xl object-cover"
                     />
-                    <div className="min-w-0">
-                      <Link href={`/posts/${post.id}`} className="font-bold text-gray-800 line-clamp-2 hover:text-[#1877F2] transition-colors text-sm">
-                        {post.title}
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={`/posts/${post.id}`}
+                      className="font-bold text-slate-900 hover:text-blue-600"
+                    >
+                      {post.title}
+                    </Link>
+                    <p className="mt-1 text-sm font-semibold text-blue-700">
+                      {Number(post.price).toLocaleString('vi-VN')} VNĐ
+                    </p>
+                    <p className="mt-2 text-sm text-slate-600">
+                      {label}
+                      {reservation ? ` · ${reservation.buyer.fullName}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-sm font-semibold">
+                    {reservation && (
+                      <Link
+                        href="/my-transactions"
+                        className="rounded-lg border px-3 py-2 text-blue-700"
+                      >
+                        Xem giao dịch
                       </Link>
-                      <div className="text-[11px] text-gray-400 mt-1.5 font-medium">
-                        Ngày đăng: {new Date(post.createdAt).toLocaleDateString('vi-VN')}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* MỨC GIÁ */}
-                  <div className="hidden md:block col-span-2 text-center font-extrabold text-[#1877F2] text-sm font-mono">
-                    {Number(post.price || 0).toLocaleString('vi-VN')} VNĐ
-                  </div>
-
-                  {/* TRẠNG THÁI & CÔNG TẮC BẬT TẮT (BỊ KHÓA NẾU BỊ ADMIN TỪ CHỐI / CHỜ DUYỆT) */}
-                  <div className="col-span-3 md:col-span-3 flex flex-col items-center justify-center gap-2">
-                    {isRejected ? (
-                      <div className="flex flex-col items-center">
-                        <span className="px-3 py-1 bg-rose-50 text-rose-600 text-[10px] font-black rounded-xl border border-rose-100 mb-1">
-                          BỊ TỪ CHỐI
-                        </span>
-                        <span className="text-[10px] text-gray-400 italic">Admin không duyệt</span>
-                      </div>
-                    ) : isPending ? (
-                      <div className="flex flex-col items-center">
-                        <span className="px-3 py-1 bg-amber-50 text-amber-600 text-[10px] font-black rounded-xl border border-amber-100 mb-1">
-                          ĐANG CHỜ DUYỆT
-                        </span>
-                        <span className="text-[10px] text-gray-400 italic">Chờ Admin kiểm duyệt</span>
-                      </div>
-                    ) : isSold ? (
-                      <div className="flex flex-col items-center">
-                        <span className="px-3 py-1 bg-purple-50 text-purple-600 text-[10px] font-black rounded-xl border border-purple-100 mb-1">
-                          ĐÃ BÁN
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-3">
-                        <button
-                          disabled={isToggleDisabled}
-                          onClick={() => handleUpdateStatus(post.id, isVisible ? 'HIDDEN' : 'ACTIVE')}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none ${
-                            isVisible ? 'bg-emerald-500' : 'bg-gray-300'
-                          }`}
-                          title={isVisible ? 'Bấm để ẩn tin' : 'Bấm để hiện tin'}
-                        >
-                          <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow-md ${
-                              isVisible ? 'translate-x-6' : 'translate-x-1'
-                            }`}
-                          />
-                        </button>
-                        <span className={`text-xs font-bold ${isVisible ? 'text-emerald-600' : 'text-gray-400'}`}>
-                          {isVisible ? 'Hiển thị' : 'Đã ẩn'}
-                        </span>
-                      </div>
                     )}
-                  </div>
-
-                  {/* THAO TÁC (SỬA, XÓA, ĐÃ BÁN) */}
-                  <div className="col-span-3 md:col-span-2 flex justify-center items-center gap-1.5">
-                    {/* Nút đánh dấu Đã bán / Mở lại */}
-                    {!isPending && !isRejected && !isSold && (
+                    {(post.status === 'ACTIVE' ||
+                      reservation?.status === 'NEGOTIATING') && (
                       <button
-                        onClick={() => setSoldPost(post)}
-                        className={`px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${
-                          isSold 
-                            ? 'bg-emerald-600 text-white hover:bg-emerald-700' 
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                        title={isSold ? 'Mở lại tin bán' : 'Đánh dấu đã bán'}
+                        disabled={busy}
+                        onClick={() => {
+                          setSoldPost(post);
+                          setBuyerPhone(reservation?.buyer.phoneNumber || '');
+                        }}
+                        className="rounded-lg bg-blue-600 px-3 py-2 text-white disabled:opacity-50"
                       >
                         Đã bán
                       </button>
                     )}
-
-                    {!isSold && <Link 
-                      href={`/dashboard/edit/${post.id}`}
-                      className="p-2.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all shadow-sm" 
-                      title="Sửa tin"
-                    >
-                      ✏️
-                    </Link>}
-                    {!isSold && <button 
-                      onClick={() => handleDelete(post.id, post.title)}
-                      className="p-2.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-all shadow-sm" 
-                      title="Xóa tin"
-                    >
-                      🗑️
-                    </button>}
+                    {!locked && (
+                      <>
+                        {post.approvedAt && (
+                          <button
+                            disabled={busy}
+                            onClick={() => changeStatus(post)}
+                            className="rounded-lg border px-3 py-2"
+                          >
+                            {post.status === 'ACTIVE' ? 'Ẩn tin' : 'Hiện tin'}
+                          </button>
+                        )}
+                        <Link
+                          href={`/dashboard/edit/${post.id}`}
+                          className="rounded-lg border px-3 py-2"
+                        >
+                          Chỉnh sửa
+                        </Link>
+                        <button
+                          disabled={busy}
+                          onClick={() => remove(post)}
+                          className="rounded-lg border px-3 py-2 text-rose-600"
+                        >
+                          Xóa
+                        </button>
+                      </>
+                    )}
                   </div>
-
-                </div>
+                </article>
               );
             })}
           </div>
         )}
       </main>
+      {soldPost && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+          <form
+            onSubmit={markSold}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mark-sold-title"
+            className="w-full max-w-md rounded-2xl bg-white p-6"
+          >
+            <h2 id="mark-sold-title" className="text-xl font-bold">
+              Báo đã bán
+            </h2>
+            <p className="mt-3 text-sm text-slate-600">
+              Nhập số điện thoại tài khoản khách hàng. Hệ thống sẽ gửi yêu cầu xác nhận;
+              chỉ khi khách đồng ý mới tạo hóa đơn nháp cho admin.
+            </p>
+            <label className="mt-4 block text-sm font-semibold">
+              Số điện thoại khách hàng
+              <input
+                required
+                pattern="0[0-9]{9}"
+                maxLength={10}
+                value={buyerPhone}
+                onChange={(event) => setBuyerPhone(event.target.value.replace(/\D/g, ''))}
+                readOnly={!!soldPost.transactions[0]?.buyer.phoneNumber}
+                className="mt-2 w-full rounded-xl border px-4 py-3"
+              />
+            </label>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setSoldPost(null)}
+                className="rounded-xl border px-4 py-2"
+              >
+                Đóng
+              </button>
+              <button
+                disabled={busy}
+                className="rounded-xl bg-blue-600 px-4 py-2 text-white"
+              >
+                {busy ? 'Đang gửi...' : 'Gửi xác nhận'}
+              </button>
+            </div>
+            {message && (
+              <p role="alert" className="mt-3 text-sm text-rose-700">
+                {message}
+              </p>
+            )}
+          </form>
+        </div>
+      )}
     </div>
   );
 }

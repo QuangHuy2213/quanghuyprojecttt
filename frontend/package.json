@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:requests": "node --test tests/request-policy.test.cjs"
+    "test:requests": "node --test tests/request-policy.test.cjs",
+    "test:inbox": "node --test tests/notification-state.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",

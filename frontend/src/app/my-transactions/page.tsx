@@ -5,16 +5,7 @@ import Link from 'next/link';
 import Header from '@/components/Header';
 import { apiFetch } from '@/services/api';
 import { startPolling } from '@/services/polling';
-
-const txLabels: Record<string, string> = {
-  VERIFYING: 'Chờ xác nhận',
-  SUCCESS: 'Đã giao dịch',
-  DISPUTE: 'Đang đối soát',
-  CANCELLED: 'Chưa giao dịch',
-  PENDING_CANCEL: 'Chờ hủy',
-  CANCELLED_AFTER_SUCCESS: 'Đã hủy sau giao dịch',
-  FRAUD: 'Có dấu hiệu gian lận',
-};
+import TransactionPrompt, { transactionLabels } from '@/components/TransactionPrompt';
 
 const invLabels: Record<string, string> = {
   DRAFT: 'Chờ admin phát hành',
@@ -122,18 +113,20 @@ export default function TransactionsAndInvoicesPage() {
 
   useEffect(() => {
     let first = true;
-    if (!localStorage.getItem('access_token') || !localStorage.getItem('user')) setLoading(false);
-    const poller = startPolling(async signal => {
+    if (!localStorage.getItem('access_token') || !localStorage.getItem('user'))
+      setLoading(false);
+    const poller = startPolling(async (signal) => {
       await load(first, signal);
       first = false;
     });
-    return poller.stop;
+    window.addEventListener('transactions-updated', poller.refresh);
+    return () => {
+      poller.stop();
+      window.removeEventListener('transactions-updated', poller.refresh);
+    };
   }, [load]);
 
-  const notify = (
-    message: string,
-    type: 'success' | 'error' | 'info' = 'success'
-  ) => {
+  const notify = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ show: true, message, type });
 
     window.setTimeout(() => {
@@ -163,17 +156,14 @@ export default function TransactionsAndInvoicesPage() {
 
     try {
       const token = localStorage.getItem('access_token');
-      const res = await apiFetch(
-        `transactions/${cancelModal.id}/request-cancel`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ reason }),
-        }
-      );
+      const res = await apiFetch(`transactions/${cancelModal.id}/request-cancel`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ reason }),
+      });
 
       const data = await res.json().catch(() => ({}));
 
@@ -184,7 +174,13 @@ export default function TransactionsAndInvoicesPage() {
           reason: '',
           sending: false,
         });
-        notify('Đã gửi yêu cầu hủy tới đối tác.', 'success');
+        notify(
+          data.status === 'CANCELLED'
+            ? 'Đã hủy thỏa thuận. Tin đã được mở lại.'
+            : 'Đã gửi yêu cầu hủy tới đối tác.',
+          'success',
+        );
+        window.dispatchEvent(new Event('transactions-updated'));
         load(false);
       } else {
         notify(data.message || 'Không thể gửi yêu cầu hủy.', 'error');
@@ -197,10 +193,7 @@ export default function TransactionsAndInvoicesPage() {
     }
   };
 
-  const openRespondModal = (
-    id: string,
-    action: 'agree' | 'dispute'
-  ) => {
+  const openRespondModal = (id: string, action: 'agree' | 'dispute') => {
     setActionModal({
       isOpen: true,
       id,
@@ -218,17 +211,14 @@ export default function TransactionsAndInvoicesPage() {
 
     try {
       const token = localStorage.getItem('access_token');
-      const res = await apiFetch(
-        `transactions/${actionModal.id}/respond-cancel`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ isAgreed }),
-        }
-      );
+      const res = await apiFetch(`transactions/${actionModal.id}/respond-cancel`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ isAgreed }),
+      });
 
       const data = await res.json().catch(() => ({}));
 
@@ -241,10 +231,8 @@ export default function TransactionsAndInvoicesPage() {
         });
 
         notify(
-          isAgreed
-            ? 'Đã đồng ý hủy giao dịch.'
-            : 'Đã chuyển tranh chấp tới admin.',
-          isAgreed ? 'success' : 'info'
+          isAgreed ? 'Đã đồng ý hủy giao dịch.' : 'Đã chuyển tranh chấp tới admin.',
+          isAgreed ? 'success' : 'info',
         );
 
         load(false);
@@ -285,15 +273,15 @@ export default function TransactionsAndInvoicesPage() {
   };
 
   const pendingInvoices = invoices.filter(
-    (invoice) => invoice.status === 'PENDING_PAYMENT'
+    (invoice) => invoice.status === 'PENDING_PAYMENT',
   ).length;
 
   const completedTransactions = transactions.filter(
-    (tx) => tx.status === 'SUCCESS'
+    (tx) => tx.status === 'SUCCESS',
   ).length;
 
   const disputeTransactions = transactions.filter((tx) =>
-    ['DISPUTE', 'PENDING_CANCEL', 'FRAUD'].includes(tx.status)
+    ['DISPUTE', 'PENDING_CANCEL', 'FRAUD'].includes(tx.status),
   ).length;
 
   if (loading) {
@@ -332,8 +320,8 @@ export default function TransactionsAndInvoicesPage() {
             toast.type === 'error'
               ? 'border-rose-200'
               : toast.type === 'info'
-              ? 'border-amber-200'
-              : 'border-emerald-200'
+                ? 'border-amber-200'
+                : 'border-emerald-200'
           }`}
         >
           <div
@@ -341,15 +329,11 @@ export default function TransactionsAndInvoicesPage() {
               toast.type === 'error'
                 ? 'bg-rose-50 text-rose-600'
                 : toast.type === 'info'
-                ? 'bg-amber-50 text-amber-600'
-                : 'bg-emerald-50 text-emerald-600'
+                  ? 'bg-amber-50 text-amber-600'
+                  : 'bg-emerald-50 text-emerald-600'
             }`}
           >
-            {toast.type === 'error'
-              ? '!'
-              : toast.type === 'info'
-              ? 'i'
-              : '✓'}
+            {toast.type === 'error' ? '!' : toast.type === 'info' ? 'i' : '✓'}
           </div>
 
           <div className="pt-0.5">
@@ -357,8 +341,8 @@ export default function TransactionsAndInvoicesPage() {
               {toast.type === 'error'
                 ? 'Có lỗi xảy ra'
                 : toast.type === 'info'
-                ? 'Thông báo'
-                : 'Thành công'}
+                  ? 'Thông báo'
+                  : 'Thành công'}
             </div>
             <div className="mt-1 text-sm font-medium leading-6 text-slate-600">
               {toast.message}
@@ -384,32 +368,26 @@ export default function TransactionsAndInvoicesPage() {
               </h1>
 
               <p className="mt-3 max-w-2xl text-[15px] font-medium leading-7 text-slate-300">
-                Theo dõi trạng thái giao dịch, yêu cầu hủy và các khoản phí cần
-                thanh toán. Hóa đơn có thời hạn 30 ngày; phí chậm thanh toán là
-                0,5% phí gốc cho mỗi tháng trễ.
+                Theo dõi trạng thái giao dịch, yêu cầu hủy và các khoản phí cần thanh
+                toán. Hóa đơn có thời hạn 30 ngày; phí chậm thanh toán là 0,5% phí gốc cho
+                mỗi tháng trễ.
               </p>
             </div>
 
             <div className="grid grid-cols-3 gap-2 sm:gap-3">
               <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur">
                 <div className="text-xs font-bold text-slate-400">Giao dịch</div>
-                <div className="mt-1 text-2xl font-black">
-                  {transactions.length}
-                </div>
+                <div className="mt-1 text-2xl font-black">{transactions.length}</div>
               </div>
 
               <div className="rounded-2xl border border-emerald-400/10 bg-emerald-400/10 px-4 py-3 backdrop-blur">
                 <div className="text-xs font-bold text-emerald-200">Hoàn tất</div>
-                <div className="mt-1 text-2xl font-black">
-                  {completedTransactions}
-                </div>
+                <div className="mt-1 text-2xl font-black">{completedTransactions}</div>
               </div>
 
               <div className="rounded-2xl border border-rose-400/10 bg-rose-400/10 px-4 py-3 backdrop-blur">
                 <div className="text-xs font-bold text-rose-200">Cần xử lý</div>
-                <div className="mt-1 text-2xl font-black">
-                  {disputeTransactions}
-                </div>
+                <div className="mt-1 text-2xl font-black">{disputeTransactions}</div>
               </div>
             </div>
           </div>
@@ -461,10 +439,7 @@ export default function TransactionsAndInvoicesPage() {
                 >
                   <div className="flex flex-col gap-5 p-5 md:flex-row md:items-center md:p-6">
                     <img
-                      src={
-                        tx.post?.thumbnail ||
-                        'https://via.placeholder.com/160'
-                      }
+                      src={tx.post?.thumbnail || 'https://via.placeholder.com/160'}
                       className="h-36 w-full rounded-2xl border border-slate-200 object-cover md:h-24 md:w-36"
                       alt=""
                     />
@@ -485,18 +460,20 @@ export default function TransactionsAndInvoicesPage() {
                         </span>
 
                         <span className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-1.5 text-sm font-extrabold text-blue-700">
-                          {txLabels[tx.status] || tx.status}
+                          {transactionLabels[tx.status] || tx.status}
                         </span>
                       </div>
                     </div>
 
                     <div className="flex flex-wrap gap-2 md:justify-end">
-                      {tx.status === 'SUCCESS' && (
+                      {['VERIFYING', 'NEGOTIATING', 'SALE_PENDING', 'SUCCESS'].includes(
+                        tx.status,
+                      ) && (
                         <button
                           onClick={() => openCancelModal(tx.id)}
                           className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-extrabold text-rose-700 transition-all hover:bg-rose-100 active:scale-[0.98]"
                         >
-                          Yêu cầu hủy
+                          {tx.status === 'SUCCESS' ? 'Yêu cầu hủy' : 'Hủy thỏa thuận'}
                         </button>
                       )}
 
@@ -504,18 +481,14 @@ export default function TransactionsAndInvoicesPage() {
                         tx.cancelInitiatorId !== user?.id && (
                           <>
                             <button
-                              onClick={() =>
-                                openRespondModal(tx.id, 'agree')
-                              }
+                              onClick={() => openRespondModal(tx.id, 'agree')}
                               className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-extrabold text-emerald-700 transition-all hover:bg-emerald-100 active:scale-[0.98]"
                             >
                               Đồng ý hủy
                             </button>
 
                             <button
-                              onClick={() =>
-                                openRespondModal(tx.id, 'dispute')
-                              }
+                              onClick={() => openRespondModal(tx.id, 'dispute')}
                               className="rounded-xl bg-rose-600 px-4 py-3 text-sm font-extrabold text-white shadow-lg shadow-rose-500/20 transition-all hover:bg-rose-700 active:scale-[0.98]"
                             >
                               Phản đối
@@ -524,6 +497,15 @@ export default function TransactionsAndInvoicesPage() {
                         )}
                     </div>
                   </div>
+                  {['VERIFYING', 'SALE_PENDING'].includes(tx.status) && (
+                    <div className="px-5 pb-5">
+                      <TransactionPrompt
+                        transaction={tx}
+                        userId={user?.id || ''}
+                        onUpdated={() => load(false)}
+                      />
+                    </div>
+                  )}
                 </article>
               ))
             : invoices.map((inv) => (
@@ -541,17 +523,14 @@ export default function TransactionsAndInvoicesPage() {
                         href={`/posts/${inv.transaction?.post?.id}`}
                         className="block text-lg font-black leading-6 text-slate-900 transition-colors hover:text-blue-700"
                       >
-                        {inv.transaction?.post?.title ||
-                          'Tin bất động sản'}
+                        {inv.transaction?.post?.title || 'Tin bất động sản'}
                       </Link>
 
                       <p className="mt-3 text-sm font-medium text-slate-600">
                         Hạn thanh toán:{' '}
                         <b className="font-extrabold text-slate-900">
                           {inv.dueDate
-                            ? new Date(inv.dueDate).toLocaleDateString(
-                                'vi-VN'
-                              )
+                            ? new Date(inv.dueDate).toLocaleDateString('vi-VN')
                             : 'Chờ phát hành'}
                         </b>
                       </p>
@@ -576,9 +555,7 @@ export default function TransactionsAndInvoicesPage() {
                       </span>
                     </div>
 
-                    {['PENDING_PAYMENT', 'OVERDUE'].includes(
-                      inv.status
-                    ) && (
+                    {['PENDING_PAYMENT', 'OVERDUE'].includes(inv.status) && (
                       <button
                         onClick={() => pay(inv.id)}
                         className="rounded-xl bg-emerald-600 px-5 py-3.5 text-sm font-black text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-700 active:translate-y-0"
@@ -600,8 +577,7 @@ export default function TransactionsAndInvoicesPage() {
                 Chưa có dữ liệu
               </div>
               <div className="mt-1 text-sm font-medium text-slate-500">
-                Thông tin sẽ xuất hiện tại đây khi có giao dịch hoặc hóa
-                đơn mới.
+                Thông tin sẽ xuất hiện tại đây khi có giao dịch hoặc hóa đơn mới.
               </div>
             </div>
           )}
@@ -619,8 +595,7 @@ export default function TransactionsAndInvoicesPage() {
                     Yêu cầu hủy giao dịch
                   </div>
                   <div className="mt-1 text-sm font-medium leading-6 text-slate-500">
-                    Hãy nêu rõ lý do để đối tác có thể xem xét yêu cầu của
-                    bạn.
+                    Hãy nêu rõ lý do để đối tác có thể xem xét yêu cầu của bạn.
                   </div>
                 </div>
 
@@ -682,9 +657,7 @@ export default function TransactionsAndInvoicesPage() {
                   disabled={cancelModal.sending}
                   className="flex-1 rounded-2xl bg-rose-600 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-rose-500/20 transition-all hover:bg-rose-700 disabled:opacity-60"
                 >
-                  {cancelModal.sending
-                    ? 'Đang gửi...'
-                    : 'Gửi yêu cầu hủy'}
+                  {cancelModal.sending ? 'Đang gửi...' : 'Gửi yêu cầu hủy'}
                 </button>
               </div>
             </form>
@@ -750,8 +723,8 @@ export default function TransactionsAndInvoicesPage() {
                 {actionModal.sending
                   ? 'Đang xử lý...'
                   : actionModal.action === 'agree'
-                  ? 'Đồng ý hủy'
-                  : 'Chuyển Admin'}
+                    ? 'Đồng ý hủy'
+                    : 'Chuyển Admin'}
               </button>
             </div>
           </div>

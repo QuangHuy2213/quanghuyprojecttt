@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import UserDropdown from './UserDropdown';
 import { apiFetch, clearApiCache } from '../services/api';
 import { subscribeApiPolling } from '../services/polling';
-import { supabase } from '../services/supabase'; 
+import { useInbox } from './InboxProvider';
+import TransactionPrompt from './TransactionPrompt';
 import UserAvatar from './UserAvatar';
 
 async function readJsonSafely(response: Response) {
@@ -24,8 +25,7 @@ async function readJsonSafely(response: Response) {
 
 export default function Header() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
-  const [token, setToken] = useState<string | null>(null);
+
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
@@ -39,19 +39,30 @@ export default function Header() {
     localStorage.setItem('theme', next ? 'dark' : 'light');
     setIsDark(next);
   };
-  
+
   // STATE QUẢN LÝ DROPDOWN
   const [showFavorites, setShowFavorites] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false); 
-  
+  const [showNotifications, setShowNotifications] = useState(false);
+
   // STATE QUẢN LÝ DỮ LIỆU
   const [favoritePosts, setFavoritePosts] = useState<any[]>([]);
   const [isLoadingFavs, setIsLoadingFavs] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]); 
-  const [unreadCount, setUnreadCount] = useState(0); 
+  const {
+    user,
+    token,
+    notifications: allNotifications,
+    setNotifications,
+    unreadMessages,
+  } = useInbox();
+  const notifications = allNotifications.filter(
+    (item) => item.type !== 'WARNING_POPUP' && item.type !== 'MESSAGE',
+  );
+  const unreadCount = notifications.filter(
+    (item) => !item.isRead && !item.is_read,
+  ).length;
+
   const [pendingConfirmations, setPendingConfirmations] = useState<any[]>([]);
-  const [respondingTransactionId, setRespondingTransactionId] = useState<string | null>(null);
 
   // 🌟 STATE QUẢN LÝ POPUP CẢNH BÁO TỪ ADMIN
   const [warningPopup, setWarningPopup] = useState<any>(null);
@@ -63,7 +74,7 @@ export default function Header() {
 
   const showHeaderToast = (
     message: string,
-    type: 'success' | 'error' | 'info' = 'info'
+    type: 'success' | 'error' | 'info' = 'info',
   ) => {
     setHeaderToast({ show: true, message, type });
     window.setTimeout(() => {
@@ -72,32 +83,8 @@ export default function Header() {
   };
 
   useEffect(() => {
-    const syncUser = () => {
-      const stored = localStorage.getItem('user');
-      const accessToken = localStorage.getItem('access_token');
-      try {
-        const nextUser = stored && accessToken ? JSON.parse(stored) : null;
-        setUser(nextUser?.id ? nextUser : null);
-        setToken(nextUser?.id ? accessToken : null);
-      } catch {
-        setUser(null);
-        setToken(null);
-      }
-      setShowUserMenu(false);
-    };
-    syncUser();
-    window.addEventListener('user-updated', syncUser);
-    window.addEventListener('storage', syncUser);
-    return () => {
-      window.removeEventListener('user-updated', syncUser);
-      window.removeEventListener('storage', syncUser);
-    };
-  }, []);
-
-  useEffect(() => {
     setFavoritePosts([]);
-    setNotifications([]);
-    setUnreadCount(0);
+
     setWarningPopup(null);
     setPendingConfirmations([]);
     if (!user?.id || !token) return;
@@ -105,48 +92,43 @@ export default function Header() {
     const controller = new AbortController();
     apiFetch(`posts/favorites/${userId}`, { signal: controller.signal })
       .then(readJsonSafely)
-      .then(data => {
+      .then((data) => {
         if (!controller.signal.aborted && Array.isArray(data)) setFavoritePosts(data);
       })
-      .catch(err => { if (!controller.signal.aborted) console.error('Lỗi tải danh sách yêu thích', err); });
+      .catch((err) => {
+        if (!controller.signal.aborted) console.error('Lỗi tải danh sách yêu thích', err);
+      });
 
-    const notificationsSync = subscribeApiPolling('notifications', token, data => {
-      if (!Array.isArray(data)) return;
-      const normalNotifs = data.filter((n: any) => n.type !== 'WARNING_POPUP');
-      setNotifications(normalNotifs);
-      setUnreadCount(normalNotifs.filter((n: any) => !n.isRead && !n.is_read).length);
-    });
-    const warningsSync = subscribeApiPolling('notifications/unread-warnings', token, data => {
-      const warning = data as { id?: string } | null;
-      setWarningPopup((current: any) => warning?.id ? (current?.id === warning.id ? current : warning) : null);
-    });
-    const confirmationsSync = subscribeApiPolling('transactions/pending-confirmations', token, data => {
-      setPendingConfirmations(Array.isArray(data) ? data : []);
-    });
+    const warningsSync = subscribeApiPolling(
+      'notifications/unread-warnings',
+      token,
+      (data) => {
+        const warning = data as { id?: string } | null;
+        setWarningPopup((current: any) =>
+          warning?.id ? (current?.id === warning.id ? current : warning) : null,
+        );
+      },
+    );
+    const confirmationsSync = subscribeApiPolling(
+      'transactions/pending-confirmations',
+      token,
+      (data) => {
+        setPendingConfirmations(Array.isArray(data) ? data : []);
+      },
+    );
 
-    const channel = supabase
-      .channel(`global_notifications_${userId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, payload => {
-        if (controller.signal.aborted || localStorage.getItem('access_token') !== token) return;
-        const newNotif = payload.new;
-        if (String(newNotif.user_id ?? newNotif.userId) !== String(userId)) return;
-        if (newNotif.type === 'WARNING_POPUP') {
-          setWarningPopup(newNotif);
-        } else {
-          // Realtime keeps the UI immediate; polling recovers missed events.
-          setNotifications(prev => [newNotif, ...prev.filter(n => n.id !== newNotif.id)]);
-          setUnreadCount(prev => prev + 1);
-          confirmationsSync.refresh();
-        }
-      })
-      .subscribe();
+    const refresh = () => {
+      warningsSync.refresh();
+      confirmationsSync.refresh();
+    };
+    window.addEventListener('transactions-updated', refresh);
 
     return () => {
       controller.abort();
-      notificationsSync.stop();
+
       warningsSync.stop();
       confirmationsSync.stop();
-      supabase.removeChannel(channel);
+      window.removeEventListener('transactions-updated', refresh);
     };
   }, [user?.id, token]);
 
@@ -155,14 +137,12 @@ export default function Header() {
     localStorage.removeItem('user');
     clearApiCache();
     window.dispatchEvent(new Event('user-updated'));
-    setToken(null);
-    setUser(null);
+
     setShowUserMenu(false);
     setShowFavorites(false);
     setShowNotifications(false);
-    setFavoritePosts([]); 
-    setNotifications([]);
-    setUnreadCount(0);
+    setFavoritePosts([]);
+
     setWarningPopup(null);
     setPendingConfirmations([]);
     router.push('/');
@@ -175,7 +155,7 @@ export default function Header() {
 
   const toggleFavorites = async () => {
     setShowUserMenu(false);
-    setShowNotifications(false); 
+    setShowNotifications(false);
     if (!user) {
       showHeaderToast('Vui lòng đăng nhập để xem danh sách đã lưu.', 'error');
       router.push('/login');
@@ -201,7 +181,7 @@ export default function Header() {
 
   const toggleNotifications = () => {
     setShowUserMenu(false);
-    setShowFavorites(false); 
+    setShowFavorites(false);
     if (!user) {
       showHeaderToast('Vui lòng đăng nhập để xem thông báo.', 'error');
       router.push('/login');
@@ -236,39 +216,16 @@ export default function Header() {
     try {
       const response = await apiFetch('notifications/read-all', {
         method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       await readJsonSafely(response);
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true, is_read: true })));
-      setUnreadCount(0);
+      setNotifications((prev) =>
+        prev.map((n) =>
+          n.type === 'WARNING_POPUP' ? n : { ...n, isRead: true, is_read: true },
+        ),
+      );
     } catch (error) {
       console.error('Lỗi đánh dấu đã đọc', error);
-    }
-  };
-
-  const handleTransactionResponse = async (transactionId: string, isConfirmed: boolean) => {
-    const token = localStorage.getItem('access_token');
-    if (!token) return;
-    setRespondingTransactionId(transactionId);
-    try {
-      const response = await apiFetch(`transactions/${transactionId}/verify`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ isConfirmed }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.message || 'Không thể gửi phản hồi giao dịch.');
-      setPendingConfirmations(prev => prev.filter(item => item.id !== transactionId));
-      showHeaderToast(
-        isConfirmed
-          ? 'Đã xác nhận giao dịch. Bài đăng đã được đóng.'
-          : 'Đã gửi phản hồi không xác nhận. Giao dịch sẽ được chuyển cho admin đối soát.',
-        isConfirmed ? 'success' : 'info'
-      );
-    } catch (error: any) {
-      showHeaderToast(error.message || 'Không thể kết nối tới máy chủ.', 'error');
-    } finally {
-      setRespondingTransactionId(null);
     }
   };
 
@@ -279,7 +236,7 @@ export default function Header() {
       const token = localStorage.getItem('access_token');
       const response = await apiFetch(`notifications/${warningPopup.id}/read`, {
         method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       await readJsonSafely(response);
       setWarningPopup(null); // Tắt Modal
@@ -297,26 +254,36 @@ export default function Header() {
             : 'pointer-events-none -translate-y-4 opacity-0'
         }`}
       >
-        <div className={`flex items-center gap-3 rounded-2xl border bg-white px-4 py-3.5 shadow-2xl ${
-          headerToast.type === 'error'
-            ? 'border-rose-200'
-            : headerToast.type === 'success'
-            ? 'border-emerald-200'
-            : 'border-blue-200'
-        }`}>
-          <div className={`flex h-9 w-9 items-center justify-center rounded-xl font-black ${
+        <div
+          className={`flex items-center gap-3 rounded-2xl border bg-white px-4 py-3.5 shadow-2xl ${
             headerToast.type === 'error'
-              ? 'bg-rose-50 text-rose-600'
+              ? 'border-rose-200'
               : headerToast.type === 'success'
-              ? 'bg-emerald-50 text-emerald-600'
-              : 'bg-blue-50 text-blue-600'
-          }`}>
-            {headerToast.type === 'error' ? '!' : headerToast.type === 'success' ? '✓' : 'i'}
+                ? 'border-emerald-200'
+                : 'border-blue-200'
+          }`}
+        >
+          <div
+            className={`flex h-9 w-9 items-center justify-center rounded-xl font-black ${
+              headerToast.type === 'error'
+                ? 'bg-rose-50 text-rose-600'
+                : headerToast.type === 'success'
+                  ? 'bg-emerald-50 text-emerald-600'
+                  : 'bg-blue-50 text-blue-600'
+            }`}
+          >
+            {headerToast.type === 'error'
+              ? '!'
+              : headerToast.type === 'success'
+                ? '✓'
+                : 'i'}
           </div>
-          <span className="text-sm font-extrabold leading-6 text-slate-700">{headerToast.message}</span>
+          <span className="text-sm font-extrabold leading-6 text-slate-700">
+            {headerToast.message}
+          </span>
         </div>
       </div>
-      
+
       {/* ========================================================================= */}
       {/* 🌟 MODAL CẢNH BÁO GIAN LẬN (CHẶN TOÀN MÀN HÌNH - KHÔNG THỂ BẤM RA NGOÀI) */}
       {/* ========================================================================= */}
@@ -331,21 +298,26 @@ export default function Header() {
                 {warningPopup.title || 'CẢNH BÁO TỪ BAN QUẢN TRỊ'}
               </h2>
             </div>
-            
+
             <div className="p-8 text-center bg-white">
               <p className="text-gray-800 font-medium text-[15px] leading-relaxed mb-6 whitespace-pre-wrap">
                 {warningPopup.content}
               </p>
-              
+
               <div className="bg-rose-50 border border-red-100 rounded-2xl p-5 mb-8 text-left shadow-inner">
                 <p className="text-xs text-red-700 font-medium leading-relaxed">
-                  <b>* Lưu ý nghiêm trọng:</b> Mọi hành vi cố tình cung cấp thông tin sai lệch, lách luật hoặc trốn tránh phí nền tảng trong quá trình giao dịch sẽ dẫn đến việc tài khoản của bạn bị <b>khóa vĩnh viễn</b> và đưa vào danh sách đen của Nhà Tốt.
+                  <b>* Lưu ý nghiêm trọng:</b> Mọi hành vi cố tình cung cấp thông tin sai
+                  lệch, lách luật hoặc trốn tránh phí nền tảng trong quá trình giao dịch
+                  sẽ dẫn đến việc tài khoản của bạn bị <b>khóa vĩnh viễn</b> và đưa vào
+                  danh sách đen của Nhà Tốt.
                 </p>
               </div>
 
-              <button 
+              <button
                 onClick={handleAcknowledgeWarning}
-                className="w-full rounded-2xl bg-slate-950 py-4 text-sm font-black uppercase tracking-wide text-white shadow-xl transition-all hover:bg-black active:scale-[0.98]"
+                className="w-full rounded-2xl bg-slate-950 py-4 text-sm font-black uppercase
+                  tracking-wide text-white shadow-xl transition-all hover:bg-black
+                  active:scale-[0.98]"
               >
                 Tôi đã hiểu và cam kết tuân thủ
               </button>
@@ -355,7 +327,6 @@ export default function Header() {
       )}
 
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
-        
         {/* LOGO */}
         <div className="flex items-center gap-4">
           <Link href="/" className="flex items-center gap-2">
@@ -370,21 +341,40 @@ export default function Header() {
 
         {/* NÚT TÍNH NĂNG BÊN PHẢI */}
         <div className="flex items-center gap-2.5">
-          <button onClick={toggleTheme} title={isDark ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'} aria-label="Đổi chế độ sáng tối" className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/10 text-lg text-slate-200 shadow-sm transition hover:rotate-12 hover:bg-white/20">
+          <button
+            onClick={toggleTheme}
+            title={isDark ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}
+            aria-label="Đổi chế độ sáng tối"
+            className="grid h-10 w-10 place-items-center rounded-full border border-white/10
+              bg-white/10 text-lg text-slate-200 shadow-sm transition hover:rotate-12
+              hover:bg-white/20"
+          >
             {isDark ? '☀️' : '🌙'}
           </button>
-          
+
           {/* ===================== NÚT TRÁI TIM ===================== */}
           <div className="relative">
-            <button 
+            <button
               onClick={toggleFavorites}
               className={`relative flex items-center justify-center w-10 h-10 rounded-full shadow-sm transition-all ${
-                showFavorites ? 'bg-blue-600 text-white ring-2 ring-blue-400/30' : 'border border-white/10 bg-white/10 text-slate-200 hover:bg-white/15'
-              }`} 
+                showFavorites
+                  ? 'bg-blue-600 text-white ring-2 ring-blue-400/30'
+                  : 'border border-white/10 bg-white/10 text-slate-200 hover:bg-white/15'
+              }`}
               title="Tin đã lưu"
             >
-              <svg className="w-5 h-5" fill={showFavorites ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              <svg
+                className="w-5 h-5"
+                fill={showFavorites ? 'currentColor' : 'none'}
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                />
               </svg>
 
               {user && favoritePosts.length > 0 && (
@@ -397,13 +387,22 @@ export default function Header() {
             {showFavorites && (
               <div className="absolute right-0 top-full z-50 mt-3 flex w-96 flex-col overflow-hidden rounded-[22px] border border-slate-200 bg-white text-slate-800 shadow-2xl">
                 <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3.5">
-                  <h3 className="text-sm font-black text-slate-800">Tin đã lưu ({favoritePosts.length})</h3>
-                  <button onClick={() => setShowFavorites(false)} className="text-gray-400 hover:text-red-500 text-2xl leading-none">&times;</button>
+                  <h3 className="text-sm font-black text-slate-800">
+                    Tin đã lưu ({favoritePosts.length})
+                  </h3>
+                  <button
+                    onClick={() => setShowFavorites(false)}
+                    className="text-gray-400 hover:text-red-500 text-2xl leading-none"
+                  >
+                    &times;
+                  </button>
                 </div>
-                
+
                 <div className="max-h-[60vh] overflow-y-auto">
                   {isLoadingFavs ? (
-                    <div className="p-8 text-center text-gray-400 text-sm">Đang tải dữ liệu...</div>
+                    <div className="p-8 text-center text-gray-400 text-sm">
+                      Đang tải dữ liệu...
+                    </div>
                   ) : favoritePosts.length === 0 ? (
                     <div className="p-8 text-center text-gray-400 text-sm flex flex-col items-center">
                       <span className="text-3xl mb-2">💔</span>
@@ -411,24 +410,63 @@ export default function Header() {
                     </div>
                   ) : (
                     favoritePosts.map((post) => (
-                      <div key={post.id} className="flex group border-b border-gray-50 hover:bg-blue-50 transition-colors items-center pr-3">
-                        <Link href={`/posts/${post.id}`} onClick={() => setShowFavorites(false)} className="flex gap-4 p-4 flex-1 min-w-0">
-                          <img src={post.thumbnail || 'https://via.placeholder.com/150'} alt={post.title} className="w-20 h-20 object-cover rounded-xl border border-gray-200 flex-shrink-0" />
+                      <div
+                        key={post.id}
+                        className="flex group border-b border-gray-50 hover:bg-blue-50
+                          transition-colors items-center pr-3"
+                      >
+                        <Link
+                          href={`/posts/${post.id}`}
+                          onClick={() => setShowFavorites(false)}
+                          className="flex gap-4 p-4 flex-1 min-w-0"
+                        >
+                          <img
+                            src={post.thumbnail || 'https://via.placeholder.com/150'}
+                            alt={post.title}
+                            className="w-20 h-20 object-cover rounded-xl border border-gray-200 flex-shrink-0"
+                          />
                           <div className="flex-1 min-w-0">
-                            <h4 className="text-sm font-bold text-gray-800 line-clamp-2 leading-tight">{post.title}</h4>
-                            <div className="text-[#1877F2] font-bold text-sm mt-1">{formatPrice(post.price)} VNĐ</div>
+                            <h4 className="text-sm font-bold text-gray-800 line-clamp-2 leading-tight">
+                              {post.title}
+                            </h4>
+                            <div className="text-[#1877F2] font-bold text-sm mt-1">
+                              {formatPrice(post.price)} VNĐ
+                            </div>
                             <div className="flex items-center gap-3 text-xs text-gray-500 mt-1.5 font-medium">
                               <span className="truncate">📐 {post.area} m²</span>
-                              <span className="truncate max-w-[150px]" title={`${post.districts?.name ? post.districts.name + ', ' : ''}${post.cities?.name || post.city || 'Đang cập nhật'}`}>
-                                📍 {post.districts?.name && post.cities?.name 
-                                    ? `${post.districts.name}, ${post.cities.name}` 
-                                    : post.districts?.name || post.cities?.name || post.city || 'Đang cập nhật'}
+                              <span
+                                className="truncate max-w-[150px]"
+                                title={`${post.districts?.name ? post.districts.name + ', ' : ''}${post.cities?.name || post.city || 'Đang cập nhật'}`}
+                              >
+                                📍{' '}
+                                {post.districts?.name && post.cities?.name
+                                  ? `${post.districts.name}, ${post.cities.name}`
+                                  : post.districts?.name ||
+                                    post.cities?.name ||
+                                    post.city ||
+                                    'Đang cập nhật'}
                               </span>
                             </div>
                           </div>
                         </Link>
-                        <button onClick={(e) => handleRemoveFavorite(e, post.id)} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all">
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        <button
+                          onClick={(e) => handleRemoveFavorite(e, post.id)}
+                          className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50
+                            rounded-full transition-all"
+                        >
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                            />
+                          </svg>
                         </button>
                       </div>
                     ))
@@ -440,17 +478,29 @@ export default function Header() {
 
           {/* ===================== NÚT THÔNG BÁO ===================== */}
           <div className="relative">
-            <button 
+            <button
               onClick={toggleNotifications}
               className={`relative flex items-center justify-center w-10 h-10 rounded-full shadow-sm transition-all ${
-                showNotifications ? 'bg-blue-600 text-white ring-2 ring-blue-400/30' : 'border border-white/10 bg-white/10 text-slate-200 hover:bg-white/15'
-              }`} 
+                showNotifications
+                  ? 'bg-blue-600 text-white ring-2 ring-blue-400/30'
+                  : 'border border-white/10 bg-white/10 text-slate-200 hover:bg-white/15'
+              }`}
               title="Thông báo"
             >
-              <svg className="w-5 h-5" fill={showNotifications ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              <svg
+                className="w-5 h-5"
+                fill={showNotifications ? 'currentColor' : 'none'}
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                />
               </svg>
-              
+
               {user && unreadCount > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold px-1.5 min-w-[20px] h-5 rounded-full flex items-center justify-center border-2 border-[#1877F2] shadow-sm">
                   {unreadCount > 99 ? '99+' : unreadCount}
@@ -464,30 +514,34 @@ export default function Header() {
                   <h3 className="text-sm font-black text-slate-800">Thông báo</h3>
                   <div className="flex items-center gap-4">
                     {unreadCount > 0 && (
-                      <button onClick={handleMarkAllAsRead} className="text-[#1877F2] text-xs font-semibold hover:underline">
+                      <button
+                        onClick={handleMarkAllAsRead}
+                        className="text-[#1877F2] text-xs font-semibold hover:underline"
+                      >
                         Đánh dấu đã đọc
                       </button>
                     )}
-                    <button onClick={() => setShowNotifications(false)} className="text-gray-400 hover:text-red-500 text-2xl leading-none">&times;</button>
+                    <button
+                      onClick={() => setShowNotifications(false)}
+                      className="text-gray-400 hover:text-red-500 text-2xl leading-none"
+                    >
+                      &times;
+                    </button>
                   </div>
                 </div>
-                
+
                 <div className="max-h-[60vh] overflow-y-auto">
                   {pendingConfirmations.map((transaction) => (
-                    <div key={transaction.id} className="border-b border-blue-100 bg-blue-50/70 p-4">
-                      <div className="flex gap-3">
-                        <div className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl bg-blue-600 text-lg text-white">✓</div>
-                        <div className="min-w-0 flex-1">
-                          <h4 className="text-sm font-black text-gray-900">Yêu cầu xác nhận giao dịch</h4>
-                          <p className="mt-1 text-xs leading-relaxed text-gray-600">
-                            <strong>{transaction.seller?.fullName || 'Người đăng tin'}</strong> xác nhận đã giao dịch bài “{transaction.post?.title}” với bạn.
-                          </p>
-                          <div className="mt-3 flex gap-2">
-                            <button disabled={respondingTransactionId === transaction.id} onClick={() => handleTransactionResponse(transaction.id, true)} className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50">Xác nhận</button>
-                            <button disabled={respondingTransactionId === transaction.id} onClick={() => handleTransactionResponse(transaction.id, false)} className="flex-1 rounded-lg bg-white px-3 py-2 text-xs font-bold text-rose-600 ring-1 ring-rose-200 hover:bg-rose-50 disabled:opacity-50">Không xác nhận</button>
-                          </div>
-                        </div>
-                      </div>
+                    <div key={transaction.id} className="p-3">
+                      <TransactionPrompt
+                        transaction={transaction}
+                        userId={user?.id || ''}
+                        onUpdated={() =>
+                          setPendingConfirmations((current) =>
+                            current.filter((item) => item.id !== transaction.id),
+                          )
+                        }
+                      />
                     </div>
                   ))}
                   {notifications.length === 0 && pendingConfirmations.length === 0 ? (
@@ -499,19 +553,30 @@ export default function Header() {
                     notifications.map((notif) => {
                       const isUnread = !notif.isRead && !notif.is_read;
                       return (
-                        <div key={notif.id} className={`flex gap-3 p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer ${isUnread ? 'bg-blue-50/40' : ''}`}>
-                          <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${isUnread ? 'bg-[#1877F2]' : 'bg-transparent'}`}></div>
+                        <div
+                          key={notif.id}
+                          className={`flex gap-3 p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer ${isUnread ? 'bg-blue-50/40' : ''}`}
+                        >
+                          <div
+                            className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${isUnread ? 'bg-[#1877F2]' : 'bg-transparent'}`}
+                          ></div>
                           <div className="flex-1 min-w-0">
-                            <h4 className={`text-sm ${isUnread ? 'font-bold text-gray-800' : 'font-semibold text-gray-600'}`}>
+                            <h4
+                              className={`text-sm ${isUnread ? 'font-bold text-gray-800' : 'font-semibold text-gray-600'}`}
+                            >
                               {notif.title}
                             </h4>
-                            <p className="text-xs text-gray-500 mt-1 line-clamp-2 leading-relaxed">{notif.content}</p>
+                            <p className="text-xs text-gray-500 mt-1 line-clamp-2 leading-relaxed">
+                              {notif.content}
+                            </p>
                             <span className="text-[10px] text-gray-400 font-medium mt-2 block">
-                              {new Date(notif.created_at || notif.createdAt).toLocaleString('vi-VN')}
+                              {new Date(
+                                notif.created_at || notif.createdAt || '',
+                              ).toLocaleString('vi-VN')}
                             </span>
                           </div>
                         </div>
-                      )
+                      );
                     })
                   )}
                 </div>
@@ -519,56 +584,104 @@ export default function Header() {
             )}
           </div>
 
-          <Link href="/chat" className="hidden items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-4 py-2.5 text-sm font-extrabold text-slate-200 transition-all hover:bg-white/15 md:flex">
-            <svg className="w-4 h-4 text-[#1877F2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          <Link
+            href="/chat"
+            className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-4
+              py-2.5 text-sm font-extrabold text-slate-200 transition-all
+              hover:bg-white/15 md:flex"
+          >
+            <svg
+              className="w-4 h-4 text-[#1877F2]"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+              />
             </svg>
-            Liên hệ
+            Tin nhắn
+            {unreadMessages > 0 && (
+              <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] text-white">
+                {unreadMessages > 99 ? '99+' : unreadMessages}
+              </span>
+            )}
           </Link>
 
           {!user && (
-            <Link href="/login" className="rounded-xl border border-white/10 bg-white/10 px-4 py-2.5 text-sm font-extrabold text-white transition-all hover:bg-white/15">
+            <Link
+              href="/login"
+              className="rounded-xl border border-white/10 bg-white/10 px-4 py-2.5 text-sm
+                font-extrabold text-white transition-all hover:bg-white/15"
+            >
               Đăng nhập
             </Link>
           )}
 
-          {user && ['AGENT', 'ADMIN'].includes(user.role) ? (
-            <Link href="/create-post" className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5">
+          {user && ['AGENT', 'ADMIN'].includes(user.role || '') ? (
+            <Link
+              href="/create-post"
+              className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5
+                text-sm font-black text-white shadow-lg shadow-blue-500/20 transition-all
+                hover:-translate-y-0.5"
+            >
               ĐĂNG TIN
             </Link>
           ) : (
-            <button disabled title={user ? 'Nâng cấp tài khoản để đăng tin' : 'Đăng nhập và nâng cấp tài khoản để đăng tin'} className="cursor-not-allowed rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-extrabold text-slate-500 opacity-80">
+            <button
+              disabled
+              title={
+                user
+                  ? 'Nâng cấp tài khoản để đăng tin'
+                  : 'Đăng nhập và nâng cấp tài khoản để đăng tin'
+              }
+              className="cursor-not-allowed rounded-xl border border-white/10 bg-white/5 px-5
+                py-2.5 text-sm font-extrabold text-slate-500 opacity-80"
+            >
               ĐĂNG TIN
             </button>
           )}
 
           {/* MENU NGƯỜI DÙNG */}
           {user && (
-          <div className="relative">
-            <button 
-              onClick={() => { 
-                setShowUserMenu(!showUserMenu); 
-                setShowFavorites(false); 
-                setShowNotifications(false); 
-              }}
-              className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-slate-200 transition-all hover:bg-white/15"
-            >
-              <UserAvatar user={user} className="w-6 h-6" />
-              <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setShowUserMenu(!showUserMenu);
+                  setShowFavorites(false);
+                  setShowNotifications(false);
+                }}
+                className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/10
+                  px-3 py-2 text-slate-200 transition-all hover:bg-white/15"
+              >
+                <UserAvatar user={user} className="w-6 h-6" />
+                <svg
+                  className="w-4 h-4 text-gray-500"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </button>
 
-            {showUserMenu && (
-              <UserDropdown 
-                user={user} 
-                onLogout={handleLogout} 
-                onClose={() => setShowUserMenu(false)} 
-              />
-            )}
-          </div>
+              {showUserMenu && (
+                <UserDropdown
+                  user={user}
+                  onLogout={handleLogout}
+                  onClose={() => setShowUserMenu(false)}
+                />
+              )}
+            </div>
           )}
-
         </div>
       </div>
     </header>

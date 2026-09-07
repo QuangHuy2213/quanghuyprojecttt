@@ -7,7 +7,9 @@ import Link from 'next/link';
 
 const statusLabel: Record<string, string> = {
   SUCCESS: 'Đã giao dịch',
-  VERIFYING: 'Chờ xác nhận',
+  VERIFYING: 'Chờ xác nhận thỏa thuận',
+  NEGOTIATING: 'Đang thỏa thuận',
+  SALE_PENDING: 'Chờ khách xác nhận đã bán',
   DISPUTE: 'Cần đối soát',
   FRAUD: 'Gian lận',
   PENDING_CANCEL: 'Chờ hủy',
@@ -32,7 +34,13 @@ type PopupState = {
   onConfirm?: () => void | Promise<void>;
 };
 
-function AdminSystemPopup({ popup, onClose }: { popup: PopupState; onClose: () => void }) {
+function AdminSystemPopup({
+  popup,
+  onClose,
+}: {
+  popup: PopupState;
+  onClose: () => void;
+}) {
   const isConfirm = popup.type === 'confirm';
 
   const visual = {
@@ -40,7 +48,13 @@ function AdminSystemPopup({ popup, onClose }: { popup: PopupState; onClose: () =
       iconWrap: 'border-emerald-100 bg-emerald-50 text-emerald-600',
       button: 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20',
       icon: (
-        <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+        <svg
+          className="h-7 w-7"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+        >
           <path strokeLinecap="round" strokeLinejoin="round" d="m5 12 4 4L19 6" />
         </svg>
       ),
@@ -49,7 +63,13 @@ function AdminSystemPopup({ popup, onClose }: { popup: PopupState; onClose: () =
       iconWrap: 'border-rose-100 bg-rose-50 text-rose-600',
       button: 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/20',
       icon: (
-        <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+        <svg
+          className="h-7 w-7"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+        >
           <circle cx="12" cy="12" r="9" />
           <path strokeLinecap="round" d="m9 9 6 6M15 9l-6 6" />
         </svg>
@@ -59,8 +79,18 @@ function AdminSystemPopup({ popup, onClose }: { popup: PopupState; onClose: () =
       iconWrap: 'border-amber-100 bg-amber-50 text-amber-600',
       button: 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20',
       icon: (
-        <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3 2.8 19a1.5 1.5 0 001.3 2.25h15.8A1.5 1.5 0 0021.2 19L12 3z" />
+        <svg
+          className="h-7 w-7"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M12 3 2.8 19a1.5 1.5 0 001.3 2.25h15.8A1.5 1.5 0 0021.2 19L12 3z"
+          />
           <path strokeLinecap="round" d="M12 9v4M12 17h.01" />
         </svg>
       ),
@@ -71,11 +101,21 @@ function AdminSystemPopup({ popup, onClose }: { popup: PopupState; onClose: () =
         popup.confirmVariant === 'danger'
           ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/20'
           : popup.confirmVariant === 'success'
-          ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20'
-          : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20',
+            ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20'
+            : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20',
       icon: (
-        <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3 4 6v5c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6l-8-3z" />
+        <svg
+          className="h-7 w-7"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M12 3 4 6v5c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V6l-8-3z"
+          />
           <path strokeLinecap="round" d="M9.5 12 11 13.5l3.5-4" />
         </svg>
       ),
@@ -92,19 +132,27 @@ function AdminSystemPopup({ popup, onClose }: { popup: PopupState; onClose: () =
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
       <div className="w-full max-w-md overflow-hidden rounded-[28px] border border-white/30 bg-white shadow-[0_30px_90px_-25px_rgba(15,23,42,0.55)]">
         <div className="p-7 sm:p-8">
-          <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border ${visual.iconWrap}`}>
+          <div
+            className={`mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border ${visual.iconWrap}`}
+          >
             {visual.icon}
           </div>
           <div className="mt-5 text-center">
-            <h3 className="text-xl font-black tracking-tight text-slate-900">{popup.title}</h3>
-            <p className="mt-2 whitespace-pre-line text-sm font-medium leading-6 text-slate-600">{popup.message}</p>
+            <h3 className="text-xl font-black tracking-tight text-slate-900">
+              {popup.title}
+            </h3>
+            <p className="mt-2 whitespace-pre-line text-sm font-medium leading-6 text-slate-600">
+              {popup.message}
+            </p>
           </div>
           <div className={`mt-7 flex ${isConfirm ? 'gap-3' : ''}`}>
             {isConfirm && (
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 rounded-2xl border border-slate-200 bg-white py-3.5 text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 active:scale-[0.98]"
+                className="flex-1 rounded-2xl border border-slate-200 bg-white py-3.5 text-sm
+                  font-bold text-slate-700 transition-all hover:bg-slate-50
+                  active:scale-[0.98]"
               >
                 {popup.cancelText || 'Hủy bỏ'}
               </button>
@@ -135,16 +183,24 @@ function AdminWarningModal({
   targetUserId: string;
   targetUserName: string;
   onClose: () => void;
-  onNotify: (type: 'success' | 'error' | 'warning', title: string, message: string) => void;
+  onNotify: (
+    type: 'success' | 'error' | 'warning',
+    title: string,
+    message: string,
+  ) => void;
 }) {
   const [isSending, setIsSending] = useState(false);
   const [content, setContent] = useState(
-    'Hệ thống phát hiện tài khoản của bạn có dấu hiệu cung cấp thông tin sai lệch nhằm trốn tránh phí nền tảng trong quá trình giao dịch. Yêu cầu bạn nghiêm túc tuân thủ quy định của Nhà Tốt.'
+    'Hệ thống phát hiện tài khoản của bạn có dấu hiệu cung cấp thông tin sai lệch nhằm trốn tránh phí nền tảng trong quá trình giao dịch. Yêu cầu bạn nghiêm túc tuân thủ quy định của Nhà Tốt.',
   );
 
   const handleSendWarning = async () => {
     if (!content.trim()) {
-      onNotify('warning', 'Thiếu nội dung cảnh báo', 'Vui lòng nhập nội dung cảnh báo trước khi phát lệnh.');
+      onNotify(
+        'warning',
+        'Thiếu nội dung cảnh báo',
+        'Vui lòng nhập nội dung cảnh báo trước khi phát lệnh.',
+      );
       return;
     }
 
@@ -165,15 +221,23 @@ function AdminWarningModal({
         onNotify(
           'success',
           'Đã gửi cảnh báo',
-          `Cảnh báo chặn màn hình đã được gửi thành công đến ${targetUserName}.`
+          `Cảnh báo chặn màn hình đã được gửi thành công đến ${targetUserName}.`,
         );
       } else {
         const data = await res.json().catch(() => ({}));
-        onNotify('error', 'Gửi cảnh báo thất bại', data.message || 'Không thể gửi cảnh báo. Vui lòng kiểm tra lại.');
+        onNotify(
+          'error',
+          'Gửi cảnh báo thất bại',
+          data.message || 'Không thể gửi cảnh báo. Vui lòng kiểm tra lại.',
+        );
       }
     } catch (error) {
       console.error(error);
-      onNotify('error', 'Lỗi kết nối', 'Không thể kết nối đến máy chủ. Vui lòng thử lại.');
+      onNotify(
+        'error',
+        'Lỗi kết nối',
+        'Không thể kết nối đến máy chủ. Vui lòng thử lại.',
+      );
     } finally {
       setIsSending(false);
     }
@@ -203,7 +267,10 @@ function AdminWarningModal({
           <button
             onClick={onClose}
             disabled={isSending}
-            className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-2xl leading-none text-white/80 transition-all hover:bg-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className="relative flex h-9 w-9 items-center justify-center rounded-xl border
+              border-white/15 bg-white/10 text-2xl leading-none text-white/80
+              transition-all hover:bg-white/20 hover:text-white
+              disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Đóng"
           >
             &times;
@@ -231,7 +298,10 @@ function AdminWarningModal({
               rows={5}
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3.5 text-sm font-medium leading-6 text-slate-800 outline-none transition-all placeholder:text-slate-400 hover:border-slate-300 focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100"
+              className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50/80 px-4
+                py-3.5 text-sm font-medium leading-6 text-slate-800 outline-none
+                transition-all placeholder:text-slate-400 hover:border-slate-300
+                focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100"
             />
             <div className="mt-2 flex justify-end">
               <span className="text-[11px] font-medium text-slate-400">
@@ -244,14 +314,20 @@ function AdminWarningModal({
             <button
               onClick={onClose}
               disabled={isSending}
-              className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold
+                text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50
+                hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Hủy bỏ
             </button>
             <button
               onClick={handleSendWarning}
               disabled={isSending}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-rose-500/20 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-rose-500/25 disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-rose-600
+                to-red-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg
+                shadow-rose-500/20 transition-all hover:-translate-y-0.5 hover:shadow-xl
+                hover:shadow-rose-500/25 disabled:cursor-not-allowed
+                disabled:translate-y-0 disabled:opacity-50"
             >
               {isSending && (
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
@@ -269,9 +345,7 @@ function AdminWarningModal({
 // 🌟 PAGE CHÍNH: QUẢN LÝ ĐỐI SOÁT (GIAO DỊCH & HÓA ĐƠN)
 // =========================================================================
 export default function AdminTransactionsPage() {
-  const [activeTab, setActiveTab] = useState<'TRANSACTIONS' | 'INVOICES'>(
-    'TRANSACTIONS'
-  );
+  const [activeTab, setActiveTab] = useState<'TRANSACTIONS' | 'INVOICES'>('TRANSACTIONS');
 
   // States cho Giao Dịch
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -289,7 +363,11 @@ export default function AdminTransactionsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [popup, setPopup] = useState<PopupState | null>(null);
 
-  const showMessage = (type: 'success' | 'error' | 'warning', title: string, message: string) => {
+  const showMessage = (
+    type: 'success' | 'error' | 'warning',
+    title: string,
+    message: string,
+  ) => {
     setPopup({ type, title, message });
   };
 
@@ -298,7 +376,7 @@ export default function AdminTransactionsPage() {
     message: string,
     onConfirm: () => void | Promise<void>,
     confirmText = 'Xác nhận',
-    confirmVariant: ConfirmVariant = 'primary'
+    confirmVariant: ConfirmVariant = 'primary',
   ) => {
     setPopup({
       type: 'confirm',
@@ -347,12 +425,17 @@ export default function AdminTransactionsPage() {
 
   useEffect(() => {
     let first = true;
-    if (!localStorage.getItem('access_token') || !localStorage.getItem('user')) setLoading(false);
-    const poller = startPolling(async signal => {
+    if (!localStorage.getItem('access_token') || !localStorage.getItem('user'))
+      setLoading(false);
+    const poller = startPolling(async (signal) => {
       await fetchData(first, signal);
       first = false;
     });
-    return poller.stop;
+    window.addEventListener('transactions-updated', poller.refresh);
+    return () => {
+      poller.stop();
+      window.removeEventListener('transactions-updated', poller.refresh);
+    };
   }, [fetchData]);
 
   // --- Xử lý Giao dịch ---
@@ -382,20 +465,30 @@ export default function AdminTransactionsPage() {
             showMessage(
               'success',
               'Đã xử lý tranh chấp',
-              isApprove ? 'Giao dịch đã được công nhận thành công.' : 'Giao dịch đã được hủy thành công.'
+              isApprove
+                ? 'Giao dịch đã được công nhận thành công.'
+                : 'Giao dịch đã được hủy thành công.',
             );
             fetchData(false);
           } else {
             const data = await res.json().catch(() => ({}));
-            showMessage('error', 'Không thể xử lý giao dịch', data.message || 'Máy chủ từ chối yêu cầu xử lý tranh chấp.');
+            showMessage(
+              'error',
+              'Không thể xử lý giao dịch',
+              data.message || 'Máy chủ từ chối yêu cầu xử lý tranh chấp.',
+            );
           }
         } catch (error) {
           console.error(error);
-          showMessage('error', 'Lỗi kết nối', 'Không thể kết nối đến máy chủ. Vui lòng thử lại.');
+          showMessage(
+            'error',
+            'Lỗi kết nối',
+            'Không thể kết nối đến máy chủ. Vui lòng thử lại.',
+          );
         }
       },
       isApprove ? 'Công nhận giao dịch' : 'Hủy giao dịch',
-      isApprove ? 'success' : 'danger'
+      isApprove ? 'success' : 'danger',
     );
   };
 
@@ -413,18 +506,30 @@ export default function AdminTransactionsPage() {
           const data = await res.json().catch(() => ({}));
 
           if (res.ok) {
-            showMessage('success', 'Đã xóa giao dịch', 'Giao dịch đã được xóa khỏi danh sách thành công.');
+            showMessage(
+              'success',
+              'Đã xóa giao dịch',
+              'Giao dịch đã được xóa khỏi danh sách thành công.',
+            );
             fetchData(false);
           } else {
-            showMessage('error', 'Chưa thể xóa giao dịch', data.message || 'Máy chủ từ chối yêu cầu xóa giao dịch này.');
+            showMessage(
+              'error',
+              'Chưa thể xóa giao dịch',
+              data.message || 'Máy chủ từ chối yêu cầu xóa giao dịch này.',
+            );
           }
         } catch (error) {
           console.error(error);
-          showMessage('error', 'Lỗi kết nối', 'Không thể kết nối đến máy chủ. Vui lòng thử lại.');
+          showMessage(
+            'error',
+            'Lỗi kết nối',
+            'Không thể kết nối đến máy chủ. Vui lòng thử lại.',
+          );
         }
       },
       'Xóa giao dịch',
-      'danger'
+      'danger',
     );
   };
 
@@ -442,28 +547,40 @@ export default function AdminTransactionsPage() {
           });
 
           if (res.ok) {
-            showMessage('success', 'Phát hành hóa đơn thành công', 'Hóa đơn đã được phát hành và yêu cầu thanh toán đã được gửi đến người dùng.');
+            showMessage(
+              'success',
+              'Phát hành hóa đơn thành công',
+              'Hóa đơn đã được phát hành và yêu cầu thanh toán đã được gửi đến người dùng.',
+            );
             fetchData(false);
           } else {
             const data = await res.json().catch(() => ({}));
-            showMessage('error', 'Không thể phát hành hóa đơn', data.message || 'Máy chủ từ chối yêu cầu phát hành hóa đơn.');
+            showMessage(
+              'error',
+              'Không thể phát hành hóa đơn',
+              data.message || 'Máy chủ từ chối yêu cầu phát hành hóa đơn.',
+            );
           }
         } catch (error) {
           console.error(error);
-          showMessage('error', 'Lỗi kết nối', 'Không thể kết nối đến máy chủ. Vui lòng thử lại.');
+          showMessage(
+            'error',
+            'Lỗi kết nối',
+            'Không thể kết nối đến máy chủ. Vui lòng thử lại.',
+          );
         }
       },
       'Phát hành hóa đơn',
-      'primary'
+      'primary',
     );
   };
 
   // Lọc dữ liệu
   const filteredTx = transactions.filter(
-    (tx) => txFilter === 'ALL' || tx.status === txFilter
+    (tx) => txFilter === 'ALL' || tx.status === txFilter,
   );
   const filteredInv = invoices.filter(
-    (inv) => invFilter === 'ALL' || inv.status === invFilter
+    (inv) => invFilter === 'ALL' || inv.status === invFilter,
   );
 
   const totalRevenue = transactions
@@ -475,7 +592,9 @@ export default function AdminTransactionsPage() {
 
   const disputeCount = transactions.filter((tx) => tx.status === 'DISPUTE').length;
   const verifyingCount = transactions.filter((tx) => tx.status === 'VERIFYING').length;
-  const pendingInvoiceCount = invoices.filter((inv) => inv.status === 'PENDING_PAYMENT').length;
+  const pendingInvoiceCount = invoices.filter(
+    (inv) => inv.status === 'PENDING_PAYMENT',
+  ).length;
 
   if (loading) {
     return (
@@ -511,73 +630,77 @@ export default function AdminTransactionsPage() {
       {/* HEADER TABS & THỐNG KÊ */}
       <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
-        <div className="w-full md:w-auto">
-          <div className="mb-2 flex items-center gap-2 px-1">
-            <span className="h-2 w-2 rounded-full bg-blue-600 shadow-[0_0_0_4px_rgba(37,99,235,0.1)]" />
-            <span className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
-              Quản trị tài chính
-            </span>
-          </div>
-
-          <div className="flex w-full rounded-2xl border border-slate-200 bg-slate-50 p-1.5 shadow-inner shadow-slate-100 md:w-auto">
-            <button
-              onClick={() => setActiveTab('TRANSACTIONS')}
-              className={`flex-1 rounded-xl px-5 py-2.5 text-sm font-extrabold transition-all duration-200 md:flex-none ${
-                activeTab === 'TRANSACTIONS'
-                  ? 'bg-white text-blue-700 shadow-md shadow-slate-200/70 ring-1 ring-slate-200/70'
-                  : 'text-slate-500 hover:bg-white/60 hover:text-slate-800'
-              }`}
-            >
-              Giao dịch & đối soát
-            </button>
-            <button
-              onClick={() => setActiveTab('INVOICES')}
-              className={`flex-1 rounded-xl px-5 py-2.5 text-sm font-extrabold transition-all duration-200 md:flex-none ${
-                activeTab === 'INVOICES'
-                  ? 'bg-white text-emerald-700 shadow-md shadow-slate-200/70 ring-1 ring-slate-200/70'
-                  : 'text-slate-500 hover:bg-white/60 hover:text-slate-800'
-              }`}
-            >
-              Hóa đơn thanh toán
-            </button>
-          </div>
-        </div>
-
-        <div
-          className={`relative w-full overflow-hidden rounded-2xl px-6 py-4 text-white shadow-lg md:w-auto md:min-w-[280px] ${
-            activeTab === 'TRANSACTIONS'
-              ? 'bg-gradient-to-br from-blue-600 via-blue-600 to-indigo-700 shadow-blue-500/20'
-              : 'bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 shadow-emerald-500/20'
-          }`}
-        >
-          <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-white/10" />
-          <div className="absolute -bottom-10 right-16 h-20 w-20 rounded-full bg-white/10" />
-          <div className="relative flex flex-col">
-            <span className="text-xs font-extrabold uppercase tracking-[0.16em] text-white/70">
-              {activeTab === 'TRANSACTIONS'
-                ? 'Tổng phí nền tảng dự kiến'
-                : 'Tổng tiền đã thu'}
-            </span>
-            <div className="mt-1 flex items-end gap-2">
-              <span className="font-mono text-xl font-black tracking-tight sm:text-2xl">
-                {activeTab === 'TRANSACTIONS'
-                  ? totalRevenue.toLocaleString()
-                  : totalCollected.toLocaleString()}
+          <div className="w-full md:w-auto">
+            <div className="mb-2 flex items-center gap-2 px-1">
+              <span className="h-2 w-2 rounded-full bg-blue-600 shadow-[0_0_0_4px_rgba(37,99,235,0.1)]" />
+              <span className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
+                Quản trị tài chính
               </span>
-              <span className="pb-0.5 text-xs font-bold text-white/75">VNĐ</span>
+            </div>
+
+            <div className="flex w-full rounded-2xl border border-slate-200 bg-slate-50 p-1.5 shadow-inner shadow-slate-100 md:w-auto">
+              <button
+                onClick={() => setActiveTab('TRANSACTIONS')}
+                className={`flex-1 rounded-xl px-5 py-2.5 text-sm font-extrabold transition-all duration-200 md:flex-none ${
+                  activeTab === 'TRANSACTIONS'
+                    ? 'bg-white text-blue-700 shadow-md shadow-slate-200/70 ring-1 ring-slate-200/70'
+                    : 'text-slate-500 hover:bg-white/60 hover:text-slate-800'
+                }`}
+              >
+                Giao dịch & đối soát
+              </button>
+              <button
+                onClick={() => setActiveTab('INVOICES')}
+                className={`flex-1 rounded-xl px-5 py-2.5 text-sm font-extrabold transition-all duration-200 md:flex-none ${
+                  activeTab === 'INVOICES'
+                    ? 'bg-white text-emerald-700 shadow-md shadow-slate-200/70 ring-1 ring-slate-200/70'
+                    : 'text-slate-500 hover:bg-white/60 hover:text-slate-800'
+                }`}
+              >
+                Hóa đơn thanh toán
+              </button>
             </div>
           </div>
-        </div>
+
+          <div
+            className={`relative w-full overflow-hidden rounded-2xl px-6 py-4 text-white shadow-lg md:w-auto md:min-w-[280px] ${
+              activeTab === 'TRANSACTIONS'
+                ? 'bg-gradient-to-br from-blue-600 via-blue-600 to-indigo-700 shadow-blue-500/20'
+                : 'bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 shadow-emerald-500/20'
+            }`}
+          >
+            <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-white/10" />
+            <div className="absolute -bottom-10 right-16 h-20 w-20 rounded-full bg-white/10" />
+            <div className="relative flex flex-col">
+              <span className="text-xs font-extrabold uppercase tracking-[0.16em] text-white/70">
+                {activeTab === 'TRANSACTIONS'
+                  ? 'Tổng phí nền tảng dự kiến'
+                  : 'Tổng tiền đã thu'}
+              </span>
+              <div className="mt-1 flex items-end gap-2">
+                <span className="font-mono text-xl font-black tracking-tight sm:text-2xl">
+                  {activeTab === 'TRANSACTIONS'
+                    ? totalRevenue.toLocaleString()
+                    : totalCollected.toLocaleString()}
+                </span>
+                <span className="pb-0.5 text-xs font-bold text-white/75">VNĐ</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="mt-5 grid grid-cols-1 gap-3 border-t border-slate-100 pt-5 sm:grid-cols-3">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5">
             <div className="text-sm font-bold text-slate-500">Tổng giao dịch</div>
-            <div className="mt-1 text-2xl font-black text-slate-900">{transactions.length}</div>
+            <div className="mt-1 text-2xl font-black text-slate-900">
+              {transactions.length}
+            </div>
           </div>
           <div className="rounded-2xl border border-rose-100 bg-rose-50/70 px-4 py-3.5">
             <div className="text-sm font-bold text-rose-600">Cần đối soát / xác minh</div>
-            <div className="mt-1 text-2xl font-black text-rose-700">{disputeCount + verifyingCount}</div>
+            <div className="mt-1 text-2xl font-black text-rose-700">
+              {disputeCount + verifyingCount}
+            </div>
           </div>
           <div className="rounded-2xl border border-amber-100 bg-amber-50/70 px-4 py-3.5">
             <div className="flex items-center justify-between gap-2 text-sm font-bold text-amber-700">
@@ -589,7 +712,9 @@ export default function AdminTransactionsPage() {
                 </span>
               )}
             </div>
-            <div className="mt-1 text-2xl font-black text-amber-800">{pendingInvoiceCount}</div>
+            <div className="mt-1 text-2xl font-black text-amber-800">
+              {pendingInvoiceCount}
+            </div>
           </div>
         </div>
       </div>
@@ -604,6 +729,8 @@ export default function AdminTransactionsPage() {
               'ALL',
               'SUCCESS',
               'VERIFYING',
+              'NEGOTIATING',
+              'SALE_PENDING',
               'DISPUTE',
               'FRAUD',
               'PENDING_CANCEL',
@@ -661,7 +788,8 @@ export default function AdminTransactionsPage() {
                       <td className="px-5 py-4">
                         <Link
                           href={`/posts/${tx.postId}`}
-                          className="inline-flex max-w-[240px] items-center gap-2 font-bold text-slate-800 transition-colors hover:text-blue-700"
+                          className="inline-flex max-w-[240px] items-center gap-2 font-bold
+                            text-slate-800 transition-colors hover:text-blue-700"
                         >
                           <span className="truncate">
                             {tx.post?.title || 'Xem bài đăng'}
@@ -688,7 +816,10 @@ export default function AdminTransactionsPage() {
                                   userName: tx.buyer?.fullName || 'Người Mua',
                                 })
                               }
-                              className="flex h-7 w-7 items-center justify-center rounded-lg border border-rose-100 bg-rose-50 text-sm transition-all hover:-translate-y-0.5 hover:border-rose-200 hover:bg-rose-100"
+                              className="flex h-7 w-7 items-center justify-center rounded-lg border
+                                border-rose-100 bg-rose-50 text-sm transition-all
+                                hover:-translate-y-0.5 hover:border-rose-200
+                                hover:bg-rose-100"
                               title="Cảnh báo"
                             >
                               ⚠️
@@ -709,7 +840,10 @@ export default function AdminTransactionsPage() {
                                   userName: tx.seller?.fullName || 'Người Bán',
                                 })
                               }
-                              className="flex h-7 w-7 items-center justify-center rounded-lg border border-rose-100 bg-rose-50 text-sm transition-all hover:-translate-y-0.5 hover:border-rose-200 hover:bg-rose-100"
+                              className="flex h-7 w-7 items-center justify-center rounded-lg border
+                                border-rose-100 bg-rose-50 text-sm transition-all
+                                hover:-translate-y-0.5 hover:border-rose-200
+                                hover:bg-rose-100"
                               title="Cảnh báo"
                             >
                               ⚠️
@@ -765,28 +899,31 @@ export default function AdminTransactionsPage() {
                         {tx.status === 'DISPUTE' ? (
                           <div className="flex flex-col items-end gap-2">
                             <button
-                              onClick={() =>
-                                handleResolveDispute(tx.id, 'APPROVE')
-                              }
-                              className="w-full max-w-[150px] rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-extrabold text-emerald-700 transition-all hover:border-emerald-300 hover:bg-emerald-100"
+                              disabled={!tx.completedAt || !tx.saleRequestedAt}
+                              onClick={() => handleResolveDispute(tx.id, 'APPROVE')}
+                              className="w-full max-w-[150px] rounded-lg border border-emerald-200
+                                bg-emerald-50 px-3 py-2 text-sm font-extrabold
+                                text-emerald-700 transition-all hover:border-emerald-300
+                                hover:bg-emerald-100"
                             >
-                              Công nhận giao dịch
+                              Giữ kết quả đã bán
                             </button>
                             <button
-                              onClick={() =>
-                                handleResolveDispute(tx.id, 'CANCEL')
-                              }
-                              className="w-full max-w-[150px] rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-extrabold text-rose-700 transition-all hover:border-rose-300 hover:bg-rose-100"
+                              onClick={() => handleResolveDispute(tx.id, 'CANCEL')}
+                              className="w-full max-w-[150px] rounded-lg border border-rose-200
+                                bg-rose-50 px-3 py-2 text-sm font-extrabold text-rose-700
+                                transition-all hover:border-rose-300 hover:bg-rose-100"
                             >
                               Hủy giao dịch
                             </button>
                           </div>
-                        ) : ['SUCCESS', 'CANCELLED', 'CANCELLED_AFTER_SUCCESS', 'FRAUD'].includes(
-                            tx.status
-                          ) ? (
+                        ) : !tx.invoice &&
+                          ['CANCELLED', 'CANCELLED_AFTER_SUCCESS'].includes(tx.status) ? (
                           <button
                             onClick={() => handleDelete(tx.id)}
-                            className="rounded-lg border border-rose-100 bg-rose-50 px-3.5 py-2 text-sm font-extrabold text-rose-600 transition-all hover:border-rose-200 hover:bg-rose-100 hover:text-rose-700"
+                            className="rounded-lg border border-rose-100 bg-rose-50 px-3.5 py-2
+                              text-sm font-extrabold text-rose-600 transition-all
+                              hover:border-rose-200 hover:bg-rose-100 hover:text-rose-700"
                           >
                             Xóa
                           </button>
@@ -825,7 +962,7 @@ export default function AdminTransactionsPage() {
                 >
                   {status === 'ALL' ? 'Tất cả' : statusLabel[status] || status}
                 </button>
-              )
+              ),
             )}
           </div>
 
@@ -867,7 +1004,8 @@ export default function AdminTransactionsPage() {
                       <td className="px-5 py-4">
                         <Link
                           href={`/posts/${inv.transaction?.post?.id}`}
-                          className="inline-flex max-w-[240px] items-center gap-2 font-bold text-slate-800 transition-colors hover:text-blue-700"
+                          className="inline-flex max-w-[240px] items-center gap-2 font-bold
+                            text-slate-800 transition-colors hover:text-blue-700"
                         >
                           <span className="truncate">
                             {inv.transaction?.post?.title || 'Xem bài đăng'}
@@ -891,9 +1029,7 @@ export default function AdminTransactionsPage() {
 
                       <td className="px-5 py-4">
                         <span className="whitespace-nowrap font-mono text-sm font-black text-emerald-700">
-                          {Number(
-                            inv.totalPayable || inv.amount || 0
-                          ).toLocaleString()}
+                          {Number(inv.totalPayable || inv.amount || 0).toLocaleString()}
                         </span>
                       </td>
 
@@ -936,7 +1072,10 @@ export default function AdminTransactionsPage() {
                         {inv.status === 'DRAFT' ? (
                           <button
                             onClick={() => handleIssueInvoice(inv.id)}
-                            className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-extrabold text-white shadow-md shadow-blue-500/20 transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-lg hover:shadow-blue-500/25"
+                            className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-extrabold
+                              text-white shadow-md shadow-blue-500/20 transition-all
+                              hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-lg
+                              hover:shadow-blue-500/25"
                           >
                             Gửi hóa đơn
                           </button>
