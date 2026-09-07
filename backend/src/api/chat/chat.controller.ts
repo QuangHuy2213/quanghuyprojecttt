@@ -1,5 +1,6 @@
 import {
   Body,
+  Delete,
   Controller,
   Get,
   Patch,
@@ -35,6 +36,11 @@ export class ChatController {
     return this.chat.threads(req.user.userId);
   }
 
+  @Delete('conversation')
+  deleteConversation(@Req() req: AuthRequest, @Query() query: ConversationDto) {
+    return this.chat.deleteConversation(req.user.userId, query);
+  }
+
   @Get('conversation')
   details(@Req() req: AuthRequest, @Query() query: ConversationDto) {
     return this.chat.details(req.user.userId, query);
@@ -47,7 +53,10 @@ export class ChatController {
 
   @Get('unread-count')
   async unread(@Req() req: AuthRequest) {
-    return { count: await this.chat.unreadCount(req.user.userId) };
+    return {
+      count: await this.chat.unreadCount(req.user.userId),
+      latest: await this.chat.latestReceived(req.user.userId),
+    };
   }
 
   @Patch('read')

@@ -212,6 +212,44 @@ export class ChatService {
     return this.prisma.message.count({ where: { receiverId: userId, readAt: null } });
   }
 
+  latestReceived(userId: string) {
+    return this.prisma.message.findFirst({
+      where: { receiverId: userId },
+      orderBy: { id: 'desc' },
+      select: { id: true, senderId: true, postId: true, text: true },
+    });
+  }
+
+  async deleteConversation(userId: string, input: ConversationDto) {
+    const remove = async (db: Prisma.TransactionClient) => {
+      const transaction = await db.transaction.findFirst({
+        where: {
+          ...(input.postId ? { postId: input.postId } : {}),
+          OR: [
+            { buyerId: userId, sellerId: input.receiverId },
+            { sellerId: userId, buyerId: input.receiverId },
+          ],
+          status: { notIn: ['CANCELLED', 'CANCELLED_AFTER_SUCCESS'] },
+        },
+      });
+      if (transaction) {
+        throw new BadRequestException(
+          'Không thể xóa hội thoại có giao dịch đang xử lý hoặc đã hoàn tất.',
+        );
+      }
+      await db.message.deleteMany({
+        where: this.conversation(userId, input.receiverId, input.postId),
+      });
+      return { deleted: true };
+    };
+    return this.prisma.$transaction(async (db) => {
+      if (input.postId) {
+        await db.$queryRaw`SELECT id FROM posts WHERE id = ${input.postId} FOR UPDATE`;
+      }
+      return remove(db);
+    });
+  }
+
   async markRead(userId: string, input: ConversationDto, throughId: number) {
     if (!Number.isInteger(throughId) || throughId < 1)
       throw new BadRequestException('Mốc đọc tin nhắn không hợp lệ.');

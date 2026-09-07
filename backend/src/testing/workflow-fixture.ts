@@ -34,6 +34,7 @@ export function workflowFixture() {
       if (key === 'AND') return value.every((part: any) => matches(record, part));
       if (value && typeof value === 'object' && !(value instanceof Date)) {
         if ('in' in value) return value.in.includes(record[key]);
+        if ('notIn' in value) return !value.notIn.includes(record[key]);
         if ('not' in value) return record[key] !== value.not;
         if ('gte' in value) return record[key] >= value.gte;
         if ('lte' in value) return record[key] <= value.lte;

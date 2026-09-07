@@ -77,4 +77,38 @@ describe('Message delivery and read tracking', () => {
       fixture.data.message.slice(1).every((message) => message.readAt === null),
     ).toBe(true);
   });
+
+  it('scopes deletion to the authenticated participant and selected listing', async () => {
+    const deleteMany = jest.fn().mockResolvedValue({ count: 2 });
+    fixture.db.message.deleteMany = deleteMany;
+    await service.deleteConversation('buyer', { receiverId: 'seller', postId: 1 });
+    expect(deleteMany).toHaveBeenCalledWith({
+      where: {
+        postId: 1,
+        OR: [
+          { senderId: 'buyer', receiverId: 'seller' },
+          { senderId: 'seller', receiverId: 'buyer' },
+        ],
+      },
+    });
+  });
+
+  it('preserves messages attached to an ongoing transaction', async () => {
+    fixture.data.transaction.push({
+      id: 'agreement',
+      buyerId: 'buyer',
+      sellerId: 'seller',
+      postId: 1,
+      status: 'NEGOTIATING',
+    });
+    const deleteMany = jest.fn();
+    fixture.db.message.deleteMany = deleteMany;
+    await expect(
+      service.deleteConversation('buyer', {
+        receiverId: 'seller',
+        postId: 1,
+      }),
+    ).rejects.toThrow('Không thể xóa');
+    expect(deleteMany).not.toHaveBeenCalled();
+  });
 });
