@@ -112,12 +112,55 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
       if (seen.size > 1000) seen.delete(seen.values().next().value!);
       setPopups((current) => [...current, entry].slice(-3));
     };
+    let notificationIds: Set<string> | null = null;
+    let latestMessageId: number | undefined;
     const notificationSync = subscribeApiPolling('notifications', token, (data) => {
-      if (active && Array.isArray(data)) setNotifications(mergeNotifications(data));
+      if (!active || !Array.isArray(data)) return;
+      const items = mergeNotifications(data);
+      for (const item of items) {
+        const id = `notification:${item.eventKey || item.id}`;
+        if (
+          notificationIds &&
+          !notificationIds.has(id) &&
+          item.type !== 'WARNING_POPUP'
+        ) {
+          popup({
+            id,
+            title: 'Bạn có 1 thông báo mới',
+            content: item.title,
+            link: item.link || '/my-transactions',
+          });
+          window.dispatchEvent(new Event('transactions-updated'));
+        }
+      }
+      notificationIds = new Set(
+        items.map((item) => `notification:${item.eventKey || item.id}`),
+      );
+      setNotifications(items);
     });
     const messageSync = subscribeApiPolling('chat/unread-count', token, (data) => {
-      if (active && data && typeof data === 'object' && 'count' in data)
-        setUnreadMessages(Number(data.count) || 0);
+      if (!active || !data || typeof data !== 'object' || !('count' in data)) return;
+      setUnreadMessages(Number(data.count) || 0);
+      const latest = (
+        data as {
+          latest?: {
+            id: number;
+            senderId: string;
+            postId: number | null;
+            text: string;
+          };
+        }
+      ).latest;
+      if (latest && latestMessageId !== undefined && latest.id > latestMessageId) {
+        popup({
+          id: `message:${latest.id}`,
+          title: 'Bạn có tin nhắn mới',
+          content: latest.text,
+          link: `/chat?receiverId=${encodeURIComponent(latest.senderId)}${latest.postId ? `&postId=${latest.postId}` : ''}`,
+        });
+        window.dispatchEvent(new Event('messages-updated'));
+      }
+      latestMessageId = Math.max(latestMessageId ?? 0, latest?.id ?? 0);
     });
     refreshRef.current = messageSync.refresh;
     const channel = supabase
@@ -187,9 +230,19 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
         },
         () => messageSync.refresh(),
       )
-      .subscribe();
+      .subscribe((status, error) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('Kết nối Realtime hộp thư bị gián đoạn:', status, error?.message);
+        }
+      });
+    const refreshInbox = () => {
+      messageSync.refresh();
+      notificationSync.refresh();
+    };
+    window.addEventListener('messages-updated', refreshInbox);
     return () => {
       active = false;
+      window.removeEventListener('messages-updated', refreshInbox);
       refreshRef.current = () => {};
       notificationSync.stop();
       messageSync.stop();

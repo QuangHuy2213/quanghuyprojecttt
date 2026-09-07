@@ -63,6 +63,7 @@ export default function ChatWorkspace() {
   const [transaction, setTransaction] = useState<TransactionSummary | null>(null);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [older, setOlder] = useState(true);
   const [error, setError] = useState('');
@@ -70,6 +71,30 @@ export default function ChatWorkspace() {
   const draft = useRef<{ key: string; text: string; id: string } | null>(null);
   const activeKey = useRef(conversationKey);
   activeKey.current = conversationKey;
+
+  const deleteConversation = async () => {
+    if (!active || sending || deleting) return;
+    if (
+      !window.confirm(
+        'Xóa tin nhắn của cuộc trò chuyện này cho cả hai bên? Không thể hoàn tác.',
+      )
+    )
+      return;
+    setDeleting(true);
+    try {
+      const query = new URLSearchParams({ receiverId });
+      if (postId) query.set('postId', String(postId));
+      await jsonRequest(`chat/conversation?${query}`, { method: 'DELETE' });
+      setThreads((current) => current.filter((item) => keyOf(item) !== conversationKey));
+      setMessages([]);
+      window.dispatchEvent(new Event('messages-updated'));
+      router.push('/chat');
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Không thể xóa hội thoại.');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   useEffect(() => {
     if (!user || !token) {
@@ -316,6 +341,13 @@ export default function ChatWorkspace() {
                     ←
                   </Link>
                   <UserAvatar user={active?.peer} className="h-10 w-10" />
+                  <button
+                    onClick={deleteConversation}
+                    disabled={!active || sending || deleting}
+                    className="ml-auto rounded-lg px-3 py-2 text-sm text-rose-600 disabled:opacity-50"
+                  >
+                    {deleting ? 'Đang xóa...' : 'Xóa chat'}
+                  </button>
                   <div className="min-w-0">
                     <h2 className="font-bold">
                       {active?.peer.fullName || 'Cuộc trò chuyện'}
