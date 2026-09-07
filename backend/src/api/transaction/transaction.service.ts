@@ -1,448 +1,700 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service'; 
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma, EscrowStatus } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
+
+const OPEN: EscrowStatus[] = [
+  'VERIFYING',
+  'NEGOTIATING',
+  'SALE_PENDING',
+  'DISPUTE',
+  'PENDING_CANCEL',
+];
+const RESERVED: EscrowStatus[] = [
+  'NEGOTIATING',
+  'SALE_PENDING',
+  'SUCCESS',
+  'DISPUTE',
+  'PENDING_CANCEL',
+];
 
 @Injectable()
 export class TransactionService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  private withLateFee<T extends { amount: any; dueDate: Date | null; status: string }>(invoice: T) {
-    const baseAmount = Number(invoice.amount);
-    const now = new Date();
-    const overdueMonths = invoice.dueDate && now > invoice.dueDate && !['PAID', 'CANCELLED'].includes(invoice.status)
-      ? Math.max(1, Math.ceil((now.getTime() - invoice.dueDate.getTime()) / (30 * 24 * 60 * 60 * 1000)))
-      : 0;
-    const lateFee = Math.round(baseAmount * 0.005 * overdueMonths);
-    return { ...invoice, status: overdueMonths > 0 && invoice.status === 'PENDING_PAYMENT' ? 'OVERDUE' : invoice.status, overdueMonths, lateFee, totalPayable: baseAmount + lateFee };
+  private locked<T>(
+    postId: number,
+    action: (db: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction(async (db) => {
+      await db.$queryRaw`SELECT id FROM posts WHERE id = ${postId} FOR UPDATE`;
+      return action(db);
+    });
   }
 
-  // =================================================================
-  // 1. HÀM TÍNH TOÁN CHIẾT KHẤU / HOA HỒNG
-  // =================================================================
-  calculateAppFee(
-    posterType: 'OWNER' | 'BROKER', 
-    transactionType: 'SALE' | 'RENT' | 'PROJECT', 
-    price: number, 
-    brokerCommission?: number
-  ): number {
-    let appFee = 0;
+  private async mutate<T>(
+    id: string,
+    action: (db: Prisma.TransactionClient) => Promise<T>,
+  ) {
+    const current = await this.prisma.transaction.findUnique({
+      where: { id },
+      select: { postId: true },
+    });
+    if (!current) throw new NotFoundException('Không tìm thấy giao dịch.');
+    return this.locked(current.postId, action);
+  }
 
-    if (posterType === 'OWNER') {
-      if (transactionType === 'SALE') {
-        appFee = price * 0.015; 
-      } else if (transactionType === 'RENT') {
-        appFee = price * 0.10; 
-      }
-    } 
-    else if (posterType === 'BROKER') {
-      if (transactionType === 'SALE') {
-        const commissionPercent = brokerCommission || 0;
-        const brokerMoney = price * (commissionPercent / 100);
-        appFee = brokerMoney * 0.20;
-      } else if (transactionType === 'RENT') {
-        appFee = price * 0.20;
-      }
+  private requireParticipant(
+    transaction: { buyerId: string; sellerId: string },
+    userId: string,
+  ) {
+    if (![transaction.buyerId, transaction.sellerId].includes(userId))
+      throw new ForbiddenException('Bạn không tham gia giao dịch này.');
+  }
+
+  private async notify(
+    db: Prisma.TransactionClient,
+    users: string[],
+    key: string,
+    title: string,
+    content: string,
+    link = '/my-transactions',
+  ) {
+    for (const userId of new Set(users)) {
+      await db.notification.upsert({
+        where: { eventKey: `${key}:${userId}` },
+        update: {},
+        create: {
+          userId,
+          eventKey: `${key}:${userId}`,
+          title,
+          content,
+          type: 'SYSTEM',
+          link,
+        },
+      });
     }
-
-    return appFee;
   }
 
-  // =================================================================
-  // 2. AI PHÁT HIỆN TỪ KHÓA & TẠO GIAO DỊCH ĐỂ ĐỒNG KIỂM
-  // =================================================================
-  async triggerEscrowVerification(postId: number, buyerId: string, sellerId: string, sellerConfirmed?: boolean) {
-    return this.prisma.transaction.create({
-      data: {
-        postId,
-        buyerId,
-        sellerId,
-        status: 'VERIFYING',
-        sellerConfirmed,
-      }
+  private async notifyAdmins(
+    db: Prisma.TransactionClient,
+    key: string,
+    title: string,
+    content: string,
+  ) {
+    const admins = await db.user.findMany({
+      where: { role: 'ADMIN' },
+      select: { id: true },
+    });
+    await this.notify(
+      db,
+      admins.map((user) => user.id),
+      key,
+      title,
+      content,
+      '/admin/transactions',
+    );
+  }
+
+  calculateAppFee(
+    posterType: 'OWNER' | 'BROKER',
+    transactionType: 'SALE' | 'RENT' | 'PROJECT',
+    price: number,
+    brokerCommission = 0,
+  ) {
+    if (
+      !Number.isFinite(price) ||
+      price < 0 ||
+      !Number.isFinite(brokerCommission) ||
+      brokerCommission < 0
+    )
+      throw new BadRequestException('Giá trị tính phí không hợp lệ.');
+    if (transactionType === 'PROJECT') return 0;
+    if (posterType === 'OWNER')
+      return Math.round(price * (transactionType === 'SALE' ? 0.015 : 0.1));
+    return Math.round(
+      transactionType === 'SALE' ? ((price * brokerCommission) / 100) * 0.2 : price * 0.2,
+    );
+  }
+
+  async triggerEscrowVerification(postId: number, buyerId: string, sellerId: string) {
+    return this.locked(postId, async (db) => {
+      const post = await db.posts.findUnique({ where: { id: postId } });
+      if (
+        !post ||
+        post.userId !== sellerId ||
+        sellerId === buyerId ||
+        post.status !== 'ACTIVE'
+      )
+        return null;
+      const existing = await db.transaction.findFirst({
+        where: { postId, buyerId, sellerId, status: { in: OPEN } },
+      });
+      if (existing) return existing;
+      if (await db.transaction.findFirst({ where: { postId, status: { in: RESERVED } } }))
+        return null;
+      if (
+        await db.transaction.findFirst({
+          where: {
+            postId,
+            buyerId,
+            sellerId,
+            status: 'CANCELLED',
+            updatedAt: { gte: new Date(Date.now() - 30 * 60_000) },
+          },
+        })
+      )
+        return null;
+      const transaction = await db.transaction.create({
+        data: { postId, buyerId, sellerId, status: 'VERIFYING' },
+      });
+      await this.notify(
+        db,
+        [buyerId, sellerId],
+        `${transaction.id}:proposal`,
+        'Bạn có đang trong quá trình thỏa thuận?',
+        `Cuộc trò chuyện về “${post.title}” có dấu hiệu thỏa thuận. Mỗi bên vui lòng xác nhận. Đây chưa phải xác nhận đã bán.`,
+      );
+      return transaction;
     });
   }
 
   async markPostSold(postId: number, sellerId: string, buyerPhone: string) {
-    const normalizedPhone = buyerPhone?.replace(/\s+/g, '');
-    if (!/^0\d{9}$/.test(normalizedPhone || '')) {
-      throw new BadRequestException('Số điện thoại khách hàng phải gồm 10 số và bắt đầu bằng 0.');
-    }
-
-    const [post, buyer] = await Promise.all([
-      this.prisma.posts.findUnique({ where: { id: postId } }),
-      this.prisma.user.findUnique({ where: { phoneNumber: normalizedPhone } }),
-    ]);
-    if (!post) throw new BadRequestException('Không tìm thấy bài đăng.');
-    if (post.userId !== sellerId) throw new ForbiddenException('Bạn không phải người đăng tin này.');
-    if (!buyer) throw new BadRequestException('Không tìm thấy tài khoản khách hàng với số điện thoại này.');
-    if (buyer.id === sellerId) throw new BadRequestException('Không thể chọn chính bạn làm khách mua.');
-    if (await this.hasCompletedTransaction(postId, buyer.id, sellerId)) {
-      throw new ConflictException('Giao dịch với khách hàng này đã hoàn tất.');
-    }
-
-    let transaction = await this.prisma.transaction.findFirst({
-      where: { postId, buyerId: buyer.id, sellerId, status: 'VERIFYING' },
-    });
-    if (!transaction) {
-      transaction = await this.triggerEscrowVerification(postId, buyer.id, sellerId, true);
-    } else if (transaction.sellerConfirmed !== true) {
-      transaction = await this.prisma.transaction.update({
-        where: { id: transaction.id }, data: { sellerConfirmed: true },
+    const phone = typeof buyerPhone === 'string' ? buyerPhone.replace(/\s+/g, '') : '';
+    if (!/^0\d{9}$/.test(phone))
+      throw new BadRequestException(
+        'Số điện thoại khách hàng phải gồm 10 số, bắt đầu bằng 0.',
+      );
+    return this.locked(postId, async (db) => {
+      const post = await db.posts.findUnique({ where: { id: postId } });
+      if (!post) throw new NotFoundException('Không tìm thấy bài đăng.');
+      if (post.userId !== sellerId)
+        throw new ForbiddenException('Bạn không phải người đăng tin.');
+      const buyer = await db.user.findUnique({ where: { phoneNumber: phone } });
+      if (!buyer || buyer.isLocked || buyer.id === sellerId)
+        throw new BadRequestException('Tài khoản khách hàng không hợp lệ.');
+      const reserved = await db.transaction.findFirst({
+        where: { postId, status: { in: RESERVED } },
       });
-    }
-
-    await this.prisma.notification.create({
-      data: {
-        userId: buyer.id,
-        title: 'Yêu cầu xác nhận giao dịch',
-        content: `Người đăng tin “${post.title}” đã báo giao dịch thành công với bạn. Vui lòng mở cuộc trò chuyện và xác nhận.`,
-        type: 'SYSTEM',
-      },
+      if (
+        reserved &&
+        (reserved.buyerId !== buyer.id ||
+          !['NEGOTIATING', 'SALE_PENDING'].includes(reserved.status))
+      )
+        throw new ConflictException(
+          'Tin đang được giữ cho giao dịch khác hoặc đã hoàn tất.',
+        );
+      if (reserved?.status === 'SALE_PENDING') return reserved;
+      if (!reserved && post.status !== 'ACTIVE')
+        throw new ConflictException(
+          'Chỉ tin đã duyệt và đang hiển thị mới được báo đã bán.',
+        );
+      const proposal =
+        reserved ??
+        (await db.transaction.findFirst({
+          where: { postId, buyerId: buyer.id, sellerId, status: 'VERIFYING' },
+        }));
+      const saleRequestedAt = new Date();
+      const transaction = proposal
+        ? await db.transaction.update({
+            where: { id: proposal.id },
+            data: {
+              status: 'SALE_PENDING',
+              sellerConfirmed: true,
+              buyerConfirmed: null,
+              saleRequestedAt,
+            },
+          })
+        : await db.transaction.create({
+            data: {
+              postId,
+              buyerId: buyer.id,
+              sellerId,
+              status: 'SALE_PENDING',
+              sellerConfirmed: true,
+              saleRequestedAt,
+            },
+          });
+      await db.posts.update({ where: { id: postId }, data: { status: 'HIDDEN' } });
+      await db.transaction.updateMany({
+        where: { postId, id: { not: transaction.id }, status: 'VERIFYING' },
+        data: { status: 'CANCELLED' },
+      });
+      await this.notify(
+        db,
+        [buyer.id],
+        `${transaction.id}:sale:${saleRequestedAt.getTime()}`,
+        'Người bán yêu cầu xác nhận đã bán',
+        `Người bán báo đã hoàn tất giao dịch “${post.title}” với bạn. Chỉ xác nhận nếu giao dịch thực sự đã hoàn tất.`,
+      );
+      return transaction;
     });
-    return transaction;
   }
 
-  // =================================================================
-  // 3. MA TRẬN ĐỒNG KIỂM & XỬ LÝ KẾT QUẢ (CÓ / KHÔNG)
-  // =================================================================
-  async verifyTransaction(transactionId: string, userId: string, isConfirmed: boolean) {
-    if (typeof isConfirmed !== 'boolean') {
-      throw new BadRequestException('isConfirmed phải có giá trị true hoặc false.');
-    }
-
-    return this.prisma.$transaction(async (tx) => {
-      const transaction = await tx.transaction.findUnique({
-        where: { id: transactionId },
+  async verifyTransaction(
+    id: string,
+    userId: string,
+    isConfirmed: boolean,
+    expectedStatus: string,
+  ) {
+    if (typeof isConfirmed !== 'boolean')
+      throw new BadRequestException('Phản hồi phải là true hoặc false.');
+    if (!['VERIFYING', 'SALE_PENDING'].includes(expectedStatus))
+      throw new BadRequestException('Cần xác định bước đang xác nhận.');
+    return this.mutate(id, async (db) => {
+      const transaction = await db.transaction.findUniqueOrThrow({
+        where: { id },
         include: { post: true },
       });
-
-      if (!transaction) throw new BadRequestException('Không tìm thấy giao dịch!');
-      if (transaction.status !== 'VERIFYING') {
-        throw new ConflictException('Giao dịch này đã được xử lý và không thể xác nhận lại.');
-      }
-
-      // Xác định ai đang bấm xác nhận
-      const updateData =
-        userId === transaction.buyerId
-          ? { buyerConfirmed: isConfirmed }
-          : userId === transaction.sellerId
-            ? { sellerConfirmed: isConfirmed }
-            : null;
-
-      if (!updateData) throw new ForbiddenException('Bạn không có quyền xác nhận giao dịch này.');
-
-      // Cập nhật câu trả lời của người dùng
-      const updatedTx = await tx.transaction.update({
-        where: { id: transactionId },
-        data: updateData,
-      });
-
-      let finalStatus = updatedTx.status;
-      let calculatedFee: number | undefined;
-
-      // KHI CẢ 2 ĐÃ CÓ CÂU TRẢ LỜI
-      if (updatedTx.buyerConfirmed !== null && updatedTx.sellerConfirmed !== null) {
-        const buyerYes = updatedTx.buyerConfirmed;
-        const sellerYes = updatedTx.sellerConfirmed;
-
-        if (buyerYes && sellerYes) {
-          // 🌟 Trường hợp 1: Cả 2 chọn CÓ (Giao dịch thành công)
-          calculatedFee = this.calculateAppFee(
-            transaction.post.posterType,
-            transaction.post.transactionType,
-            Number(transaction.post.price),
-            transaction.post.brokerCommission ?? 0,
-          );
-          finalStatus = 'SUCCESS';
-          await tx.posts.update({
-            where: { id: updatedTx.postId },
-            data: { status: 'SOLD' },
+      this.requireParticipant(transaction, userId);
+      if (transaction.status !== expectedStatus)
+        throw new ConflictException(
+          'Trạng thái đã thay đổi. Vui lòng tải lại trước khi xác nhận.',
+        );
+      const parties = [transaction.buyerId, transaction.sellerId];
+      if (transaction.status === 'SALE_PENDING') {
+        if (userId !== transaction.buyerId)
+          throw new ForbiddenException('Chỉ khách hàng được xác nhận đã bán.');
+        if (!transaction.saleRequestedAt || transaction.sellerConfirmed !== true)
+          throw new ConflictException('Người bán chưa gửi yêu cầu đã bán.');
+        if (!isConfirmed) {
+          const updated = await db.transaction.update({
+            where: { id },
+            data: {
+              status: transaction.negotiatedAt ? 'NEGOTIATING' : 'CANCELLED',
+              buyerConfirmed: !!transaction.negotiatedAt,
+              sellerConfirmed: true,
+              saleRequestedAt: null,
+            },
           });
-
-          await tx.invoice.upsert({
-            where: { transactionId },
-            create: { transactionId, userId: updatedTx.sellerId, amount: calculatedFee, status: 'DRAFT' },
-            update: { amount: calculatedFee },
-          });
-
-        } else if (!buyerYes && !sellerYes) {
-          // 🌟 Trường hợp 2: Cả 2 chọn KHÔNG (Hủy đồng kiểm, AI có thể hỏi lại sau)
-          finalStatus = 'CANCELLED';
-
-        } else {
-          // 🌟 Trường hợp 3: Lệch pha (1 CÓ, 1 KHÔNG) -> Chuyển thành Tranh chấp
-          // Tạm thời không auto-ban (FRAUD) ở đây để Admin vào kiểm tra và xử lý cảnh báo sau.
-          finalStatus = 'DISPUTE';
-          const admins = await tx.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } });
-          if (admins.length) {
-            await tx.notification.createMany({
-              data: admins.map((admin) => ({
-                userId: admin.id,
-                title: 'Cảnh báo giao dịch cần đối soát',
-                content: `Hai bên trả lời không khớp cho giao dịch #${transactionId.substring(0, 8)} (${transaction.post.title}).`,
-                type: 'SYSTEM' as const,
-              })),
+          if (!transaction.negotiatedAt)
+            await db.posts.update({
+              where: { id: transaction.postId },
+              data: { status: 'ACTIVE' },
             });
-          }
+          await this.notify(
+            db,
+            parties,
+            `${id}:sale-declined:${transaction.saleRequestedAt.getTime()}`,
+            'Khách hàng chưa xác nhận đã bán',
+            transaction.negotiatedAt
+              ? `“${transaction.post.title}” trở về đang thỏa thuận; chưa tạo hóa đơn. Bạn có thể hủy thỏa thuận để mở lại tin.`
+              : `Yêu cầu đã bán cho “${transaction.post.title}” bị từ chối. Tin đã hiển thị lại, không tạo hóa đơn.`,
+          );
+          return updated;
         }
+        const fee = this.calculateAppFee(
+          transaction.post.posterType,
+          transaction.post.transactionType,
+          Number(transaction.post.price),
+          transaction.post.brokerCommission ?? 0,
+        );
+        const updated = await db.transaction.update({
+          where: { id },
+          data: {
+            status: 'SUCCESS',
+            buyerConfirmed: true,
+            completedAt: new Date(),
+            calculatedFee: fee,
+          },
+        });
+        await db.posts.update({
+          where: { id: transaction.postId },
+          data: { status: 'SOLD' },
+        });
+        await db.invoice.upsert({
+          where: { transactionId: id },
+          update: {},
+          create: {
+            transactionId: id,
+            userId: transaction.sellerId,
+            amount: fee,
+            status: 'DRAFT',
+          },
+        });
+        await this.notify(
+          db,
+          parties,
+          `${id}:sold`,
+          'Giao dịch đã hoàn tất',
+          `Hai bên đã xác nhận đã bán “${transaction.post.title}”.`,
+        );
+        await this.notifyAdmins(
+          db,
+          `${id}:invoice`,
+          'Hóa đơn giao dịch chờ duyệt',
+          `Giao dịch “${transaction.post.title}” đã được khách hàng xác nhận. Hóa đơn nháp đang chờ xử lý.`,
+        );
+        return updated;
       }
-
-      // Cập nhật trạng thái cuối cùng
-      const finalTx = await tx.transaction.update({
-        where: { id: transactionId },
-        data: {
-          status: finalStatus,
-          ...(calculatedFee === undefined ? {} : { calculatedFee }),
-        },
-        include: { post: true },
+      if (transaction.status !== 'VERIFYING') {
+        if (['NEGOTIATING', 'SUCCESS', 'CANCELLED'].includes(transaction.status))
+          return transaction;
+        throw new ConflictException('Giao dịch không còn chờ xác nhận thỏa thuận.');
+      }
+      const field = userId === transaction.buyerId ? 'buyerConfirmed' : 'sellerConfirmed';
+      if (transaction[field] !== null) return transaction;
+      if (!isConfirmed) {
+        const declined = await db.transaction.update({
+          where: { id },
+          data: { [field]: false, status: 'CANCELLED' },
+        });
+        await this.notify(
+          db,
+          parties,
+          `${id}:declined`,
+          'Chưa thống nhất thỏa thuận',
+          'Một bên không xác nhận thỏa thuận. Tin vẫn hiển thị và không tạo hóa đơn.',
+        );
+        return declined;
+      }
+      const updated = await db.transaction.update({
+        where: { id },
+        data: { [field]: true },
       });
-
-      return finalTx;
+      if (!updated.buyerConfirmed || !updated.sellerConfirmed) return updated;
+      if (
+        transaction.post.status !== 'ACTIVE' ||
+        (await db.transaction.findFirst({
+          where: {
+            postId: transaction.postId,
+            id: { not: id },
+            status: { in: RESERVED },
+          },
+        }))
+      )
+        throw new ConflictException('Tin không còn sẵn sàng để thỏa thuận.');
+      await db.posts.update({
+        where: { id: transaction.postId },
+        data: { status: 'HIDDEN' },
+      });
+      await db.transaction.updateMany({
+        where: { postId: transaction.postId, id: { not: id }, status: 'VERIFYING' },
+        data: { status: 'CANCELLED' },
+      });
+      const negotiating = await db.transaction.update({
+        where: { id },
+        data: { status: 'NEGOTIATING', negotiatedAt: new Date() },
+      });
+      await this.notify(
+        db,
+        parties,
+        `${id}:negotiating`,
+        'Hai bên đang thỏa thuận',
+        `Tin “${transaction.post.title}” được tạm ẩn. Nếu thỏa thuận không tiếp tục, hãy hủy trong lịch sử giao dịch để mở lại tin.`,
+      );
+      return negotiating;
     });
   }
 
-  // =================================================================
-  // 4. CHECK TRẠNG THÁI HIỂN THỊ POPUP (Cho Frontend)
-  // =================================================================
-  async checkActiveTransaction(user1: string, user2: string, postId?: number) {
-    const transaction = await this.prisma.transaction.findFirst({
+  checkActiveTransaction(user1: string, user2: string, postId?: number) {
+    return this.prisma.transaction.findFirst({
       where: {
         ...(postId ? { postId } : {}),
-        status: { in: ['VERIFYING', 'DISPUTE'] },
+        status: { in: OPEN },
         OR: [
           { buyerId: user1, sellerId: user2 },
           { buyerId: user2, sellerId: user1 },
         ],
       },
       include: { post: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { updatedAt: 'desc' },
     });
-
-    return transaction; 
   }
 
-  // =================================================================
-  // 5. KIỂM TRA ĐÃ CHỐT THÀNH CÔNG CHƯA (Cho AI Chat Service)
-  // =================================================================
-  async hasCompletedTransaction(postId: number, user1: string, user2: string): Promise<boolean> {
-    const transaction = await this.prisma.transaction.findFirst({
-      where: {
-        postId,
-        status: 'SUCCESS', // Chỉ quan tâm nếu đã thành công
-        OR: [
-          { buyerId: user1, sellerId: user2 },
-          { buyerId: user2, sellerId: user1 },
-        ],
-      }
-    });
-
-    return !!transaction; // Trả về true nếu đã có giao dịch SUCCESS
-  }
-
-  async getUserTransactions(userId: string) {
+  getUserTransactions(userId: string) {
     return this.prisma.transaction.findMany({
       where: { OR: [{ buyerId: userId }, { sellerId: userId }] },
-      include: { post: { select: { id: true, title: true, thumbnail: true } }, invoice: true },
+      include: {
+        post: { select: { id: true, title: true, thumbnail: true } },
+        invoice: true,
+        buyer: { select: { id: true, fullName: true, phoneNumber: true } },
+        seller: { select: { id: true, fullName: true } },
+      },
       orderBy: { updatedAt: 'desc' },
     });
   }
 
-  async getPendingBuyerConfirmations(userId: string) {
+  getPendingBuyerConfirmations(userId: string) {
     return this.prisma.transaction.findMany({
       where: {
-        buyerId: userId,
-        status: 'VERIFYING',
-        sellerConfirmed: true,
-        buyerConfirmed: null,
+        OR: [
+          { status: 'VERIFYING', buyerId: userId, buyerConfirmed: null },
+          { status: 'VERIFYING', sellerId: userId, sellerConfirmed: null },
+          { status: 'SALE_PENDING', buyerId: userId, buyerConfirmed: null },
+        ],
       },
       include: {
-        post: { select: { id: true, title: true, thumbnail: true, price: true } },
-        seller: { select: { fullName: true, phoneNumber: true } },
+        post: { select: { id: true, title: true, thumbnail: true } },
+        seller: { select: { fullName: true } },
       },
       orderBy: { updatedAt: 'desc' },
     });
+  }
+
+  async requestCancelAfterSuccess(id: string, userId: string, reason: string) {
+    if (typeof reason !== 'string' || !reason.trim())
+      throw new BadRequestException('Vui lòng nhập lý do hủy.');
+    return this.mutate(id, async (db) => {
+      const transaction = await db.transaction.findUniqueOrThrow({
+        where: { id },
+        include: { invoice: true },
+      });
+      this.requireParticipant(transaction, userId);
+      if (['VERIFYING', 'NEGOTIATING', 'SALE_PENDING'].includes(transaction.status)) {
+        const updated = await db.transaction.update({
+          where: { id },
+          data: {
+            status: 'CANCELLED',
+            cancelInitiatorId: userId,
+            cancelReason: reason.trim(),
+          },
+        });
+        if (transaction.status !== 'VERIFYING')
+          await db.posts.update({
+            where: { id: transaction.postId },
+            data: { status: 'ACTIVE' },
+          });
+        await this.notify(
+          db,
+          [transaction.buyerId, transaction.sellerId],
+          `${id}:cancelled`,
+          'Thỏa thuận đã hủy',
+          'Thỏa thuận đã dừng. Tin đã được mở lại nếu trước đó đang được giữ cho thỏa thuận này.',
+        );
+        return updated;
+      }
+      if (
+        transaction.status === 'PENDING_CANCEL' &&
+        transaction.cancelInitiatorId === userId
+      )
+        return transaction;
+      if (transaction.status !== 'SUCCESS')
+        throw new ConflictException(
+          'Giao dịch không thể yêu cầu hủy ở trạng thái hiện tại.',
+        );
+      if (transaction.invoice?.status === 'PAID')
+        throw new ConflictException(
+          'Hóa đơn đã thanh toán. Vui lòng liên hệ admin để xử lý hoàn tiền.',
+        );
+      if (
+        !transaction.completedAt ||
+        Date.now() - transaction.completedAt.getTime() > 3 * 86_400_000
+      )
+        throw new ConflictException(
+          'Đã quá thời hạn 3 ngày hoặc giao dịch cũ cần admin hỗ trợ.',
+        );
+      const updated = await db.transaction.update({
+        where: { id },
+        data: {
+          status: 'PENDING_CANCEL',
+          cancelInitiatorId: userId,
+          cancelReason: reason.trim(),
+        },
+      });
+      await this.notify(
+        db,
+        [transaction.buyerId === userId ? transaction.sellerId : transaction.buyerId],
+        `${id}:cancel-request`,
+        'Yêu cầu hủy giao dịch đã bán',
+        reason.trim(),
+      );
+      return updated;
+    });
+  }
+
+  private async cancelCompleted(
+    db: Prisma.TransactionClient,
+    transaction: { id: string; postId: number },
+  ) {
+    if (
+      await db.invoice.findFirst({
+        where: { transactionId: transaction.id, status: 'PAID' },
+      })
+    )
+      throw new ConflictException('Cần xử lý hoàn tiền trước khi hủy.');
+    await db.invoice.updateMany({
+      where: { transactionId: transaction.id },
+      data: { status: 'CANCELLED' },
+    });
+    await db.posts.update({
+      where: { id: transaction.postId },
+      data: { status: 'ACTIVE' },
+    });
+    return db.transaction.update({
+      where: { id: transaction.id },
+      data: { status: 'CANCELLED_AFTER_SUCCESS' },
+    });
+  }
+
+  async respondToCancelRequest(id: string, userId: string, isAgreed: boolean) {
+    if (typeof isAgreed !== 'boolean')
+      throw new BadRequestException('Phản hồi không hợp lệ.');
+    return this.mutate(id, async (db) => {
+      const transaction = await db.transaction.findUniqueOrThrow({ where: { id } });
+      this.requireParticipant(transaction, userId);
+      if (transaction.status !== 'PENDING_CANCEL')
+        throw new ConflictException('Giao dịch không chờ hủy.');
+      if (transaction.cancelInitiatorId === userId)
+        throw new ForbiddenException('Bạn không thể tự duyệt yêu cầu hủy.');
+      const updated = isAgreed
+        ? await this.cancelCompleted(db, transaction)
+        : await db.transaction.update({ where: { id }, data: { status: 'DISPUTE' } });
+      await this.notify(
+        db,
+        [transaction.buyerId, transaction.sellerId],
+        `${id}:cancel-response`,
+        isAgreed ? 'Giao dịch đã hủy' : 'Yêu cầu hủy cần đối soát',
+        isAgreed
+          ? 'Tin đã hiển thị lại và hóa đơn chưa thanh toán đã hủy.'
+          : 'Admin sẽ xem xét yêu cầu hủy.',
+      );
+      if (!isAgreed)
+        await this.notifyAdmins(
+          db,
+          `${id}:dispute`,
+          'Tranh chấp hủy giao dịch',
+          `Giao dịch #${id} cần admin đối soát.`,
+        );
+      return updated;
+    });
+  }
+
+  async resolveDispute(id: string, resolution: 'SUCCESS' | 'CANCELLED') {
+    if (!['SUCCESS', 'CANCELLED'].includes(resolution))
+      throw new BadRequestException('Kết quả đối soát không hợp lệ.');
+    return this.mutate(id, async (db) => {
+      const transaction = await db.transaction.findUniqueOrThrow({ where: { id } });
+      if (transaction.status !== 'DISPUTE')
+        throw new ConflictException('Chỉ được đối soát giao dịch đang tranh chấp.');
+      if (resolution === 'SUCCESS') {
+        if (
+          !transaction.completedAt ||
+          !transaction.saleRequestedAt ||
+          !transaction.buyerConfirmed ||
+          !transaction.sellerConfirmed
+        )
+          throw new ConflictException('Admin không thể thay khách hàng xác nhận đã bán.');
+        return db.transaction.update({ where: { id }, data: { status: 'SUCCESS' } });
+      }
+      const updated = transaction.completedAt
+        ? await this.cancelCompleted(db, transaction)
+        : await db.transaction.update({ where: { id }, data: { status: 'CANCELLED' } });
+      if (!transaction.completedAt) {
+        const anotherReservation = await db.transaction.findFirst({
+          where: {
+            postId: transaction.postId,
+            id: { not: id },
+            status: { in: RESERVED },
+          },
+        });
+        if (!anotherReservation)
+          await db.posts.update({
+            where: { id: transaction.postId },
+            data: { status: 'ACTIVE' },
+          });
+      }
+      await this.notify(
+        db,
+        [transaction.buyerId, transaction.sellerId],
+        `${id}:resolved-cancel`,
+        'Admin đã xử lý hủy giao dịch',
+        'Yêu cầu hủy đã được xử lý. Xem lịch sử giao dịch để biết kết quả.',
+      );
+      return updated;
+    });
+  }
+
+  private withLateFee<
+    T extends { amount: Prisma.Decimal; dueDate: Date | null; status: string },
+  >(invoice: T) {
+    const overdueMonths =
+      invoice.dueDate && ['PENDING_PAYMENT', 'OVERDUE'].includes(invoice.status)
+        ? Math.max(
+            0,
+            Math.ceil((Date.now() - invoice.dueDate.getTime()) / (30 * 86_400_000)),
+          )
+        : 0;
+    const lateFee = Math.round(Number(invoice.amount) * 0.005 * overdueMonths);
+    return {
+      ...invoice,
+      status: overdueMonths ? 'OVERDUE' : invoice.status,
+      overdueMonths,
+      lateFee,
+      totalPayable: Number(invoice.amount) + lateFee,
+    };
   }
 
   async getUserInvoices(userId: string) {
     const invoices = await this.prisma.invoice.findMany({
       where: { userId },
-      include: { transaction: { include: { post: { select: { id: true, title: true, thumbnail: true } } } } },
+      include: { transaction: { include: { post: true } } },
       orderBy: { createdAt: 'desc' },
     });
     return invoices.map((invoice) => this.withLateFee(invoice));
   }
-  // =================================================================
-  // 6. YÊU CẦU HỦY KÈO (Có check Quota 3 lần/tháng)
-  // =================================================================
-  async requestCancelAfterSuccess(transactionId: string, userId: string, reason: string) {
-    return this.prisma.$transaction(async (tx) => {
-      const transaction = await tx.transaction.findUnique({
-        where: { id: transactionId }
-      });
 
-      if (!transaction) throw new BadRequestException('Không tìm thấy giao dịch!');
-      if (transaction.status !== 'SUCCESS') {
-        throw new BadRequestException('Chỉ có thể yêu cầu hủy các giao dịch đã chốt.');
-      }
-
-      // 1. Kiểm tra Grace Period (3 ngày)
-      const now = new Date();
-      const updatedAt = new Date(transaction.updatedAt);
-      const diffDays = Math.ceil(Math.abs(now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60 * 24)); 
-      if (diffDays > 3) {
-        throw new ConflictException('Đã quá thời hạn 3 ngày để yêu cầu hủy.');
-      }
-
-      // 2. 🌟 KIỂM TRA QUOTA (Tối đa 3 lần/tháng)
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const cancelCount = await tx.transaction.count({
-        where: {
-          cancelInitiatorId: userId,
-          createdAt: { gte: startOfMonth }
-        }
-      });
-
-      if (cancelCount >= 3) {
-        // Tự động khóa tài khoản nếu lạm dụng
-        await tx.user.update({
-          where: { id: userId },
-          data: { isLocked: true, lockReason: 'Hệ thống tự động khóa: Lạm dụng tính năng hủy kèo quá 3 lần/tháng.' }
-        });
-        throw new ForbiddenException('Tài khoản của bạn đã bị khóa do vi phạm lạm dụng hủy giao dịch.');
-      }
-
-      // 3. Đổi trạng thái sang Chờ Xác Nhận
-      const updatedTx = await tx.transaction.update({
-        where: { id: transactionId },
-        data: { 
-          status: 'PENDING_CANCEL',
-          cancelInitiatorId: userId,
-          cancelReason: reason
-        }
-      });
-
-      // 4. Gửi thông báo cho đối tác
-      const partnerId = transaction.buyerId === userId ? transaction.sellerId : transaction.buyerId;
-      await tx.notification.create({
-        data: {
-          userId: partnerId,
-          title: 'Yêu cầu hủy giao dịch',
-          content: `Đối tác muốn hủy giao dịch #${transactionId.substring(0,6)} với lý do: "${reason}". Vui lòng xác nhận hoặc phản đối.`,
-          type: 'SYSTEM'
-        }
-      });
-
-      return updatedTx;
-    });
-  }
-
-  // =================================================================
-  // 7. PHẢN HỒI YÊU CẦU HỦY KÈO (QUYỀN KHÁNG CÁO)
-  // =================================================================
-  async respondToCancelRequest(transactionId: string, userId: string, isAgreed: boolean) {
-    return this.prisma.$transaction(async (tx) => {
-      const transaction = await tx.transaction.findUnique({
-        where: { id: transactionId }
-      });
-
-      if (!transaction || transaction.status !== 'PENDING_CANCEL') {
-        throw new BadRequestException('Giao dịch không ở trạng thái chờ hủy.');
-      }
-
-      // Chỉ người bị yêu cầu (không phải người khơi mào) mới được quyền trả lời
-      if (transaction.cancelInitiatorId === userId) {
-        throw new ForbiddenException('Bạn không thể tự duyệt yêu cầu của chính mình.');
-      }
-
-      if (isAgreed) {
-        // 🌟 Nếu Đồng ý -> Hủy chính thức, bài đăng ACTIVE trở lại
-        await tx.posts.update({
-          where: { id: transaction.postId },
-          data: { status: 'ACTIVE' }
-        });
-        await tx.invoice.updateMany({
-          where: { transactionId },
-          data: { status: 'CANCELLED' },
-        });
-        return tx.transaction.update({
-          where: { id: transactionId },
-          data: { status: 'CANCELLED_AFTER_SUCCESS' }
-        });
-      } else {
-        // 🌟 Nếu Phản đối -> Đưa vào TRANH CHẤP để Admin xử lý
-        const disputed = await tx.transaction.update({
-          where: { id: transactionId },
-          data: { status: 'DISPUTE' }
-        });
-        const admins = await tx.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } });
-        if (admins.length) {
-          await tx.notification.createMany({
-            data: admins.map((admin) => ({
-              userId: admin.id,
-              title: 'Tranh chấp hủy giao dịch',
-              content: `Một bên phản đối yêu cầu hủy giao dịch #${transactionId.substring(0, 8)}. Vui lòng kiểm tra và phản hồi.`,
-              type: 'SYSTEM' as const,
-            })),
-          });
-        }
-        return disputed;
-      }
-    });
-  }
-  // =================================================================
-  // 8. QUẢN LÝ HÓA ĐƠN GIAO DỊCH (DÀNH CHO ADMIN)
-  // =================================================================
-  
   async getAllInvoices() {
     const invoices = await this.prisma.invoice.findMany({
       include: {
         user: { select: { fullName: true, email: true, phoneNumber: true } },
-        transaction: { include: { post: { select: { id: true, title: true, thumbnail: true } } } }
+        transaction: { include: { post: true } },
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
     return invoices.map((invoice) => this.withLateFee(invoice));
   }
 
-  async deleteProcessedTransaction(transactionId: string) {
-    const transaction = await this.prisma.transaction.findUnique({ where: { id: transactionId }, include: { invoice: true } });
-    if (!transaction) throw new BadRequestException('Không tìm thấy giao dịch.');
-    if (['VERIFYING', 'DISPUTE', 'PENDING_CANCEL'].includes(transaction.status)) {
-      throw new ConflictException('Giao dịch chưa xử lý xong nên chưa thể xóa.');
-    }
-    if (transaction.invoice && !['PAID', 'CANCELLED'].includes(transaction.invoice.status)) {
-      throw new ConflictException('Hóa đơn chưa hoàn tất nên chưa thể xóa giao dịch.');
-    }
-    return this.prisma.transaction.delete({ where: { id: transactionId } });
+  async issueInvoice(id: string) {
+    const invoice = await this.prisma.invoice.findUnique({ where: { id } });
+    if (!invoice) throw new NotFoundException('Không tìm thấy hóa đơn.');
+    return this.mutate(invoice.transactionId, async (db) => {
+      const current = await db.invoice.findUniqueOrThrow({
+        where: { id },
+        include: { transaction: true },
+      });
+      if (current.transaction.status !== 'SUCCESS')
+        throw new ConflictException(
+          'Chỉ phát hành hóa đơn cho giao dịch đã bán, không đang chờ hủy hoặc tranh chấp.',
+        );
+      if (current.status === 'PENDING_PAYMENT') return current;
+      if (current.status !== 'DRAFT')
+        throw new ConflictException('Chỉ hóa đơn nháp mới được phát hành.');
+      const dueDate = new Date(Date.now() + 30 * 86_400_000);
+      const updated = await db.invoice.update({
+        where: { id },
+        data: { status: 'PENDING_PAYMENT', dueDate },
+      });
+      await this.notify(
+        db,
+        [invoice.userId],
+        `${id}:issued`,
+        'Hóa đơn phí dịch vụ mới',
+        `Hóa đơn #${id.slice(0, 8)} cần thanh toán trước ${dueDate.toLocaleDateString('vi-VN')}.`,
+      );
+      return updated;
+    });
   }
 
-  async issueInvoice(invoiceId: string) {
-    const current = await this.prisma.invoice.findUnique({ where: { id: invoiceId } });
-    if (!current) throw new BadRequestException('Không tìm thấy hóa đơn.');
-    if (current.status !== 'DRAFT') {
-      throw new ConflictException('Chỉ hóa đơn nháp mới có thể được phát hành.');
-    }
-    // Cộng thêm 30 ngày làm hạn chót
-    const dueDate = new Date();
-    dueDate.setDate(dueDate.getDate() + 30);
-
-    const invoice = await this.prisma.invoice.update({
-      where: { id: invoiceId },
-      data: {
-        status: 'PENDING_PAYMENT',
-        dueDate: dueDate
-      }
+  async deleteProcessedTransaction(id: string) {
+    return this.mutate(id, async (db) => {
+      const transaction = await db.transaction.findUniqueOrThrow({
+        where: { id },
+        include: { invoice: true },
+      });
+      if (
+        transaction.invoice ||
+        !['CANCELLED', 'CANCELLED_AFTER_SUCCESS'].includes(transaction.status)
+      )
+        throw new ConflictException(
+          'Chỉ xóa thỏa thuận đã hủy và không có hóa đơn để giữ lịch sử đối soát.',
+        );
+      return db.transaction.delete({ where: { id } });
     });
-
-    // Bắn thông báo yêu cầu User đóng tiền
-    await this.prisma.notification.create({
-      data: {
-        userId: invoice.userId,
-        title: 'Báo cáo: Hóa đơn phí dịch vụ mới',
-        content: `Bạn có một hóa đơn phí giao dịch (Mã: #${invoice.id.substring(0,8)}) cần thanh toán trước ngày ${dueDate.toLocaleDateString('vi-VN')}. Vui lòng kiểm tra và thanh toán.`,
-        type: 'SYSTEM'
-      }
-    });
-
-    return invoice;
   }
 }

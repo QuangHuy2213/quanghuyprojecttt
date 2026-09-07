@@ -1,3 +1,4 @@
+import { getJwtSecret } from '../../config/security';
 import { Module } from '@nestjs/common';
 import { NotificationService } from './notification.service';
 import { NotificationController } from './notification.controller';
@@ -8,7 +9,7 @@ import { JwtModule } from '@nestjs/jwt';
   imports: [
     // Import JwtModule với cùng Secret Key để giải mã Token
     JwtModule.register({
-      secret: 'QUANG_HUY_SECRET_KEY_2026', 
+      secret: getJwtSecret(),
     }),
   ],
   controllers: [NotificationController],

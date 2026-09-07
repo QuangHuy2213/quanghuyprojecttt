@@ -1,17 +1,21 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { TransactionService } from '../transaction/transaction.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import * as bcrypt from 'bcrypt'; 
+import * as bcrypt from 'bcrypt';
 import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class AdminService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private transactions: TransactionService,
+  ) {}
 
   private transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-      user: 'quanghuy22130504@gmail.com', 
-      pass: 'mqlbonvnmwhmgdab', 
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASSWORD,
     },
   });
 
@@ -20,7 +24,7 @@ export class AdminService {
     const totalUsers = await this.prisma.user.count();
     const pendingPosts = await this.prisma.posts.count({ where: { status: 'PENDING' } });
     const activePosts = await this.prisma.posts.count({ where: { status: 'ACTIVE' } });
-    
+
     // Tính tổng doanh thu từ các giao dịch THÀNH CÔNG
     const successfulTransactions = await this.prisma.transaction.aggregate({
       where: { status: 'SUCCESS' },
@@ -34,28 +38,53 @@ export class AdminService {
     const chartStart = new Date(monthStart);
     chartStart.setMonth(chartStart.getMonth() - 5);
 
-    const [successCount, paidRevenue, outstandingRevenue, paidInvoices,
-      pendingInvoices, paidThisMonth, recentPaidInvoices] = await Promise.all([
+    const [
+      successCount,
+      paidRevenue,
+      outstandingRevenue,
+      paidInvoices,
+      pendingInvoices,
+      paidThisMonth,
+      recentPaidInvoices,
+    ] = await Promise.all([
       this.prisma.transaction.count({ where: { status: 'SUCCESS' } }),
-      this.prisma.invoice.aggregate({ where: { status: 'PAID' }, _sum: { amount: true } }),
-      this.prisma.invoice.aggregate({ where: { status: { in: ['DRAFT', 'PENDING_PAYMENT', 'OVERDUE'] } }, _sum: { amount: true } }),
+      this.prisma.invoice.aggregate({
+        where: { status: 'PAID' },
+        _sum: { amount: true },
+      }),
+      this.prisma.invoice.aggregate({
+        where: { status: { in: ['DRAFT', 'PENDING_PAYMENT', 'OVERDUE'] } },
+        _sum: { amount: true },
+      }),
       this.prisma.invoice.count({ where: { status: 'PAID' } }),
-      this.prisma.invoice.count({ where: { status: { in: ['DRAFT', 'PENDING_PAYMENT', 'OVERDUE'] } } }),
-      this.prisma.invoice.aggregate({ where: { status: 'PAID', paidAt: { gte: monthStart } }, _sum: { amount: true } }),
-      this.prisma.invoice.findMany({ where: { status: 'PAID', paidAt: { gte: chartStart } }, select: { amount: true, paidAt: true } }),
+      this.prisma.invoice.count({
+        where: { status: { in: ['DRAFT', 'PENDING_PAYMENT', 'OVERDUE'] } },
+      }),
+      this.prisma.invoice.aggregate({
+        where: { status: 'PAID', paidAt: { gte: monthStart } },
+        _sum: { amount: true },
+      }),
+      this.prisma.invoice.findMany({
+        where: { status: 'PAID', paidAt: { gte: chartStart } },
+        select: { amount: true, paidAt: true },
+      }),
     ]);
 
     const monthlyRevenue = Array.from({ length: 6 }, (_, index) => {
       const date = new Date(chartStart.getFullYear(), chartStart.getMonth() + index, 1);
-      return { key: `${date.getFullYear()}-${date.getMonth()}`, label: `T${date.getMonth() + 1}`, amount: 0 };
+      return {
+        key: `${date.getFullYear()}-${date.getMonth()}`,
+        label: `T${date.getMonth() + 1}`,
+        amount: 0,
+      };
     });
     for (const invoice of recentPaidInvoices) {
       if (!invoice.paidAt) continue;
       const key = `${invoice.paidAt.getFullYear()}-${invoice.paidAt.getMonth()}`;
-      const bucket = monthlyRevenue.find(item => item.key === key);
+      const bucket = monthlyRevenue.find((item) => item.key === key);
       if (bucket) bucket.amount += Number(invoice.amount);
     }
-    
+
     return {
       totalUsers,
       pendingPosts,
@@ -83,10 +112,10 @@ export class AdminService {
         avatarUrl: true,
         role: true,
         createdAt: true,
-        isLocked: true, 
-        lockReason: true, 
-        agentExpiresAt: true, 
-      }
+        isLocked: true,
+        lockReason: true,
+        agentExpiresAt: true,
+      },
     });
   }
 
@@ -113,7 +142,7 @@ export class AdminService {
         phoneNumber: data.phoneNumber,
         role: data.role || 'USER',
         isLocked: false,
-      }
+      },
     });
   }
 
@@ -126,19 +155,19 @@ export class AdminService {
         role: data.role,
         isLocked: data.isLocked,
         lockReason: data.lockReason,
-      }
+      },
     });
 
     if (data.isLocked !== undefined) {
       if (data.isLocked === true) {
         await this.prisma.posts.updateMany({
           where: { userId: id },
-          data: { status: 'HIDDEN' }
+          data: { status: 'HIDDEN' },
         });
       } else {
         await this.prisma.posts.updateMany({
           where: { userId: id },
-          data: { status: 'ACTIVE' }
+          data: { status: 'ACTIVE' },
         });
       }
     }
@@ -155,123 +184,119 @@ export class AdminService {
     return this.prisma.posts.findMany({
       where: { status: 'PENDING' },
       include: { user: true },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
   }
 
   // Duyệt hoặc Từ chối bài đăng
   async reviewPost(postId: number, status: 'ACTIVE' | 'HIDDEN', reason?: string) {
-    const updatedPost = await this.prisma.posts.update({
-      where: { id: postId },
-      data: { status },
-    });
-
-    const title = status === 'ACTIVE' ? 'Bài đăng đã được duyệt' : 'Bài đăng bị từ chối';
-    const content = status === 'ACTIVE' 
-      ? `Chúc mừng! Bài đăng "${updatedPost.title}" của bạn đã được duyệt và hiển thị.`
-      : `Rất tiếc, bài đăng "${updatedPost.title}" của bạn bị từ chối. Lý do: ${reason}`;
-
-    await this.prisma.notification.create({
-      data: {
-        userId: updatedPost.userId || '',
-        title,
-        content,
-        type: 'POST_UPDATE'
+    if (!['ACTIVE', 'HIDDEN'].includes(status))
+      throw new BadRequestException('Trạng thái duyệt không hợp lệ.');
+    return this.prisma.$transaction(async (db) => {
+      await db.$queryRaw`SELECT id FROM posts WHERE id = ${postId} FOR UPDATE`;
+      const post = await db.posts.findUnique({ where: { id: postId } });
+      if (!post) throw new NotFoundException('Không tìm thấy bài đăng.');
+      if (post.status === status) return post;
+      if (post.status !== 'PENDING')
+        throw new BadRequestException('Chỉ xử lý tin đang chờ duyệt.');
+      if (status === 'HIDDEN' && !reason?.trim())
+        throw new BadRequestException('Vui lòng nhập lý do từ chối.');
+      const updated = await db.posts.update({
+        where: { id: postId },
+        data: { status, approvedAt: status === 'ACTIVE' ? new Date() : null },
+      });
+      if (post.userId) {
+        const event = `post:${postId}:review:${post.updatedAt.getTime()}`;
+        await db.notification.upsert({
+          where: { eventKey: `${event}:${post.userId}` },
+          update: {},
+          create: {
+            userId: post.userId,
+            eventKey: `${event}:${post.userId}`,
+            type: 'POST_UPDATE',
+            link: '/dashboard',
+            title: status === 'ACTIVE' ? 'Bài đăng đã được duyệt' : 'Bài đăng bị từ chối',
+            content:
+              status === 'ACTIVE'
+                ? `Bài “${post.title}” đã được duyệt và hiển thị.`
+                : `Bài “${post.title}” bị từ chối: ${reason?.trim()}`,
+          },
+        });
+        if (status === 'ACTIVE') {
+          const followers = await db.follow.findMany({
+            where: { followingId: post.userId, followerId: { not: post.userId } },
+          });
+          await db.notification.createMany({
+            data: followers.map((item) => ({
+              userId: item.followerId,
+              eventKey: `${event}:follower:${item.followerId}`,
+              type: 'POST_UPDATE' as const,
+              title: 'Người bạn theo dõi vừa đăng tin mới',
+              content: `Bài “${post.title}” vừa được duyệt.`,
+              link: `/posts/${postId}`,
+            })),
+            skipDuplicates: true,
+          });
+        }
       }
+      return updated;
     });
-
-    if (status === 'ACTIVE' && updatedPost.userId) {
-      const followers = await this.prisma.follow.findMany({ where: { followingId: updatedPost.userId }, select: { followerId: true } });
-      if (followers.length) {
-        await this.prisma.notification.createMany({ data: followers.map(item => ({ userId: item.followerId, title: 'Người bạn theo dõi vừa đăng tin mới', content: `Bài “${updatedPost.title}” vừa được đăng. Hãy xem ngay!`, type: 'POST_UPDATE' as const })) });
-      }
-    }
-    return updatedPost;
   }
 
   // --- QUẢN LÝ GIAO DỊCH (ĐỐI SOÁT CHÉO) ---
   async getAllTransactions() {
     return this.prisma.transaction.findMany({
       include: {
+        invoice: true,
         buyer: { select: { fullName: true, email: true, phoneNumber: true } },
         seller: { select: { fullName: true, email: true, phoneNumber: true } },
-        post: { select: { title: true, price: true, transactionType: true, posterType: true, brokerCommission: true } }
+        post: {
+          select: {
+            title: true,
+            price: true,
+            transactionType: true,
+            posterType: true,
+            brokerCommission: true,
+          },
+        },
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
   }
 
   // 🌟 HÀM XỬ LÝ TRANH CHẤP / ĐỐI SOÁT GIAO DỊCH CHO ADMIN (CHUẨN XÁC)
-  async resolveTransactionDispute(id: string, resolutionStatus: 'SUCCESS' | 'CANCELLED', finalFee?: number) {
-    const transaction = await this.prisma.transaction.findUnique({
-      where: { id },
-      include: { post: true }
-    });
-
-    if (!transaction) {
-      throw new NotFoundException('Không tìm thấy giao dịch!');
-    }
-
-    let feeToUpdate = finalFee;
-
-    // Nếu duyệt thành công mà chưa truyền finalFee thủ công, hệ thống tự động tính theo công thức chuẩn
-    if (resolutionStatus === 'SUCCESS' && !feeToUpdate) {
-      const posterType = transaction.post?.posterType as 'OWNER' | 'BROKER';
-      const transactionType = transaction.post?.transactionType as 'SALE' | 'RENT';
-      const price = Number(transaction.post?.price || 0);
-      const brokerCommission = transaction.post?.brokerCommission || 0;
-
-      if (posterType === 'OWNER') {
-        feeToUpdate = transactionType === 'SALE' ? price * 0.015 : price * 0.10;
-      } else {
-        const brokerMoney = transactionType === 'SALE' ? price * (brokerCommission / 100) : price;
-        feeToUpdate = brokerMoney * 0.20;
-      }
-    }
-
-    // Cập nhật trạng thái giao dịch
-    const updated = await this.prisma.transaction.update({
-      where: { id },
-      data: {
-        status: resolutionStatus,
-        calculatedFee: resolutionStatus === 'SUCCESS' ? (feeToUpdate || 0) : 0
-      }
-    });
-
-    // Nếu thành công thì đồng thời đổi trạng thái bài đăng thành SOLD
-    if (resolutionStatus === 'SUCCESS') {
-      await this.prisma.posts.update({
-        where: { id: transaction.postId },
-        data: { status: 'SOLD' }
-      });
-      await this.prisma.invoice.upsert({
-        where: { transactionId: id },
-        create: { transactionId: id, userId: transaction.sellerId, amount: feeToUpdate || 0, status: 'DRAFT' },
-        update: { amount: feeToUpdate || 0 },
-      });
-    } else {
-      await this.prisma.posts.update({ where: { id: transaction.postId }, data: { status: 'ACTIVE' } });
-      await this.prisma.invoice.updateMany({ where: { transactionId: id }, data: { status: 'CANCELLED' } });
-    }
-
-    return { success: true, data: updated };
+  async resolveTransactionDispute(
+    id: string,
+    resolutionStatus: 'SUCCESS' | 'CANCELLED',
+    finalFee?: number,
+  ) {
+    if (finalFee !== undefined)
+      throw new BadRequestException(
+        'Phí đã được chốt khi khách hàng xác nhận, không sửa qua API đối soát.',
+      );
+    return this.transactions.resolveDispute(id, resolutionStatus);
   }
 
   // --- QUẢN LÝ LIÊN HỆ & TRỢ GIÚP ---
   async getAllContacts() {
     return this.prisma.contact.findMany({
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
   }
 
   async updateContactStatus(id: number, status: string) {
     return this.prisma.contact.update({
       where: { id },
-      data: { status }
+      data: { status },
     });
   }
 
-  async replyContactEmail(contactId: number, emailTo: string, subject: string, message: string) {
+  async replyContactEmail(
+    contactId: number,
+    emailTo: string,
+    subject: string,
+    message: string,
+  ) {
     await this.transporter.sendMail({
       from: '"Nhà Tốt Support" <quanghuy22130504@gmail.com>',
       to: emailTo,
@@ -292,13 +317,13 @@ export class AdminService {
 
     return this.prisma.contact.update({
       where: { id: contactId },
-      data: { status: 'REPLIED' }
+      data: { status: 'REPLIED' },
     });
   }
 
   async deleteContact(id: number) {
     return this.prisma.contact.delete({
-      where: { id }
+      where: { id },
     });
   }
 
@@ -306,34 +331,36 @@ export class AdminService {
   async getAllReports() {
     return this.prisma.report.findMany({
       include: {
-        user: { select: { fullName: true, email: true } }, 
-        post: { select: { title: true, id: true } }        
+        user: { select: { fullName: true, email: true } },
+        post: { select: { title: true, id: true } },
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
   }
 
   async updateReportStatus(id: number, status: string) {
     return this.prisma.report.update({
       where: { id },
-      data: { status }
+      data: { status },
     });
   }
 
   async deletePostByAdmin(postId: number, reportId: number) {
-    await this.prisma.posts.delete({
-      where: { id: postId }
-    }).catch(() => {});
+    await this.prisma.posts
+      .delete({
+        where: { id: postId },
+      })
+      .catch(() => {});
 
     return this.prisma.report.update({
       where: { id: reportId },
-      data: { status: 'RESOLVED' }
+      data: { status: 'RESOLVED' },
     });
   }
 
   async deleteReport(id: number) {
     return this.prisma.report.delete({
-      where: { id }
+      where: { id },
     });
   }
 }

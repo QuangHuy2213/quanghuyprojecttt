@@ -1,6 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsArray, IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsArray,
+  IsEnum,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 
 // Khai báo các enum tương ứng với Prisma Schema
 enum TransactionType {
@@ -44,12 +52,18 @@ export class PostsQueryDto {
   @IsString()
   keyword?: string;
 
-  @ApiPropertyOptional({ example: '1b-3b', enum: ['under-1b', '1b-3b', '3b-5b', 'over-5b'] })
+  @ApiPropertyOptional({
+    example: '1b-3b',
+    enum: ['under-1b', '1b-3b', '3b-5b', 'over-5b'],
+  })
   @IsOptional()
   @IsString()
   price?: string;
 
-  @ApiPropertyOptional({ example: '50-80', enum: ['under-30', '30-50', '50-80', 'over-80'] })
+  @ApiPropertyOptional({
+    example: '50-80',
+    enum: ['under-30', '30-50', '50-80', 'over-80'],
+  })
   @IsOptional()
   @IsString()
   area?: string;
@@ -80,7 +94,9 @@ export class CreatePostDto {
   @IsString()
   city!: string;
 
-  @ApiProperty({ description: 'Mã quận/huyện thuộc city, lấy từ GET /districts/{cityCode}' })
+  @ApiProperty({
+    description: 'Mã quận/huyện thuộc city, lấy từ GET /districts/{cityCode}',
+  })
   @IsString()
   district!: string;
 
@@ -89,13 +105,19 @@ export class CreatePostDto {
   @IsString()
   content?: string;
 
-  @ApiProperty({ example: 'https://example.com/images/post-thumbnail.jpg', required: false })
+  @ApiProperty({
+    example: 'https://example.com/images/post-thumbnail.jpg',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   thumbnail?: string;
 
   // 🌟 BỔ SUNG: Mảng nhiều ảnh tải lên hoặc dán link
-  @ApiProperty({ example: ['https://example.com/img1.jpg', 'https://example.com/img2.jpg'], required: false })
+  @ApiProperty({
+    example: ['https://example.com/img1.jpg', 'https://example.com/img2.jpg'],
+    required: false,
+  })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
@@ -159,6 +181,7 @@ export class ToggleFavoriteDto {
 
 export class UpdatePostDto {
   @ApiProperty({ description: 'ID người dùng lấy từ phiên đăng nhập' })
+  @IsOptional()
   @IsString()
   userId!: string;
 
@@ -186,7 +209,9 @@ export class UpdatePostDto {
   @IsString()
   city?: string;
 
-  @ApiPropertyOptional({ description: 'Mã quận/huyện thuộc city, lấy từ GET /districts/{cityCode}' })
+  @ApiPropertyOptional({
+    description: 'Mã quận/huyện thuộc city, lấy từ GET /districts/{cityCode}',
+  })
   @IsOptional()
   @IsString()
   district?: string;
@@ -224,7 +249,12 @@ export class UpdatePostDto {
   @Min(0)
   brokerCommission?: number;
 
-  @ApiPropertyOptional({ example: 'PENDING', enum: ['PENDING', 'ACTIVE', 'SOLD', 'HIDDEN'] })
+  @ApiPropertyOptional({
+    example: 'PENDING',
+    enum: ['PENDING', 'ACTIVE', 'SOLD', 'HIDDEN'],
+  })
+  @IsOptional()
+  @IsEnum({ ACTIVE: 'ACTIVE', HIDDEN: 'HIDDEN', PENDING: 'PENDING' })
   status?: 'PENDING' | 'ACTIVE' | 'SOLD' | 'HIDDEN';
 
   @ApiPropertyOptional({ example: 'Le Van C' })

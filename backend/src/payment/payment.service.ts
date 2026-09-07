@@ -9,10 +9,10 @@ export class PaymentService {
   constructor(private prisma: PrismaService) {
     // KHỞI TẠO VNPAY
     this.vnpay = new VNPay({
-      tmnCode: 'YLWVOYZZ', 
-      secureSecret: 'HRPRKZJXDIPAIGIZUJFCMWJPJRPYSVYQ', 
-      vnpayHost: 'https://sandbox.vnpayment.vn', 
-      testMode: true, 
+      tmnCode: 'YLWVOYZZ',
+      secureSecret: 'HRPRKZJXDIPAIGIZUJFCMWJPJRPYSVYQ',
+      vnpayHost: 'https://sandbox.vnpayment.vn',
+      testMode: true,
     });
   }
 
@@ -35,28 +35,50 @@ export class PaymentService {
   // =======================================================
   // 2. 🌟 MỚI: TẠO URL THANH TOÁN: HÓA ĐƠN GIAO DỊCH (INVOICE)
   // =======================================================
-  async createInvoicePaymentUrl(invoiceId: string, userId: string, ipAddr: string, returnUrl: string) {
+  async createInvoicePaymentUrl(
+    invoiceId: string,
+    userId: string,
+    ipAddr: string,
+    returnUrl: string,
+  ) {
     // 1. Kiểm tra hóa đơn
     const invoice = await this.prisma.invoice.findUnique({
-      where: { id: invoiceId }
+      where: { id: invoiceId },
+      include: { transaction: true },
     });
 
     if (!invoice) throw new BadRequestException('Hóa đơn không tồn tại.');
-    if (invoice.userId !== userId) throw new BadRequestException('Bạn không có quyền thanh toán hóa đơn này.');
-    if (invoice.status === 'PAID') throw new BadRequestException('Hóa đơn này đã được thanh toán rồi.');
-    if (invoice.status === 'CANCELLED') throw new BadRequestException('Hóa đơn này đã bị hủy.');
+    if (invoice.userId !== userId)
+      throw new BadRequestException('Bạn không có quyền thanh toán hóa đơn này.');
+    if (invoice.status === 'PAID')
+      throw new BadRequestException('Hóa đơn này đã được thanh toán rồi.');
+    if (invoice.status === 'CANCELLED')
+      throw new BadRequestException('Hóa đơn này đã bị hủy.');
+    if (
+      !['PENDING_PAYMENT', 'OVERDUE'].includes(invoice.status) ||
+      invoice.transaction.status !== 'SUCCESS'
+    )
+      throw new BadRequestException(
+        'Hóa đơn chưa được phát hành hoặc giao dịch đang hủy/đối soát.',
+      );
 
     // 2. Tạo URL thanh toán
     const baseAmount = Number(invoice.amount);
-    const overdueMonths = invoice.dueDate && new Date() > invoice.dueDate
-      ? Math.max(1, Math.ceil((Date.now() - invoice.dueDate.getTime()) / (30 * 24 * 60 * 60 * 1000)))
-      : 0;
+    const overdueMonths =
+      invoice.dueDate && new Date() > invoice.dueDate
+        ? Math.max(
+            1,
+            Math.ceil(
+              (Date.now() - invoice.dueDate.getTime()) / (30 * 24 * 60 * 60 * 1000),
+            ),
+          )
+        : 0;
     const amountToPay = Math.round(baseAmount * (1 + overdueMonths * 0.005));
     const urlString = this.vnpay.buildPaymentUrl({
-      vnp_Amount: amountToPay, 
+      vnp_Amount: amountToPay,
       vnp_IpAddr: ipAddr,
       vnp_TxnRef: `INVOICE_${invoice.id}_${Date.now()}`, // Tiền tố INVOICE
-      vnp_OrderInfo: `Thanh toan phi giao dich ${invoice.id.substring(0,8)}`,
+      vnp_OrderInfo: `Thanh toan phi giao dich ${invoice.id.substring(0, 8)}`,
       vnp_OrderType: ProductCode.Other,
       vnp_ReturnUrl: returnUrl,
       vnp_Locale: VnpLocale.VN,
@@ -71,12 +93,12 @@ export class PaymentService {
   async processReturn(query: any) {
     try {
       const verify = this.vnpay.verifyReturnUrl(query);
-      
+
       if (verify.isSuccess && verify.vnp_ResponseCode === '00') {
         const txnRef = query.vnp_TxnRef as string;
         const parts = txnRef.split('_');
         const paymentType = parts[0]; // UPGRADE hoặc INVOICE
-        const targetId = parts[1];    // userId hoặc invoiceId
+        const targetId = parts[1]; // userId hoặc invoiceId
 
         // ===================================
         // NẾU LÀ GIAO DỊCH NÂNG CẤP TÀI KHOẢN
@@ -97,26 +119,49 @@ export class PaymentService {
         // NẾU LÀ GIAO DỊCH TRẢ HÓA ĐƠN GIAO DỊCH
         // ===================================
         else if (paymentType === 'INVOICE') {
-          // 1. Cập nhật hóa đơn thành Đã Thanh Toán (PAID)
-          const updatedInvoice = await this.prisma.invoice.update({
+          const current = await this.prisma.invoice.findUnique({
             where: { id: targetId },
-            data: { status: 'PAID', paidAt: new Date() },
+            include: { transaction: true },
           });
-
-          // 2. Gửi thông báo cảm ơn cho User
-          await this.prisma.notification.create({
-            data: {
-              userId: updatedInvoice.userId,
-              title: '✅ Thanh toán thành công',
-              content: `Cảm ơn bạn đã thanh toán phí giao dịch cho hóa đơn #${targetId.substring(0,8)}. Chúc bạn chốt được nhiều giao dịch hơn cùng Nhà Tốt!`,
-              type: 'SYSTEM'
-            }
+          if (!current) throw new BadRequestException('Không tìm thấy hóa đơn.');
+          await this.prisma.$transaction(async (db) => {
+            await db.$queryRaw`SELECT id FROM posts WHERE id = ${current.transaction.postId} FOR UPDATE`;
+            const invoice = await db.invoice.findUniqueOrThrow({
+              where: { id: targetId },
+              include: { transaction: true },
+            });
+            if (invoice.status === 'PAID') return;
+            if (
+              !['PENDING_PAYMENT', 'OVERDUE'].includes(invoice.status) ||
+              invoice.transaction.status !== 'SUCCESS'
+            )
+              throw new BadRequestException(
+                'Hóa đơn không còn được phép thanh toán; cần đối soát khoản tiền.',
+              );
+            if (Number(query.vnp_Amount) / 100 < Number(invoice.amount))
+              throw new BadRequestException('Số tiền thanh toán không hợp lệ.');
+            await db.invoice.update({
+              where: { id: targetId },
+              data: { status: 'PAID', paidAt: new Date() },
+            });
+            await db.notification.upsert({
+              where: { eventKey: `invoice:${targetId}:paid` },
+              update: {},
+              create: {
+                userId: invoice.userId,
+                eventKey: `invoice:${targetId}:paid`,
+                title: 'Thanh toán thành công',
+                content: `Đã ghi nhận thanh toán hóa đơn #${targetId.slice(0, 8)}.`,
+                type: 'SYSTEM',
+                link: '/my-transactions',
+              },
+            });
           });
 
           return { success: true, type: 'INVOICE' };
         }
       }
-      
+
       return { success: false };
     } catch (error) {
       console.error('Lỗi xác thực VNPAY:', error);

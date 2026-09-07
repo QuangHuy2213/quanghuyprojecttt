@@ -1,27 +1,57 @@
-import { Controller, Post, Body, UseGuards, Req } from '@nestjs/common';
-import { ChatService } from './chat.service'; 
+import {
+  Body,
+  Controller,
+  Get,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+  BadRequestException,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import type { Request } from 'express';
+import { ChatService } from './chat.service';
+import {
+  ConversationDto,
+  MessageQueryDto,
+  ReadMessagesDto,
+  SendMessageDto,
+} from './dto/chat.dto';
 
-type AuthenticatedRequest = Request & {
-  user: { userId: string };
-};
+type AuthRequest = { user: { userId: string } };
 
 @Controller('chat')
+@UseGuards(AuthGuard('jwt'))
 export class ChatController {
-  constructor(private readonly chatService: ChatService) {}
+  constructor(private readonly chat: ChatService) {}
 
-  @UseGuards(AuthGuard('jwt'))
   @Post('send')
-  async sendMessage(@Req() req: AuthenticatedRequest, @Body() body: any) {
-    const senderId = req.user.userId;
-    const { postId, receiverId, content } = body;
+  send(@Req() req: AuthRequest, @Body() body: SendMessageDto) {
+    return this.chat.send(req.user.userId, body);
+  }
 
-    if (!senderId || !receiverId || !content?.trim()) {
-      return { success: false, message: 'Thiếu thông tin tin nhắn.' };
-    }
+  @Get('threads')
+  threads(@Req() req: AuthRequest) {
+    return this.chat.threads(req.user.userId);
+  }
 
-  // Gọi service đã được nâng cấp
-    return this.chatService.handleMessageWithAI(senderId, receiverId, postId, content);
-}
+  @Get('conversation')
+  details(@Req() req: AuthRequest, @Query() query: ConversationDto) {
+    return this.chat.details(req.user.userId, query);
+  }
+
+  @Get('messages')
+  messages(@Req() req: AuthRequest, @Query() query: MessageQueryDto) {
+    return this.chat.messages(req.user.userId, query, query.before);
+  }
+
+  @Get('unread-count')
+  async unread(@Req() req: AuthRequest) {
+    return { count: await this.chat.unreadCount(req.user.userId) };
+  }
+
+  @Patch('read')
+  read(@Req() req: AuthRequest, @Body() body: ReadMessagesDto) {
+    return this.chat.markRead(req.user.userId, body, body.throughId);
+  }
 }

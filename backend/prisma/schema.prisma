@@ -36,6 +36,8 @@ enum NotificationType {
 
 // Enums cho Bảng Giao Dịch (Transaction/Escrow)
 enum EscrowStatus {
+  NEGOTIATING             // Hai bên đồng ý thỏa thuận, tin tạm ẩn
+  SALE_PENDING            // Người bán báo đã bán, chờ khách xác nhận
   VERIFYING               // Chờ 2 bên xác nhận
   SUCCESS                 // Đã xác nhận thành công
   FRAUD                   // Gian lận, trốn phí
@@ -198,11 +200,18 @@ model Message {
   senderId   String   @map("sender_id")
   receiverId String   @map("receiver_id")
   text       String
+  postId     Int?     @map("post_id")
+  readAt     DateTime? @map("read_at")
+  clientMessageId String? @map("client_message_id")
   createdAt  DateTime @default(now()) @map("created_at")
 
   sender   User @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
   receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  post posts? @relation(fields: [postId], references: [id], onDelete: SetNull)
 
+  @@unique([senderId, clientMessageId])
+  @@index([receiverId, readAt])
+  @@index([senderId, receiverId, postId, createdAt])
   @@map("messages")
 }
 
@@ -212,6 +221,8 @@ model Notification {
   userId    String           @map("user_id")
   title     String
   content   String
+  eventKey  String? @unique
+  link      String?
   type      NotificationType @default(SYSTEM)
   isRead    Boolean          @default(false) @map("is_read")
 
@@ -257,6 +268,9 @@ model Transaction {
 
   buyerConfirmed  Boolean? // Khách xác nhận (true/false/null)
   sellerConfirmed Boolean? // Người bán xác nhận (true/false/null)
+  saleRequestedAt DateTime?
+  negotiatedAt DateTime?
+  completedAt DateTime?
 
   calculatedFee Decimal?     @db.Decimal // Tiền phí App dự tính thu
   status        EscrowStatus @default(VERIFYING)
@@ -347,6 +361,7 @@ model posts {
 
   transactionType TransactionType @default(SALE)
   status          ListingStatus   @default(PENDING)
+  approvedAt      DateTime?
 
   userId     String?
   categoryId Int?
@@ -362,6 +377,7 @@ model posts {
   transactions Transaction[]
   comments     Comment[]
   reviews      PostReview[]
+  messages     Message[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt

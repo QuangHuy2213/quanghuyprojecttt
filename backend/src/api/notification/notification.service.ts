@@ -17,9 +17,9 @@ export class NotificationService {
   // 2. Đánh dấu 1 thông báo là "Đã đọc"
   async markAsRead(id: number, userId: string) {
     return this.prisma.notification.updateMany({
-      where: { 
+      where: {
         id: id,
-        userId: userId // Ép buộc phải đúng chủ tài khoản mới được đánh dấu
+        userId: userId, // Ép buộc phải đúng chủ tài khoản mới được đánh dấu
       },
       data: { isRead: true },
     });
@@ -28,16 +28,22 @@ export class NotificationService {
   // 3. Đánh dấu TẤT CẢ thông báo là "Đã đọc"
   async markAllAsRead(userId: string) {
     return this.prisma.notification.updateMany({
-      where: { 
+      where: {
         userId: userId,
-        isRead: false 
+        isRead: false,
+        type: { not: 'WARNING_POPUP' },
       },
       data: { isRead: true },
     });
   }
 
   // 4. Hàm nội bộ: Dùng để các tính năng khác (như Chat) gọi vào để tạo thông báo
-  async createNotification(data: { userId: string, title: string, content: string, type: any }) {
+  async createNotification(data: {
+    userId: string;
+    title: string;
+    content: string;
+    type: any;
+  }) {
     return this.prisma.notification.create({
       data: {
         userId: data.userId,

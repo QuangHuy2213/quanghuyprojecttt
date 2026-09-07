@@ -1,10 +1,30 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { AdminGuard } from '../auth/admin.guard';
 import { ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
-import { CreateUserDto, ReplyContactEmailDto, ReviewPostDto, UpdateContactStatusDto, UpdateReportStatusDto, UpdateUserDetailsDto, UpdateUserRoleDto } from './dto/admin.dto';
+import {
+  CreateUserDto,
+  ReplyContactEmailDto,
+  ReviewPostDto,
+  UpdateContactStatusDto,
+  UpdateReportStatusDto,
+  UpdateUserDetailsDto,
+  UpdateUserRoleDto,
+} from './dto/admin.dto';
 
 @ApiTags('Admin')
 @Controller('admin')
+@UseGuards(AuthGuard('jwt'), AdminGuard)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
@@ -27,8 +47,8 @@ export class AdminController {
   @ApiParam({ name: 'id', example: '8b4d5f7c-1234-4567-8901-abcdef123456' })
   @ApiBody({ type: UpdateUserRoleDto })
   async updateUserRole(
-    @Param('id') id: string, 
-    @Body('role') role: 'USER' | 'AGENT' | 'ADMIN'
+    @Param('id') id: string,
+    @Body('role') role: 'USER' | 'AGENT' | 'ADMIN',
   ) {
     await this.adminService.updateUserRole(id, role);
     return { message: 'Cập nhật phân quyền thành công!' };
@@ -68,10 +88,7 @@ export class AdminController {
   @ApiOperation({ summary: 'Duyệt hoặc ẩn bài đăng' })
   @ApiParam({ name: 'id', example: 123 })
   @ApiBody({ type: ReviewPostDto })
-  async reviewPost(
-    @Param('id') id: string, 
-    @Body() body: ReviewPostDto
-  ) {
+  async reviewPost(@Param('id') id: string, @Body() body: ReviewPostDto) {
     return this.adminService.reviewPost(Number(id), body.status, body.reason);
   }
 
@@ -88,7 +105,7 @@ export class AdminController {
   async resolveTransactionDispute(
     @Param('id') id: string,
     @Body('resolutionStatus') resolutionStatus: 'SUCCESS' | 'CANCELLED',
-    @Body('finalFee') finalFee?: number
+    @Body('finalFee') finalFee?: number,
   ) {
     await this.adminService.resolveTransactionDispute(id, resolutionStatus, finalFee);
     return { message: 'Đã xử lý tranh chấp giao dịch thành công!' };
@@ -105,10 +122,7 @@ export class AdminController {
   @ApiOperation({ summary: 'Cập nhật trạng thái liên hệ' })
   @ApiParam({ name: 'id', example: 12 })
   @ApiBody({ type: UpdateContactStatusDto })
-  async updateContactStatus(
-    @Param('id') id: string,
-    @Body('status') status: string
-  ) {
+  async updateContactStatus(@Param('id') id: string, @Body('status') status: string) {
     await this.adminService.updateContactStatus(Number(id), status);
     return { message: 'Cập nhật trạng thái liên hệ thành công!' };
   }
@@ -117,7 +131,12 @@ export class AdminController {
   @ApiOperation({ summary: 'Gửi email phản hồi liên hệ' })
   @ApiBody({ type: ReplyContactEmailDto })
   async replyContactEmail(@Body() body: ReplyContactEmailDto) {
-    await this.adminService.replyContactEmail(body.contactId, body.email, body.subject, body.message);
+    await this.adminService.replyContactEmail(
+      body.contactId,
+      body.email,
+      body.subject,
+      body.message,
+    );
     return { message: 'Đã gửi email phản hồi thành công!' };
   }
 
@@ -142,7 +161,7 @@ export class AdminController {
   @ApiBody({ type: UpdateReportStatusDto })
   async updateReportStatus(
     @Param('id') id: string,
-    @Body('status') status: 'RESOLVED' | 'IGNORED'
+    @Body('status') status: 'RESOLVED' | 'IGNORED',
   ) {
     await this.adminService.updateReportStatus(Number(id), status);
     return { message: 'Cập nhật trạng thái báo cáo thành công!' };
@@ -154,7 +173,7 @@ export class AdminController {
   @ApiParam({ name: 'postId', example: 123 })
   async deleteReportedPost(
     @Param('reportId') reportId: string,
-    @Param('postId') postId: string
+    @Param('postId') postId: string,
   ) {
     return this.adminService.deletePostByAdmin(Number(postId), Number(reportId));
   }

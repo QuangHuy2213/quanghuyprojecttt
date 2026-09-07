@@ -1,8 +1,24 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { OptionalJwtGuard } from '../auth/optional-jwt.guard';
 import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { PostsService } from './posts.service';
-import { CreatePostDto, PostsQueryDto, ToggleFavoriteDto, UpdatePostDto } from './dto/posts.dto';
+import {
+  CreatePostDto,
+  PostsQueryDto,
+  ToggleFavoriteDto,
+  UpdatePostDto,
+} from './dto/posts.dto';
 
 @ApiTags('Posts')
 @Controller('posts')
@@ -32,10 +48,11 @@ export class PostsController {
   }
 
   @Get(':id')
+  @UseGuards(OptionalJwtGuard)
   @ApiOperation({ summary: 'Lấy chi tiết bài đăng' })
   @ApiParam({ name: 'id', example: 123 })
-  async getPostById(@Param('id') id: string) {
-    return this.postsService.findOnePost(Number(id));
+  async getPostById(@Param('id') id: string, @Req() req: any) {
+    return this.postsService.findOnePost(Number(id), req.user?.userId, req.user?.role);
   }
 
   @Get(':id/comments')
@@ -45,13 +62,24 @@ export class PostsController {
 
   @Post(':id/comments')
   @UseGuards(AuthGuard('jwt'))
-  async createComment(@Param('id') id: string, @Body() body: { content: string; parentId?: number }, @Req() req: any) {
-    return this.postsService.createComment(Number(id), req.user.userId, body.content, body.parentId);
+  async createComment(
+    @Param('id') id: string,
+    @Body() body: { content: string; parentId?: number },
+    @Req() req: any,
+  ) {
+    return this.postsService.createComment(
+      Number(id),
+      req.user.userId,
+      body.content,
+      body.parentId,
+    );
   }
 
   @Post('comments/:id/like')
   @UseGuards(AuthGuard('jwt'))
-  async likeComment(@Param('id') id: string, @Req() req: any) { return this.postsService.toggleCommentLike(Number(id), req.user.userId); }
+  async likeComment(@Param('id') id: string, @Req() req: any) {
+    return this.postsService.toggleCommentLike(Number(id), req.user.userId);
+  }
 
   @Post()
   @UseGuards(AuthGuard('jwt'))
@@ -65,10 +93,7 @@ export class PostsController {
   @ApiOperation({ summary: 'Lưu hoặc bỏ lưu bài đăng' })
   @ApiParam({ name: 'id', example: 123 })
   @ApiBody({ type: ToggleFavoriteDto })
-  async toggleFavorite(
-    @Param('id') postId: string,
-    @Body('userId') userId: string,
-  ) {
+  async toggleFavorite(@Param('id') postId: string, @Body('userId') userId: string) {
     return this.postsService.toggleFavorite(userId, Number(postId));
   }
 
@@ -80,31 +105,32 @@ export class PostsController {
   }
 
   @Get('user/:userId')
+  @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Lấy các bài đăng của người dùng' })
   @ApiParam({ name: 'userId', example: '8b4d5f7c-1234-4567-8901-abcdef123456' })
-  async getPostsByUser(@Param('userId') userId: string) {
-    return this.postsService.findPostsByUser(userId);
+  async getPostsByUser(@Param('userId') userId: string, @Req() req: any) {
+    return this.postsService.findPostsByUser(userId, req.user.userId);
   }
 
   @Post(':id/delete')
+  @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Xóa bài đăng của người dùng' })
   @ApiParam({ name: 'id', example: 123 })
   @ApiBody({ type: ToggleFavoriteDto })
-  async deletePost(
-    @Param('id') postId: string,
-    @Body('userId') userId: string,
-  ) {
-    return this.postsService.deletePost(Number(postId), userId);
+  async deletePost(@Param('id') postId: string, @Req() req: any) {
+    return this.postsService.deletePost(Number(postId), req.user.userId);
   }
 
   @Patch(':id')
+  @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Cập nhật bài đăng' })
   @ApiParam({ name: 'id', example: 123 })
   @ApiBody({ type: UpdatePostDto })
   async updatePost(
     @Param('id') id: string,
     @Body() data: UpdatePostDto,
+    @Req() req: any,
   ) {
-    return this.postsService.updatePost(Number(id), data.userId, data);
+    return this.postsService.updatePost(Number(id), req.user.userId, data);
   }
 }

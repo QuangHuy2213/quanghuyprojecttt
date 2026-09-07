@@ -1,3 +1,4 @@
+import { getJwtSecret } from '../../config/security';
 import { Module } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
@@ -9,7 +10,7 @@ import { JwtStrategy } from './jwt.strategy';
 @Module({
   imports: [
     JwtModule.register({
-      secret: 'QUANG_HUY_SECRET_KEY_2026',
+      secret: getJwtSecret(),
       signOptions: { expiresIn: '1d' },
     }),
   ],
