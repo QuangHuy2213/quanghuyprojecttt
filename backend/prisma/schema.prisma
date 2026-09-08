@@ -293,6 +293,7 @@ model Transaction {
 // --- BẢNG HÓA ĐƠN THU PHÍ GIAO DỊCH ---
 model Invoice {
   id            String        @id @default(uuid())
+  invoiceCode   String        @unique @default(dbgenerated("public.generate_invoice_code()"))
   transactionId String        @unique // 1 Giao dịch thành công chỉ có 1 Hóa đơn
   userId        String        // Mã người phải trả tiền (Seller/Broker)
   

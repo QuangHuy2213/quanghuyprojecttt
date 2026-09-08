@@ -12,6 +12,7 @@ export const transactionDto = (row: Transaction) => ({
   createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),
 });
 export const invoiceDto = (row: Invoice) => ({
+  invoiceCode: row.invoiceCode,
   id: row.id, transactionId: row.transactionId, userId: row.userId, status: row.status,
   amount: row.amount.toString(), dueDate: row.dueDate?.toISOString() ?? null,
   paidAt: row.paidAt?.toISOString() ?? null, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(),

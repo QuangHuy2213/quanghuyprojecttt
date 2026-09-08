@@ -150,3 +150,21 @@ describe('Negotiation and sale workflow', () => {
     expect(fixture.data.invoice).toHaveLength(0);
   });
 });
+
+// HTTP ownership is independent of the ADMIN role and frontend view scope.
+describe('Personal transaction and invoice ownership', () => {
+  it('returns only participant transactions and owned invoices, even for an admin ID', async () => {
+    const fixture = workflowFixture(), service = new TransactionService(fixture.db);
+    fixture.data.transaction.push({ id: 'a', buyerId: 'buyer', sellerId: 'seller', postId: 1 }, { id: 'b', buyerId: 'admin', sellerId: 'other', postId: 1 });
+    fixture.data.invoice.push({ id: 'ia', transactionId: 'a', userId: 'seller', amount: 10, status: 'DRAFT', invoiceCode: 'HD-20260908-000001' },
+      { id: 'ib', transactionId: 'b', userId: 'admin', amount: 10, status: 'DRAFT', invoiceCode: 'HD-20260908-000002' });
+    expect((await service.getUserTransactions('admin')).map(row => row.id)).toEqual(['b']);
+    expect((await service.getUserTransactions('buyer')).map(row => row.id)).toEqual(['a']);
+    const first = await service.getUserInvoices('admin');
+    expect(first.map(row => row.id)).toEqual(['ib']);
+    expect((await service.getUserInvoices('buyer'))).toEqual([]);
+    expect((await service.getUserInvoices('admin'))[0].invoiceCode).toBe(first[0].invoiceCode);
+    const all = await service.getAllInvoices(); expect(all).toHaveLength(2);
+    expect(new Set(all.map(row => row.invoiceCode)).size).toBe(2);
+  });
+});

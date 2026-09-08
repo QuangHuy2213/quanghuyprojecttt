@@ -682,7 +682,7 @@ export class TransactionService {
         [invoice.userId],
         `${id}:issued`,
         'Hóa đơn phí dịch vụ mới',
-        `Hóa đơn #${id.slice(0, 8)} cần thanh toán trước ${dueDate.toLocaleDateString('vi-VN')}.`,
+        `Hóa đơn ${invoice.invoiceCode} cần thanh toán trước ${dueDate.toLocaleDateString('vi-VN')}.`,
       );
       return updated;
     });
