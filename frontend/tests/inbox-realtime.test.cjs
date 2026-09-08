@@ -65,11 +65,50 @@ function harness(load, configured = true) {
   };
 }
 const row = (id, extra = {}) => ({ id, user_id: 'b', title: 'New message', content: 'hello',
-  type: 'MESSAGE', eventKey: `message:${id}`, is_read: false, created_at: '2026-09-08T00:00:00Z', ...extra });
+  type: 'SYSTEM', eventKey: `message:${id}`, is_read: false, created_at: '2026-09-08T00:00:00Z', ...extra });
 const apiRow = (id, extra = {}) => ({ id, userId: 'b', title: 'New message', content: 'hello',
-  type: 'MESSAGE', eventKey: `message:${id}`, isRead: false, createdAt: '2026-09-08T00:00:00Z', ...extra });
+  type: 'SYSTEM', eventKey: `message:${id}`, isRead: false, createdAt: '2026-09-08T00:00:00Z', ...extra });
 const deliver = (h, table, event, value, channel = h.channels.at(-1)) =>
   channel.handlers.find(item => item.filter.table === table && item.filter.event === event).cb({ new: value });
+
+test('global messages INSERT drives five chat badges/toasts, replay deduplicates and UPDATE never toasts', async () => {
+  const h = harness(); const messages = [];
+  const inbox = h.start({ onMessageToast: item => messages.push(item) });
+  h.channels[0].status('SUBSCRIBED'); await h.flush();
+  for (let id = 1; id <= 5; id++) {
+    const message = { id, sender_id: 'a', receiver_id: 'b', post_id: 7, read_at: null };
+    deliver(h, 'messages', 'INSERT', message);
+    deliver(h, 'messages', 'INSERT', message);
+  }
+  assert.equal(messages.length, 5); assert.equal(h.counts.at(-1), 5);
+  deliver(h, 'messages', 'UPDATE', { id: 1, sender_id: 'a', receiver_id: 'b', post_id: 7, read_at: '2026-09-08T00:00:00Z' });
+  assert.equal(messages.length, 5); assert.equal(h.counts.at(-1), 4);
+  deliver(h, 'messages', 'INSERT', { id: 6, sender_id: 'b', receiver_id: 'b', post_id: null, read_at: null });
+  deliver(h, 'messages', 'INSERT', { id: 7, sender_id: 'b', receiver_id: 'a', post_id: null, read_at: null });
+  assert.equal(messages.length, 5); assert.equal(h.counts.at(-1), 4);
+  assert.equal(h.batches.at(-1).length, 0); assert.equal(h.toasts.length, 0);
+  await h.tick(300_000); assert.equal(h.calls.length, 1); inbox.stop();
+});
+
+test('legacy MESSAGE rows in snapshot and realtime never enter bell or notification toast', async () => {
+  const h = harness(async () => ({ notifications: [apiRow(1, { type: 'MESSAGE' }), apiRow(2)], unreadIds: [3] }));
+  const inbox = h.start(); h.channels[0].status('SUBSCRIBED'); await h.flush();
+  deliver(h, 'notifications', 'INSERT', row(4, { type: 'MESSAGE' }));
+  assert.equal(h.batches.at(-1).length, 1); assert.equal(h.batches.at(-1)[0].id, 2);
+  assert.equal(h.toasts.length, 0); assert.equal(h.counts.at(-1), 1); inbox.stop();
+});
+
+test('global provider receives chat toast on other pages/hidden tab without fetching history', async () => {
+  const layout = fs.readFileSync(require.resolve('../src/app/layout.tsx'), 'utf8');
+  assert.match(layout, /<InboxProvider>\{children\}<\/InboxProvider>/);
+  const h = harness(); const messages = [];
+  const inbox = h.start({ onMessageToast: item => messages.push(item) });
+  h.channels[0].status('SUBSCRIBED'); await h.flush();
+  h.document.visibilityState = 'hidden'; h.document.dispatchEvent(new Event('visibilitychange'));
+  deliver(h, 'messages', 'INSERT', { id: 1, sender_id: 'a', receiver_id: 'b', post_id: null, read_at: null });
+  assert.equal(messages.length, 1); assert.equal(h.counts.at(-1), 1);
+  assert.equal(h.calls.length, 1); inbox.stop();
+});
 
 test('A/B: five INSERTs update bell/list/toast once each, no GET per event or polling for five minutes', async () => {
   const h = harness(); const inbox = h.start(); h.channels[0].status('SUBSCRIBED'); await h.flush();
@@ -217,5 +256,5 @@ test('F/security: no browser notification writes, per-event refetch, or warning 
   assert.doesNotMatch(inbox, /subscribeApiPolling|messageSync\.refresh|notificationSync\.refresh/);
   assert.doesNotMatch(header, /notifications\/unread-warnings/);
   assert.doesNotMatch(inbox + transport, /\.insert\s*\(|SERVICE_ROLE_KEY/);
-  assert.doesNotMatch(header, /item\.type !== 'MESSAGE'/);
+  assert.match(header, /item\.type !== 'MESSAGE'/);
 });

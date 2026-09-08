@@ -57,7 +57,7 @@ export default function Header() {
     unreadMessages,
   } = useInbox();
   const notifications = allNotifications.filter(
-    (item) => item.type !== 'WARNING_POPUP',
+    (item) => item.type !== 'WARNING_POPUP' && item.type !== 'MESSAGE',
   );
   const unreadCount = notifications.filter(
     (item) => !item.isRead && !item.is_read,

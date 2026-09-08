@@ -111,11 +111,19 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
       onToast: (item) => {
         setPopups((current) => [...current, {
           id: `notification:${item.id}`,
-          title: item.type === 'MESSAGE' ? item.title : 'Bạn có 1 thông báo mới',
-          content: item.type === 'MESSAGE' ? item.content : item.title,
+          title: 'Bạn có 1 thông báo mới',
+          content: item.title,
           link: item.link || '/my-transactions',
         }].slice(-3));
-        if (item.type !== 'MESSAGE') window.dispatchEvent(new Event('transactions-updated'));
+        window.dispatchEvent(new Event('transactions-updated'));
+      },
+      onMessageToast: (message) => {
+        setPopups(current => [...current, {
+          id: `message:${message.id}`,
+          title: 'B\u1ea1n c\u00f3 1 tin nh\u1eafn m\u1edbi',
+          content: '',
+          link: `/chat?receiverId=${encodeURIComponent(message.senderId)}${message.postId ? `&postId=${message.postId}` : ''}`,
+        }].slice(-3));
       },
       onMessage: () => window.dispatchEvent(new Event('messages-updated')),
       onError: (error) => console.warn('Inbox sync interrupted:', error),

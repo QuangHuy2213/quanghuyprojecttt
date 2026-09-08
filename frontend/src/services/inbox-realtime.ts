@@ -24,6 +24,7 @@ export function watchInbox(options: {
   onNotifications: (items: InboxNotification[]) => void;
   onUnreadMessages: (count: number) => void;
   onToast: (item: InboxNotification) => void;
+  onMessageToast?: (message: { id: number; senderId: string; postId: number | null }) => void;
   onMessage?: () => void;
   onError?: (error: unknown) => void;
   load?: (token: string, signal: AbortSignal) => Promise<Snapshot>;
@@ -31,6 +32,7 @@ export function watchInbox(options: {
   let rows: InboxNotification[] = [];
   let unread = new Set<number>();
   const seen = new Set<number>();
+  const toastedMessages = new Set<number>();
   const readMessages = new Set<number>();
   const notificationChanges = new Map<number, InboxNotification>();
   const messageChanges = new Map<number, boolean>();
@@ -67,7 +69,7 @@ export function watchInbox(options: {
     try {
       const snapshot = await (options.load ?? loadInbox)(options.token, controller.signal);
       if (stopped) return;
-      const owned = snapshot.notifications.filter(item => (item.userId ?? item.user_id) === options.userId);
+      const owned = snapshot.notifications.filter(item => item.type !== 'MESSAGE' && (item.userId ?? item.user_id) === options.userId);
       // INSERT/UPDATE and local read acknowledgements arriving during GET win over its snapshot.
       const acknowledged = new Set(rows.filter(item => item.isRead || item.is_read).map(item => item.id));
       rows = mergeNotifications([...notificationChanges.values(), ...owned, ...rows])
@@ -91,7 +93,7 @@ export function watchInbox(options: {
   const notification = (event: 'INSERT' | 'UPDATE', payload: Change) => {
     if (stopped) return;
     const item = notificationFromRow(payload.new, options.userId);
-    if (!item) return;
+    if (!item || item.type === 'MESSAGE') return;
     // Read flags are monotonic; a replayed INSERT must not undo an acknowledgement.
     const previous = rows.find(row => row.id === item.id);
     if (previous?.isRead || previous?.is_read) item.isRead = true;
@@ -100,10 +102,10 @@ export function watchInbox(options: {
     announce(item, event === 'INSERT');
     options.onNotifications(rows);
   };
-  const message = (payload: Change) => {
+  const message = (event: 'INSERT' | 'UPDATE', payload: Change) => {
     if (stopped) return;
     const row = payload.new;
-    if (row.receiver_id !== options.userId || !Number.isInteger(row.id) ||
+    if (row.receiver_id !== options.userId || row.sender_id === options.userId || !Number.isInteger(row.id) ||
         !(row.read_at === null || typeof row.read_at === 'string')) return;
     const id = row.id as number;
     if (row.read_at !== null) readMessages.add(id);
@@ -111,6 +113,11 @@ export function watchInbox(options: {
     if (running) messageChanges.set(id, isUnread);
     if (isUnread) unread.add(id); else unread.delete(id);
     options.onUnreadMessages(unread.size);
+    if (event === 'INSERT' && !toastedMessages.has(id) && typeof row.sender_id === 'string' &&
+        (row.post_id === null || Number.isInteger(row.post_id))) {
+      toastedMessages.add(id);
+      options.onMessageToast?.({ id, senderId: row.sender_id, postId: row.post_id as number | null });
+    }
     options.onMessage?.();
   };
   const connect = () => {
@@ -124,7 +131,7 @@ export function watchInbox(options: {
       }, payload => { if (generation === ownGeneration) notification(event, payload); });
       channel.on('postgres_changes', {
         event, schema: 'public', table: 'messages', filter: `receiver_id=eq.${options.userId}`,
-      }, payload => { if (generation === ownGeneration) message(payload); });
+      }, payload => { if (generation === ownGeneration) message(event, payload); });
     }
     channel.subscribe(status => {
       if (stopped || generation !== ownGeneration) return;
