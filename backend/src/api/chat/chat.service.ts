@@ -82,24 +82,39 @@ export class ChatService {
         throw new BadRequestException('Mã gửi tin đã được dùng cho nội dung khác.');
       return { message: existing };
     }
-    const message = await this.prisma.message.upsert({
-      where: unique,
-      update: {},
-      create: {
-        senderId: userId,
-        receiverId: input.receiverId,
-        postId: input.postId,
-        text: content,
-        clientMessageId: input.clientMessageId,
-      },
+    const message = await this.prisma.$transaction(async (db) => {
+      const saved = await db.message.upsert({
+        where: unique,
+        update: {},
+        create: {
+          senderId: userId,
+          receiverId: input.receiverId,
+          postId: input.postId ?? null,
+          text: content,
+          clientMessageId: input.clientMessageId,
+        },
+      });
+      if (
+        saved.receiverId !== input.receiverId ||
+        saved.postId !== (input.postId ?? null) ||
+        saved.text !== content
+      ) {
+        throw new BadRequestException('Mã gửi tin đã được dùng cho nội dung khác.');
+      }
+      await db.notification.createMany({
+        data: [{
+          userId: saved.receiverId,
+          type: 'MESSAGE',
+          title: 'Bạn có tin nhắn mới',
+          content: saved.text,
+          eventKey: `message:${saved.id}`,
+          link: `/chat?receiverId=${encodeURIComponent(userId)}${saved.postId ? `&postId=${saved.postId}` : ''}`,
+          isRead: false,
+        }],
+        skipDuplicates: true,
+      });
+      return saved;
     });
-    if (
-      message.receiverId !== input.receiverId ||
-      message.postId !== (input.postId ?? null) ||
-      message.text !== content
-    ) {
-      throw new BadRequestException('Mã gửi tin đã được dùng cho nội dung khác.');
-    }
     if (post?.status === 'ACTIVE') {
       const buyerId = userId === post.userId ? input.receiverId : userId;
       const analysisKey = `${post.id}:${buyerId}`;
@@ -210,6 +225,13 @@ export class ChatService {
 
   unreadCount(userId: string) {
     return this.prisma.message.count({ where: { receiverId: userId, readAt: null } });
+  }
+
+  unreadMessageIds(userId: string) {
+    return this.prisma.message.findMany({
+      where: { receiverId: userId, readAt: null },
+      select: { id: true },
+    });
   }
 
   latestReceived(userId: string) {

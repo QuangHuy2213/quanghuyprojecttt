@@ -7,11 +7,18 @@ export class NotificationService {
 
   // 1. Lấy danh sách thông báo của 1 user (Mới nhất xếp trên cùng)
   async getUserNotifications(userId: string) {
-    return this.prisma.notification.findMany({
+    const recent = await this.prisma.notification.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 50, // Chỉ lấy 50 thông báo gần nhất để tránh nặng máy
     });
+    // Include every unread row so reload does not cap the bell badge at 50.
+    const unread = await this.prisma.notification.findMany({
+      where: { userId, isRead: false },
+      orderBy: { createdAt: 'desc' },
+    });
+    return [...new Map([...recent, ...unread].map((item) => [item.id, item])).values()]
+      .sort((a, b) => b.id - a.id);
   }
 
   // 2. Đánh dấu 1 thông báo là "Đã đọc"

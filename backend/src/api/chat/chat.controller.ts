@@ -53,8 +53,10 @@ export class ChatController {
 
   @Get('unread-count')
   async unread(@Req() req: AuthRequest) {
+    const unread = await this.chat.unreadMessageIds(req.user.userId);
     return {
-      count: await this.chat.unreadCount(req.user.userId),
+      count: unread.length,
+      unreadIds: unread.map((message) => message.id),
       latest: await this.chat.latestReceived(req.user.userId),
     };
   }
