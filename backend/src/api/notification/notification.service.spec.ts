@@ -12,6 +12,6 @@ describe('Notification inbox snapshot', () => {
     expect(rows).toHaveLength(51);
     expect(rows.some(item => item.id === 1)).toBe(true);
     expect(db.notification.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: { userId: 'buyer' }, take: 50 }));
-    expect(db.notification.findMany).toHaveBeenNthCalledWith(2, expect.objectContaining({ where: { userId: 'buyer', isRead: false } }));
+    expect(db.notification.findMany).toHaveBeenNthCalledWith(2, expect.objectContaining({ where: { userId: 'buyer', OR: [{ isRead: false }, { type: 'WARNING_POPUP' }] } }));
   });
 });

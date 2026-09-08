@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { RealtimeModule } from './realtime/realtime.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PostsController } from './api/posts/posts.controller';
@@ -12,7 +13,7 @@ import { TransactionModule } from './api/transaction/transaction.module';
 import { ChatModule } from './api/chat/chat.module';
 import { CommunityModule } from './api/community/community.module';
 @Module({
-  imports: [AuthModule, NotificationModule, AdminModule, PaymentModule, TransactionModule, ChatModule, CommunityModule],
+  imports: [AuthModule, RealtimeModule, NotificationModule, AdminModule, PaymentModule, TransactionModule, ChatModule, CommunityModule],
   controllers: [AppController, PostsController],
   providers: [AppService, PostsService, PrismaService],
 })

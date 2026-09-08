@@ -1,4 +1,5 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { RealtimeService } from '../realtime/realtime.service';
+import { Injectable, BadRequestException, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { VNPay, ProductCode, VnpLocale } from 'vnpay';
 
@@ -6,7 +7,7 @@ import { VNPay, ProductCode, VnpLocale } from 'vnpay';
 export class PaymentService {
   private vnpay: VNPay;
 
-  constructor(private prisma: PrismaService) {
+  constructor(private prisma: PrismaService, @Optional() private readonly realtime?: RealtimeService) {
     // KHỞI TẠO VNPAY
     this.vnpay = new VNPay({
       tmnCode: 'YLWVOYZZ',
@@ -124,7 +125,7 @@ export class PaymentService {
             include: { transaction: true },
           });
           if (!current) throw new BadRequestException('Không tìm thấy hóa đơn.');
-          await this.prisma.$transaction(async (db) => {
+          const updatedInvoice = await this.prisma.$transaction(async (db) => {
             await db.$queryRaw`SELECT id FROM posts WHERE id = ${current.transaction.postId} FOR UPDATE`;
             const invoice = await db.invoice.findUniqueOrThrow({
               where: { id: targetId },
@@ -140,7 +141,7 @@ export class PaymentService {
               );
             if (Number(query.vnp_Amount) / 100 < Number(invoice.amount))
               throw new BadRequestException('Số tiền thanh toán không hợp lệ.');
-            await db.invoice.update({
+            const paidInvoice = await db.invoice.update({
               where: { id: targetId },
               data: { status: 'PAID', paidAt: new Date() },
             });
@@ -156,7 +157,9 @@ export class PaymentService {
                 link: '/my-transactions',
               },
             });
+            return paidInvoice;
           });
+          if (updatedInvoice) this.realtime?.invoice(updatedInvoice);
 
           return { success: true, type: 'INVOICE' };
         }

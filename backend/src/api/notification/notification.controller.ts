@@ -70,14 +70,11 @@ export class NotificationController {
   async sendWarning(@Body() body: { userId: string, content: string }, @Req() req: any) {
     if (req.user?.role !== 'ADMIN') throw new ForbiddenException('Chỉ quản trị viên được gửi cảnh báo.');
     if (!body.content?.trim()) throw new ForbiddenException('Nội dung cảnh báo không được để trống.');
-    return this.prisma.notification.create({
-      data: {
+    return this.notificationService.createNotification({
         userId: body.userId,
         title: '⚠️ CẢNH BÁO TỪ BAN QUẢN TRỊ',
         content: body.content,
         type: 'WARNING_POPUP', // Trùng khớp với Enum trong schema.prisma
-        isRead: false,
-      }
     });
   }
 

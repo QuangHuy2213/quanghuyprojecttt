@@ -4,9 +4,11 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma, EscrowStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RealtimeService } from '../../realtime/realtime.service';
 
 const OPEN: EscrowStatus[] = [
   'VERIFYING',
@@ -25,16 +27,21 @@ const RESERVED: EscrowStatus[] = [
 
 @Injectable()
 export class TransactionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, @Optional() private readonly realtime?: RealtimeService) {}
 
-  private locked<T>(
+  private async locked<T>(
     postId: number,
     action: (db: Prisma.TransactionClient) => Promise<T>,
   ): Promise<T> {
-    return this.prisma.$transaction(async (db) => {
+    const committed = await this.prisma.$transaction(async (db) => {
       await db.$queryRaw`SELECT id FROM posts WHERE id = ${postId} FOR UPDATE`;
-      return action(db);
+      const before = await this.realtime?.capture(db, postId);
+      const result = await action(db);
+      const after = await this.realtime?.capture(db, postId);
+      return { result, before, after };
     });
+    if (committed.before && committed.after) this.realtime?.publish(committed.before, committed.after);
+    return committed.result;
   }
 
   private async mutate<T>(

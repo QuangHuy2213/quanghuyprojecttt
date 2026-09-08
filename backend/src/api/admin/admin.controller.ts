@@ -107,8 +107,8 @@ export class AdminController {
     @Body('resolutionStatus') resolutionStatus: 'SUCCESS' | 'CANCELLED',
     @Body('finalFee') finalFee?: number,
   ) {
-    await this.adminService.resolveTransactionDispute(id, resolutionStatus, finalFee);
-    return { message: 'Đã xử lý tranh chấp giao dịch thành công!' };
+    const data = await this.adminService.resolveTransactionDispute(id, resolutionStatus, finalFee);
+    return { message: 'Đã xử lý tranh chấp giao dịch thành công!', data };
   }
 
   // --- API LIÊN HỆ ---
