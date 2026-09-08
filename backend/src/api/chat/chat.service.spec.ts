@@ -27,12 +27,7 @@ describe('Message delivery and read tracking', () => {
     await service.send('buyer', input);
     await service.send('buyer', input);
     expect(fixture.data.message).toHaveLength(1);
-    expect(fixture.data.notification).toHaveLength(1);
-    expect(fixture.data.notification[0]).toMatchObject({
-      userId: 'seller', type: 'MESSAGE', isRead: false,
-      eventKey: `message:${fixture.data.message[0].id}`,
-      link: '/chat?receiverId=buyer&postId=1',
-    });
+    expect(fixture.data.notification).toHaveLength(0);
     expect(intent.isNegotiating).toHaveBeenCalledTimes(1);
   });
 
@@ -47,34 +42,29 @@ describe('Message delivery and read tracking', () => {
     expect(result.message.text).toBe('Xin chào');
     expect(fixture.data.message).toHaveLength(1);
     expect(fixture.data.transaction).toHaveLength(0);
-    expect(fixture.data.notification).toHaveLength(1);
+    expect(fixture.data.notification).toHaveLength(0);
   });
 
-  it('creates five receiver notifications for five identical texts with distinct request IDs', async () => {
+  it('saves five distinct messages without creating bell notifications', async () => {
     for (let i = 0; i < 5; i++) await service.send('buyer', {
       receiverId: 'seller', postId: 1, content: 'hello', clientMessageId: `request-${i}`,
     });
-    expect(fixture.data.notification).toHaveLength(5);
-    expect(new Set(fixture.data.notification.map(item => item.eventKey)).size).toBe(5);
-    expect(fixture.data.notification.every(item => item.userId === 'seller')).toBe(true);
+    expect(fixture.data.message).toHaveLength(5);
+    expect(fixture.data.notification).toHaveLength(0);
   });
 
   it('deduplicates concurrent retries inside the message transaction', async () => {
     const input = { receiverId: 'seller', postId: 1, content: 'hello', clientMessageId: 'same' };
     await Promise.all([service.send('buyer', input), service.send('buyer', input)]);
     expect(fixture.data.message).toHaveLength(1);
-    expect(fixture.data.notification).toHaveLength(1);
+    expect(fixture.data.notification).toHaveLength(0);
   });
 
-  it('rolls back message persistence if notification creation fails, then permits retry', async () => {
-    fixture.db.notification.createMany.mockRejectedValueOnce(new Error('notification unavailable'));
-    const input = { receiverId: 'seller', postId: 1, content: 'hello', clientMessageId: 'retry' };
-    await expect(service.send('buyer', input)).rejects.toThrow('notification unavailable');
-    expect(fixture.data.message).toHaveLength(0);
-    expect(fixture.data.notification).toHaveLength(0);
-    await service.send('buyer', input);
+  it('chat does not call notification storage', async () => {
+    fixture.db.notification.createMany.mockRejectedValue(new Error('unavailable'));
+    await service.send('buyer', { receiverId: 'seller', postId: 1, content: 'hello', clientMessageId: 'one' });
     expect(fixture.data.message).toHaveLength(1);
-    expect(fixture.data.notification).toHaveLength(1);
+    expect(fixture.db.notification.createMany).not.toHaveBeenCalled();
   });
 
   it('does not create a notification on a failed message write or invalid send', async () => {
@@ -86,9 +76,9 @@ describe('Message delivery and read tracking', () => {
     expect(fixture.data.notification).toHaveLength(0);
   });
 
-  it('links direct chat notifications without a listing', async () => {
+  it('saves direct chat without notifications', async () => {
     await service.send('buyer', { receiverId: 'seller', content: 'hello', clientMessageId: 'direct' });
-    expect(fixture.data.notification[0].link).toBe('/chat?receiverId=buyer');
+    expect(fixture.data.notification).toHaveLength(0);
   });
 
   it('rejects reuse of a request ID for another message and rejects chat about someone else’s listing', async () => {

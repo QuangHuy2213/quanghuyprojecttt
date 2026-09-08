@@ -101,18 +101,6 @@ export class ChatService {
       ) {
         throw new BadRequestException('Mã gửi tin đã được dùng cho nội dung khác.');
       }
-      await db.notification.createMany({
-        data: [{
-          userId: saved.receiverId,
-          type: 'MESSAGE',
-          title: 'Bạn có tin nhắn mới',
-          content: saved.text,
-          eventKey: `message:${saved.id}`,
-          link: `/chat?receiverId=${encodeURIComponent(userId)}${saved.postId ? `&postId=${saved.postId}` : ''}`,
-          isRead: false,
-        }],
-        skipDuplicates: true,
-      });
       return saved;
     });
     if (post?.status === 'ACTIVE') {
