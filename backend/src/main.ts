@@ -17,7 +17,6 @@ async function bootstrap() {
   // =====================================================
   // CORS
   // =====================================================
-
   app.enableCors({
     origin: [
       'http://localhost:3000',
@@ -38,40 +37,44 @@ async function bootstrap() {
   // =====================================================
   // SECURITY GATEWAY
   // =====================================================
-
-  const gatewaySecret =
-    process.env.SECURITY_GATEWAY_SECRET;
+  const gatewaySecret = process.env.SECURITY_GATEWAY_SECRET;
 
   app.use((req, res, next) => {
     const path = req.path;
 
-    // Các route được phép truy cập trực tiếp
-    const publicPaths = [
-      '/health',
-      '/auth/google',
-      '/auth/google/callback',
-      '/api',
-    ];
+    // ===================================================
+    // CÁC ROUTE ĐƯỢC PHÉP TRUY CẬP TRỰC TIẾP
+    // ===================================================
+    const isHealthPath = path === '/health';
 
-    const isPublicPath = publicPaths.some((publicPath) => {
-      if (publicPath === '/api') {
-        // Cho Swagger hoạt động
-        return (
-          path === '/api' ||
-          path.startsWith('/api/')
-        );
-      }
+    const isGoogleAuthPath =
+      path === '/auth/google' ||
+      path === '/auth/google/callback';
 
-      return (
-        path === publicPath ||
-        path.startsWith(`${publicPath}/`)
-      );
-    });
+    // VNPay redirect từ hệ thống bên ngoài.
+    // Route này tự xác minh chữ ký VNPay trong PaymentService.
+    const isVnpayReturnPath =
+      req.method === 'GET' &&
+      path === '/payments/vnpay-return';
+
+    // Swagger
+    const isSwaggerPath =
+      path === '/api' ||
+      path.startsWith('/api/');
+
+    const isPublicPath =
+      isHealthPath ||
+      isGoogleAuthPath ||
+      isVnpayReturnPath ||
+      isSwaggerPath;
 
     if (isPublicPath) {
       return next();
     }
 
+    // ===================================================
+    // CÁC API CÒN LẠI PHẢI QUA SECURITY GATEWAY
+    // ===================================================
     const securityKey =
       req.headers['x-security-gateway-key'];
 
@@ -81,18 +84,16 @@ async function bootstrap() {
     ) {
       return res.status(403).json({
         statusCode: 403,
-        message:
-          'Yêu cầu phải đi qua Security Gateway.',
+        message: 'Yêu cầu phải đi qua Security Gateway.',
       });
     }
 
-    next();
+    return next();
   });
 
   // =====================================================
   // SWAGGER
   // =====================================================
-
   const config = new DocumentBuilder()
     .setTitle('Nhà Tốt API')
     .setDescription(
@@ -116,9 +117,7 @@ async function bootstrap() {
   // =====================================================
   // START SERVER
   // =====================================================
-
-  const port =
-    process.env.PORT || 3001;
+  const port = process.env.PORT || 3001;
 
   await app.listen(
     port,
