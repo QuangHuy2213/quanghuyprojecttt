@@ -31,8 +31,14 @@ function harness(load, configured = true) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText;
   const module = { exports: {} };
+  const timestamps = { exports: {} };
+  const timestampCode = ts.transpileModule(fs.readFileSync(require.resolve('../src/services/timestamps.ts'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  vm.runInContext(`(function(exports){${timestampCode}\n})`, context)(timestamps.exports);
   vm.runInContext(`(function(require,module,exports){${code}\n})`, context)(
-    name => name === './supabase' ? { supabase: client, isSupabaseConfigured: configured } : { getApiRetryDelay: () => Math.max(0, retryUntil - now) },
+    name => name === './supabase' ? { supabase: client, isSupabaseConfigured: configured }
+      : name === './timestamps' ? timestamps.exports : { getApiRetryDelay: () => Math.max(0, retryUntil - now) },
     module, module.exports,
   );
   const service = module.exports;

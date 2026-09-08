@@ -70,7 +70,7 @@ export function watchInbox(options: {
       const owned = snapshot.notifications.filter(item => (item.userId ?? item.user_id) === options.userId);
       // INSERT/UPDATE and local read acknowledgements arriving during GET win over its snapshot.
       const acknowledged = new Set(rows.filter(item => item.isRead || item.is_read).map(item => item.id));
-      rows = mergeNotifications([...notificationChanges.values(), ...owned])
+      rows = mergeNotifications([...notificationChanges.values(), ...owned, ...rows])
         .map(item => acknowledged.has(item.id) ? { ...item, isRead: true } : item);
       unread = new Set(snapshot.unreadIds.filter(id => !readMessages.has(id)));
       for (const [id, isUnread] of messageChanges) {

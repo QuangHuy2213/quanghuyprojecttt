@@ -120,6 +120,26 @@ test('initial snapshot racing INSERT does not lose or double-count notification 
   assert.equal(h.batches.at(-1).length, 1); assert.equal(h.toasts.length, 1); assert.equal(h.counts.at(-1), 1); inbox.stop();
 });
 
+test('notification arriving BEFORE initial GET survives a stale snapshot and later recovery', async () => {
+  const h = harness(); const inbox = h.start();
+  for (let id = 1; id <= 5; id++) deliver(h, 'notifications', 'INSERT', row(id));
+  h.channels[0].status('SUBSCRIBED'); await h.flush();
+  assert.equal(h.batches.at(-1).length, 5);
+  assert.equal(h.batches.at(-1).filter(item => !item.isRead && item.type !== 'WARNING_POPUP').length, 5);
+  await h.tick(1000); inbox.refresh(); await h.flush();
+  assert.equal(h.batches.at(-1).length, 5);
+  assert.equal(h.toasts.length, 5); inbox.stop();
+});
+
+test('notification arriving DURING GET survives a snapshot that does not contain it', async () => {
+  let resolve;
+  const h = harness(() => new Promise(r => { resolve = r; }));
+  const inbox = h.start(); h.channels[0].status('SUBSCRIBED');
+  deliver(h, 'notifications', 'INSERT', row(1));
+  resolve({ notifications: [], unreadIds: [] }); await h.flush();
+  assert.equal(h.batches.at(-1).length, 1); assert.equal(h.toasts.length, 1); inbox.stop();
+});
+
 test('UPDATE/read acknowledgement wins over late history or replay; no second toast', async () => {
   let resolve;
   const h = harness(() => new Promise(r => { resolve = r; }));

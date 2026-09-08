@@ -9,6 +9,7 @@ import { subscribeApiPolling } from '../services/polling';
 import { useInbox } from './InboxProvider';
 import TransactionPrompt from './TransactionPrompt';
 import UserAvatar from './UserAvatar';
+import { formatNotificationTime } from '@/services/timestamps';
 
 async function readJsonSafely(response: Response) {
   const text = await response.text();
@@ -558,9 +559,9 @@ export default function Header() {
                               {notif.content}
                             </p>
                             <span className="text-[10px] text-gray-400 font-medium mt-2 block">
-                              {new Date(
+                              {formatNotificationTime(
                                 notif.created_at || notif.createdAt || '',
-                              ).toLocaleString('vi-VN')}
+                              )}
                             </span>
                           </div>
                         </div>

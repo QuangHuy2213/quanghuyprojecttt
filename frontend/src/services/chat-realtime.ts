@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 import { getApiRetryDelay } from './api';
+import { normalizeTimestamp } from './timestamps';
 
 export type Message = {
   id: number;
@@ -26,7 +27,10 @@ export function messageFromRow(row: Record<string, unknown>): Message | null {
 }
 
 export const mergeMessages = (items: Message[]) =>
-  [...new Map(items.map((item) => [item.id, item])).values()].sort((a, b) => a.id - b.id);
+  [...new Map(items.map((item) => [item.id, {
+    ...item, createdAt: normalizeTimestamp(item.createdAt),
+    readAt: item.readAt ? normalizeTimestamp(item.readAt) : null,
+  }])).values()].sort((a, b) => a.id - b.id);
 
 export function belongsToConversation(message: Message, userId: string, receiverId: string, postId?: number) {
   return message.postId === (postId ?? null) &&

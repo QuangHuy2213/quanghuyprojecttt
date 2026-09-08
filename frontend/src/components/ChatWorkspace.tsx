@@ -10,6 +10,7 @@ import { useInbox } from './InboxProvider';
 import { apiFetch } from '@/services/api';
 import { startPolling } from '@/services/polling';
 import { watchConversation, mergeMessages, type Message } from '@/services/chat-realtime';
+import { formatMessageTime } from '@/services/timestamps';
 
 type Thread = {
   peer: { id: string; fullName: string; avatarUrl?: string };
@@ -396,10 +397,7 @@ export default function ChatWorkspace() {
                       >
                         <p>{message.text}</p>
                         <time className="mt-1 block text-right text-[10px] opacity-70">
-                          {new Date(message.createdAt).toLocaleTimeString('vi-VN', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
+                          {formatMessageTime(message.createdAt)}
                         </time>
                       </div>
                     </div>
