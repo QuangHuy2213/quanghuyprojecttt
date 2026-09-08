@@ -549,51 +549,83 @@ export default function PostDetailPage() {
           <div className="w-full max-w-md overflow-hidden rounded-[28px] border border-white/20 bg-white shadow-[0_30px_90px_-25px_rgba(15,23,42,0.6)] animate-fade-in-up">
             <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-rose-50 to-white p-6">
               <h3 className="flex items-center gap-2 text-xl font-black text-slate-900">
-                <span className="text-red-500">🚩</span> Báo cáo tin đăng
+                <span className="text-red-500">🚩</span>
+                Báo cáo tin đăng
               </h3>
-              <button 
-                onClick={() => setReportModal(false)} 
-                className="text-gray-400 hover:text-red-500 text-xl font-bold leading-none"
+
+              <button
+                type="button"
+                onClick={() => {
+                  setReportModal(false);
+                  setReportReason('');
+                }}
+                className="text-xl font-bold leading-none text-gray-400 transition-colors hover:text-red-500"
+                aria-label="Đóng"
               >
                 &times;
               </button>
             </div>
-            
+
             <form onSubmit={submitReport} className="p-5">
               <p className="mb-5 text-sm font-medium leading-6 text-slate-600">
                 Vui lòng chọn lý do để hệ thống kiểm tra và xử lý. Thông tin của bạn sẽ được bảo mật.
               </p>
-              
-              <div className="space-y-2 mb-5">
-                {REPORT_REASONS.map((reason, idx) => (
-                  <label 
-                    key={idx} 
-                    className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-3.5 transition-all ${
-                      reportReason === reason ? 'border-rose-400 bg-rose-50' : 'border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${reportReason === reason ? 'border-rose-500' : 'border-slate-300'}`}>
-                      {reportReason === reason && <div className="w-2 h-2 bg-rose-600 rounded-full"></div>}
-                    </div>
-                    <span className={`text-sm ${reportReason === reason ? 'font-extrabold text-rose-700' : 'text-slate-600'}`}>
-                      {reason}
-                    </span>
-                  </label>
-                ))}
+
+              <div className="mb-5 space-y-2">
+                {REPORT_REASONS.map((reason, idx) => {
+                  const inputId = `report-reason-${idx}`;
+                  const selected = reportReason === reason;
+
+                  return (
+                    <label
+                      key={reason}
+                      htmlFor={inputId}
+                      className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-3.5 transition-all ${
+                        selected
+                          ? 'border-rose-400 bg-rose-50 shadow-sm'
+                          : 'border-slate-200 bg-white hover:border-rose-200 hover:bg-rose-50/40'
+                      }`}
+                    >
+                      <input
+                        id={inputId}
+                        type="radio"
+                        name="reportReason"
+                        value={reason}
+                        checked={selected}
+                        onChange={(e) => setReportReason(e.target.value)}
+                        className="h-4 w-4 flex-shrink-0 cursor-pointer accent-rose-600"
+                      />
+
+                      <span
+                        className={`text-sm ${
+                          selected
+                            ? 'font-extrabold text-rose-700'
+                            : 'font-medium text-slate-600'
+                        }`}
+                      >
+                        {reason}
+                      </span>
+                    </label>
+                  );
+                })}
               </div>
 
               <div className="flex gap-2.5">
-                <button 
-                  type="button" 
-                  onClick={() => setReportModal(false)} 
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReportModal(false);
+                    setReportReason('');
+                  }}
                   className="flex-1 rounded-2xl border border-slate-200 bg-white py-3.5 text-sm font-extrabold text-slate-700 transition-all hover:bg-slate-50"
                 >
                   Hủy
                 </button>
-                <button 
-                  type="submit" 
-                  disabled={isReporting || !reportReason} 
-                  className="flex-1 bg-rose-600 text-white font-semibold py-2.5 rounded-xl hover:bg-red-600 transition-colors disabled:opacity-50 text-sm"
+
+                <button
+                  type="submit"
+                  disabled={isReporting || !reportReason}
+                  className="flex-1 rounded-2xl bg-rose-600 py-3.5 text-sm font-extrabold text-white transition-all hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isReporting ? 'Đang gửi...' : 'Gửi báo cáo'}
                 </button>
