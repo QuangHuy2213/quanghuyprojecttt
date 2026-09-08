@@ -38,6 +38,10 @@ export function watchInbox(options: {
   const messageChanges = new Map<number, boolean>();
   const controller = new AbortController();
   let channel: ReturnType<typeof supabase.channel> | undefined;
+  let messageChannel: ReturnType<typeof supabase.channel> | undefined;
+  let messageGeneration = 0;
+  let messageReconnect: ReturnType<typeof setTimeout> | undefined;
+  let messageNeedsRecovery = false;
   let generation = 0;
   let stopped = false, connected = false, closed = false, running = false, pending = false;
   let initialized = false, lastSync = 0;
@@ -105,20 +109,48 @@ export function watchInbox(options: {
   const message = (event: 'INSERT' | 'UPDATE', payload: Change) => {
     if (stopped) return;
     const row = payload.new;
-    if (row.receiver_id !== options.userId || row.sender_id === options.userId || !Number.isInteger(row.id) ||
-        !(row.read_at === null || typeof row.read_at === 'string')) return;
+    if (row.receiver_id !== options.userId || typeof row.sender_id !== 'string' ||
+        row.sender_id === options.userId || !Number.isInteger(row.id)) return;
+    // INSERT defaults to unread; optional listing/read metadata must not suppress a toast.
+    if (event === 'UPDATE' && row.read_at === undefined) return;
     const id = row.id as number;
-    if (row.read_at !== null) readMessages.add(id);
-    const isUnread = row.read_at === null && !readMessages.has(id);
+    if (typeof row.read_at === 'string') readMessages.add(id);
+    const isUnread = row.read_at == null && !readMessages.has(id);
     if (running) messageChanges.set(id, isUnread);
     if (isUnread) unread.add(id); else unread.delete(id);
     options.onUnreadMessages(unread.size);
-    if (event === 'INSERT' && !toastedMessages.has(id) && typeof row.sender_id === 'string' &&
-        (row.post_id === null || Number.isInteger(row.post_id))) {
+    if (event === 'INSERT' && !toastedMessages.has(id)) {
       toastedMessages.add(id);
-      options.onMessageToast?.({ id, senderId: row.sender_id, postId: row.post_id as number | null });
+      options.onMessageToast?.({ id, senderId: row.sender_id, postId: Number.isInteger(row.post_id) ? row.post_id as number : null });
     }
     options.onMessage?.();
+  };
+  // Keep chat delivery independent of the notifications table's subscription health.
+  const connectMessages = () => {
+    const ownGeneration = ++messageGeneration;
+    if (messageChannel) void supabase.removeChannel(messageChannel);
+    messageChannel = supabase.channel(`global-messages:${options.userId}:${crypto.randomUUID()}`);
+    for (const event of ['INSERT', 'UPDATE'] as const) {
+      messageChannel.on('postgres_changes', {
+        event, schema: 'public', table: 'messages', filter: `receiver_id=eq.${options.userId}`,
+      }, payload => { if (messageGeneration === ownGeneration) message(event, payload); });
+    }
+    messageChannel.subscribe((status, error) => {
+      if (stopped || messageGeneration !== ownGeneration) return;
+      if (status === 'SUBSCRIBED') {
+        clearTimeout(messageReconnect);
+        if (messageNeedsRecovery) { messageNeedsRecovery = false; void sync(); }
+      }
+      else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        messageNeedsRecovery = true;
+        options.onError?.(new Error(`Global messages Realtime ${status}: ${error?.message || 'connection interrupted'}`));
+        // SDK rejoins errors/timeouts; CLOSED is terminal and needs a fresh channel.
+        if (status === 'CLOSED') {
+          clearTimeout(messageReconnect);
+          messageReconnect = setTimeout(() => { if (!stopped) connectMessages(); }, 60_000);
+        }
+      }
+    });
   };
   const connect = () => {
     const ownGeneration = ++generation;
@@ -129,11 +161,8 @@ export function watchInbox(options: {
       channel.on('postgres_changes', {
         event, schema: 'public', table: 'notifications', filter: `user_id=eq.${options.userId}`,
       }, payload => { if (generation === ownGeneration) notification(event, payload); });
-      channel.on('postgres_changes', {
-        event, schema: 'public', table: 'messages', filter: `receiver_id=eq.${options.userId}`,
-      }, payload => { if (generation === ownGeneration) message(event, payload); });
     }
-    channel.subscribe(status => {
+    channel.subscribe((status, error) => {
       if (stopped || generation !== ownGeneration) return;
       if (status === 'SUBSCRIBED') {
         const recover = !connected;
@@ -141,6 +170,7 @@ export function watchInbox(options: {
         clearTimeout(timer);
         if (recover) void sync();
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        options.onError?.(new Error(`Notifications Realtime ${status}: ${error?.message || 'connection interrupted'}`));
         connected = false;
         closed = status === 'CLOSED';
         if (!lastSync && !running) void sync(); else schedule(60_000);
@@ -151,7 +181,7 @@ export function watchInbox(options: {
     if (!visible()) clearTimeout(timer);
     else if (!connected || !initialized) void sync();
   };
-  if (isSupabaseConfigured) { schedule(10_000); connect(); }
+  if (isSupabaseConfigured) { schedule(10_000); connect(); connectMessages(); }
   else schedule(0);
   document.addEventListener('visibilitychange', visibility);
   return {
@@ -166,8 +196,10 @@ export function watchInbox(options: {
       stopped = true;
       controller.abort();
       clearTimeout(timer);
+      clearTimeout(messageReconnect);
       document.removeEventListener('visibilitychange', visibility);
       if (channel) void supabase.removeChannel(channel);
+      if (messageChannel) void supabase.removeChannel(messageChannel);
     },
   };
 }

@@ -68,8 +68,23 @@ const row = (id, extra = {}) => ({ id, user_id: 'b', title: 'New message', conte
   type: 'SYSTEM', eventKey: `message:${id}`, is_read: false, created_at: '2026-09-08T00:00:00Z', ...extra });
 const apiRow = (id, extra = {}) => ({ id, userId: 'b', title: 'New message', content: 'hello',
   type: 'SYSTEM', eventKey: `message:${id}`, isRead: false, createdAt: '2026-09-08T00:00:00Z', ...extra });
-const deliver = (h, table, event, value, channel = h.channels.at(-1)) =>
+const deliver = (h, table, event, value, channel = [...h.channels].reverse().find(c => c.handlers.some(item => item.filter.table === table))) =>
   channel.handlers.find(item => item.filter.table === table && item.filter.event === event).cb({ new: value });
+
+test('global chat channel delivers popup without notification subscription or optional listing fields', async () => {
+  const h = harness(); const popups = [];
+  const inbox = h.start({ onMessageToast: item => popups.push(item) });
+  const chat = h.channels.find(c => c.name.startsWith('global-messages:'));
+  assert.ok(chat);
+  assert.equal(chat.handlers.every(item => item.filter.table === 'messages'), true);
+  chat.status('SUBSCRIBED');
+  h.channels[0].status('CHANNEL_ERROR'); await h.flush();
+  deliver(h, 'messages', 'INSERT', { id: 12, sender_id: 'a', receiver_id: 'b' });
+  deliver(h, 'messages', 'INSERT', { id: 12, sender_id: 'a', receiver_id: 'b' });
+  assert.equal(popups.length, 1); assert.equal(popups[0].postId, null);
+  assert.equal(h.counts.at(-1), 1); assert.equal(h.toasts.length, 0);
+  inbox.stop(); assert.equal(h.channels.every(c => c.removed), true);
+});
 
 test('global messages INSERT drives five chat badges/toasts, replay deduplicates and UPDATE never toasts', async () => {
   const h = harness(); const messages = [];
@@ -139,7 +154,7 @@ test('C: hidden tab receives notification/toast without extra GET or channels', 
   assert.equal(h.toasts.length, 1); assert.equal(h.batches.at(-1).length, 1);
   await h.tick(300_000); assert.equal(h.calls.length, 1);
   h.document.visibilityState = 'visible'; h.document.dispatchEvent(new Event('visibilitychange')); await h.flush();
-  assert.equal(h.calls.length, 1); assert.equal(h.channels.length, 1); inbox.stop();
+  assert.equal(h.calls.length, 1); assert.equal(h.channels.length, 2); inbox.stop();
 });
 
 test('D: reload snapshot keeps all 65 unread items and does not toast historical items', async () => {
@@ -154,7 +169,7 @@ test('initial snapshot racing INSERT does not lose or double-count notification 
   const h = harness(() => new Promise(r => { resolve = r; }));
   const inbox = h.start(); h.channels[0].status('SUBSCRIBED');
   deliver(h, 'notifications', 'INSERT', row(1));
-  deliver(h, 'messages', 'INSERT', { id: 1, receiver_id: 'b', read_at: null });
+  deliver(h, 'messages', 'INSERT', { id: 1, sender_id: 'a', receiver_id: 'b', read_at: null });
   resolve({ notifications: [apiRow(1)], unreadIds: [1] }); await h.flush();
   assert.equal(h.batches.at(-1).length, 1); assert.equal(h.toasts.length, 1); assert.equal(h.counts.at(-1), 1); inbox.stop();
 });
@@ -185,8 +200,8 @@ test('UPDATE/read acknowledgement wins over late history or replay; no second to
   const inbox = h.start(); h.channels[0].status('SUBSCRIBED');
   deliver(h, 'notifications', 'INSERT', row(1));
   inbox.updateNotifications(items => items.map(item => ({ ...item, isRead: true })));
-  deliver(h, 'messages', 'UPDATE', { id: 1, receiver_id: 'b', read_at: '2026-09-08T01:00:00Z' });
-  deliver(h, 'messages', 'INSERT', { id: 1, receiver_id: 'b', read_at: null });
+  deliver(h, 'messages', 'UPDATE', { id: 1, sender_id: 'a', receiver_id: 'b', read_at: '2026-09-08T01:00:00Z' });
+  deliver(h, 'messages', 'INSERT', { id: 1, sender_id: 'a', receiver_id: 'b', read_at: null });
   resolve({ notifications: [apiRow(1)], unreadIds: [1] }); await h.flush();
   deliver(h, 'notifications', 'INSERT', row(1));
   assert.equal(h.batches.at(-1)[0].isRead, true); assert.equal(h.toasts.length, 1); assert.equal(h.counts.at(-1), 0); inbox.stop();
@@ -198,7 +213,7 @@ test('E: disconnect uses 60s fallback and reconnect cancels it; terminal CLOSED 
   await h.tick(1); assert.equal(h.calls.length, 2);
   h.channels[0].status('SUBSCRIBED'); await h.tick(1000); assert.equal(h.calls.length, 3);
   await h.tick(300_000); assert.equal(h.calls.length, 3);
-  h.channels[0].status('CLOSED'); await h.tick(60_000); assert.equal(h.channels.length, 2);
+  h.channels[0].status('CLOSED'); await h.tick(60_000); assert.equal(h.channels.length, 3);
   assert.equal(h.channels[0].removed, true); inbox.stop();
 });
 
@@ -210,7 +225,7 @@ test('cleanup/logout aborts GET, removes channel, and ignores stale callbacks an
   resolve({ notifications: [apiRow(1)], unreadIds: [1] }); await h.flush();
   deliver(h, 'notifications', 'INSERT', row(2)); h.channels[0].status('SUBSCRIBED');
   assert.equal(h.toasts.length, 0); assert.equal(h.batches.length, 0);
-  const next = h.start(); assert.equal(h.channels.filter(c => !c.removed).length, 1); next.stop();
+  const next = h.start(); assert.equal(h.channels.filter(c => !c.removed).length, 2); next.stop();
 });
 
 test('fallback obeys API cooldown; missing config does not create a placeholder channel', async () => {
@@ -232,7 +247,7 @@ test('a cached recovery snapshot cannot resurrect already acknowledged rows', as
   const h = harness(async () => ({ notifications: [apiRow(1)], unreadIds: [1] }));
   const inbox = h.start(); h.channels[0].status('SUBSCRIBED'); await h.flush();
   deliver(h, 'notifications', 'UPDATE', row(1, { is_read: true }));
-  deliver(h, 'messages', 'UPDATE', { id: 1, receiver_id: 'b', read_at: '2026-09-08T01:00:00Z' });
+  deliver(h, 'messages', 'UPDATE', { id: 1, sender_id: 'a', receiver_id: 'b', read_at: '2026-09-08T01:00:00Z' });
   await h.tick(1000); inbox.refresh(); await h.flush();
   assert.equal(h.batches.at(-1)[0].isRead, true); assert.equal(h.counts.at(-1), 0); inbox.stop();
 });
