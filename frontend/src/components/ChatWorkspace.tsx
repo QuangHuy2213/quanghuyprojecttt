@@ -41,7 +41,7 @@ export default function ChatWorkspace() {
   const router = useRouter();
   const search = useSearchParams();
   const params = useParams<{ postId?: string }>();
-  const { user, token, setUnreadMessages } = useInbox();
+  const { user, token, setUnreadMessages, refreshMessages } = useInbox();
   const receiverId = search.get('receiverId') || search.get('sellerId') || '';
   const rawPostId = params.postId || search.get('postId') || '';
   const postId = rawPostId ? Number(rawPostId) : undefined;
@@ -85,6 +85,7 @@ export default function ChatWorkspace() {
       await jsonRequest(`chat/conversation?${query}`, { method: 'DELETE' });
       setThreads((current) => current.filter((item) => keyOf(item) !== conversationKey));
       setMessages([]);
+      refreshMessages();
       window.dispatchEvent(new Event('messages-updated'));
       router.push('/chat');
     } catch (error) {

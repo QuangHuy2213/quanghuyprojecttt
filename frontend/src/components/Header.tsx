@@ -56,7 +56,7 @@ export default function Header() {
     unreadMessages,
   } = useInbox();
   const notifications = allNotifications.filter(
-    (item) => item.type !== 'WARNING_POPUP' && item.type !== 'MESSAGE',
+    (item) => item.type !== 'WARNING_POPUP',
   );
   const unreadCount = notifications.filter(
     (item) => !item.isRead && !item.is_read,
@@ -65,7 +65,7 @@ export default function Header() {
   const [pendingConfirmations, setPendingConfirmations] = useState<any[]>([]);
 
   // 🌟 STATE QUẢN LÝ POPUP CẢNH BÁO TỪ ADMIN
-  const [warningPopup, setWarningPopup] = useState<any>(null);
+  const warningPopup = allNotifications.find(item => item.type === 'WARNING_POPUP' && !item.isRead && !item.is_read) || null;
   const [headerToast, setHeaderToast] = useState<{
     show: boolean;
     message: string;
@@ -85,7 +85,6 @@ export default function Header() {
   useEffect(() => {
     setFavoritePosts([]);
 
-    setWarningPopup(null);
     setPendingConfirmations([]);
     if (!user?.id || !token) return;
     const userId = user.id;
@@ -99,16 +98,6 @@ export default function Header() {
         if (!controller.signal.aborted) console.error('Lỗi tải danh sách yêu thích', err);
       });
 
-    const warningsSync = subscribeApiPolling(
-      'notifications/unread-warnings',
-      token,
-      (data) => {
-        const warning = data as { id?: string } | null;
-        setWarningPopup((current: any) =>
-          warning?.id ? (current?.id === warning.id ? current : warning) : null,
-        );
-      },
-    );
     const confirmationsSync = subscribeApiPolling(
       'transactions/pending-confirmations',
       token,
@@ -118,7 +107,6 @@ export default function Header() {
     );
 
     const refresh = () => {
-      warningsSync.refresh();
       confirmationsSync.refresh();
     };
     window.addEventListener('transactions-updated', refresh);
@@ -126,7 +114,6 @@ export default function Header() {
     return () => {
       controller.abort();
 
-      warningsSync.stop();
       confirmationsSync.stop();
       window.removeEventListener('transactions-updated', refresh);
     };
@@ -143,7 +130,6 @@ export default function Header() {
     setShowNotifications(false);
     setFavoritePosts([]);
 
-    setWarningPopup(null);
     setPendingConfirmations([]);
     router.push('/');
   };
@@ -212,6 +198,7 @@ export default function Header() {
   const handleMarkAllAsRead = async () => {
     const token = localStorage.getItem('access_token');
     if (!token) return;
+    const viewedIds = new Set(notifications.map(item => item.id));
 
     try {
       const response = await apiFetch('notifications/read-all', {
@@ -221,7 +208,7 @@ export default function Header() {
       await readJsonSafely(response);
       setNotifications((prev) =>
         prev.map((n) =>
-          n.type === 'WARNING_POPUP' ? n : { ...n, isRead: true, is_read: true },
+          !viewedIds.has(n.id) ? n : { ...n, isRead: true, is_read: true },
         ),
       );
     } catch (error) {
@@ -239,7 +226,7 @@ export default function Header() {
         headers: { Authorization: `Bearer ${token}` },
       });
       await readJsonSafely(response);
-      setWarningPopup(null); // Tắt Modal
+      setNotifications(current => current.map(item => item.id === warningPopup.id ? { ...item, isRead: true, is_read: true } : item));
     } catch (err) {
       console.error('Lỗi khi xác nhận cảnh báo', err);
     }
@@ -555,6 +542,7 @@ export default function Header() {
                       return (
                         <div
                           key={notif.id}
+                          onClick={() => { if (notif.link) router.push(notif.link); }}
                           className={`flex gap-3 p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer ${isUnread ? 'bg-blue-50/40' : ''}`}
                         >
                           <div
