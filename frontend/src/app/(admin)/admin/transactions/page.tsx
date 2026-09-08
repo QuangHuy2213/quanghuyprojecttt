@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '@/services/api';
-import { useTransactions } from '@/components/TransactionProvider';
+import { TransactionProvider, useTransactions } from '@/components/TransactionProvider';
 import { mergeRows, transactionAction } from '@/services/transaction-state';
 import Link from 'next/link';
 
@@ -346,11 +346,16 @@ function AdminWarningModal({
 // 🌟 PAGE CHÍNH: QUẢN LÝ ĐỐI SOÁT (GIAO DỊCH & HÓA ĐƠN)
 // =========================================================================
 export default function AdminTransactionsPage() {
+  return <TransactionProvider scope="admin"><AdminTransactionsContent /></TransactionProvider>;
+}
+
+function AdminTransactionsContent() {
   const [activeTab, setActiveTab] = useState<'TRANSACTIONS' | 'INVOICES'>('TRANSACTIONS');
 
   // States cho Giao Dịch
   const { transactions, setTransactions, invoices, setInvoices, removeTransaction, loading, refreshing, refresh: fetchData } = useTransactions();
   const [txFilter, setTxFilter] = useState('ALL');
+  const [invoiceSearch, setInvoiceSearch] = useState('');
   const [warningTarget, setWarningTarget] = useState<{
     userId: string;
     userName: string;
@@ -536,7 +541,8 @@ export default function AdminTransactionsPage() {
     (tx) => txFilter === 'ALL' || (txFilter === 'CANCELLED' ? ['CANCELLED', 'CANCELLED_AFTER_SUCCESS'].includes(tx.status) : tx.status === txFilter),
   );
   const filteredInv = invoices.filter(
-    (inv) => invFilter === 'ALL' || inv.status === invFilter,
+    (inv) => (invFilter === 'ALL' || inv.status === invFilter) &&
+      (inv.invoiceCode || '').toUpperCase().includes(invoiceSearch.trim().toUpperCase()),
   );
 
   const totalRevenue = transactions
@@ -904,6 +910,9 @@ export default function AdminTransactionsPage() {
       {/* ========================================================= */}
       {activeTab === 'INVOICES' && (
         <div className="mt-6 animate-fade-in-up">
+          <input aria-label="Tìm mã hóa đơn" placeholder="Tìm mã hóa đơn HD-..."
+            value={invoiceSearch} onChange={event => setInvoiceSearch(event.target.value)}
+            className="w-full max-w-sm rounded-xl border border-slate-200 px-4 py-2 text-sm" />
           <div className="flex gap-2 overflow-x-auto py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {['ALL', 'DRAFT', 'PENDING_PAYMENT', 'PAID', 'OVERDUE', 'CANCELLED'].map(
               (status) => (
@@ -965,6 +974,7 @@ export default function AdminTransactionsPage() {
                         >
                           <span className="truncate">
                             {inv.transaction?.post?.title || 'Xem bài đăng'}
+                            <span className="mt-1 block text-xs text-slate-600">Mã hóa đơn: {inv.invoiceCode || 'Đang cập nhật'}</span>
                           </span>
                           <span className="text-xs text-slate-300 transition-colors group-hover:text-blue-400">
                             ↗

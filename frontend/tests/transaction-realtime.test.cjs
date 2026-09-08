@@ -4,10 +4,11 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
 
-function harness({ role = 'USER', load = async () => [], configured = true } = {}) {
+function harness({ role = 'USER', scope = 'personal', userId = 'b', load = async () => [], configured = true } = {}) {
   let now = 100000, sequence = 0, cursor = 0, cleanup;
   const values = [], channels = [], calls = [], timers = new Map(), events = new Map();
   let statusListener;
+  let activeUserId = userId, activeToken = 'test';
   const document = new EventTarget(); document.visibilityState = 'visible';
   const window = new EventTarget();
   const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
@@ -34,14 +35,17 @@ function harness({ role = 'USER', load = async () => [], configured = true } = {
   const timestamps = read('../src/services/timestamps.ts');
   const state = read('../src/services/transaction-state.ts', { './timestamps': timestamps });
   const provider = read('../src/components/TransactionProvider.tsx', {
-    react, 'react/jsx-runtime': { jsx: (type, props) => ({ type, props }) },
-    './InboxProvider': { useInbox: () => ({ user: { id: 'b', role }, token: 'test' }) },
+    react, 'react/jsx-runtime': { jsx: (type, props, key) => ({ type, props, key }) },
+    './InboxProvider': { useInbox: () => ({ user: { id: activeUserId, role }, token: activeToken }) },
     '@/services/transaction-state': state,
     '@/services/realtime-socket': { onRealtime(event, fn) { events.set(event, fn); return () => events.delete(event); }, onRealtimeStatus(fn) { statusListener = fn; fn('disconnected'); return () => { statusListener = () => {}; }; } },
     '@/services/api': { getApiRetryDelay: () => 0, apiFetch: async (path, options) => { calls.push({ path, options }); return { ok: true, json: () => load(path) }; } },
   });
-  provider.TransactionProvider({ children: null });
-  return { state, values, channels, calls, flush, document, window, stop: () => cleanup(),
+  const tree = provider.TransactionProvider({ children: null, scope });
+  tree.type(tree.props);
+  return { state, values, channels, calls, flush, document, window, sessionKey: tree.key,
+    keyForSession(id, token, nextScope = scope) { activeUserId = id; activeToken = token; return provider.TransactionProvider({ children: null, scope: nextScope }).key; },
+    stop: () => cleanup(),
     status: value => statusListener(value),
     deliver(table, row) { events.get(table === 'Transaction' ? 'transaction:updated' : table === 'Invoice' ? 'invoice:updated' : table)?.(row); },
     async tick(ms) { const end = now + ms; for (;;) { const next = [...timers].filter(([, t]) => t.at <= end).sort((a, b) => a[1].at - b[1].at)[0]; if (!next) break; now = next[1].at; timers.delete(next[0]); next[1].fn(); await flush(); } now = end; await flush(); },
@@ -90,7 +94,7 @@ test('invoice ownership, admin visibility, stale replay and no per-event GET', a
   h.deliver('Invoice', { ...invoice, id: 'foreign', userId: 's' });
   h.deliver('Invoice', { ...invoice, status: 'PAID', updatedAt: '2026-09-08T02:00:00Z' }); h.deliver('Invoice', invoice);
   assert.equal(h.values[1].length, 1); assert.equal(h.values[1][0].status, 'PAID'); assert.equal(h.calls.length, calls); h.stop();
-  const admin = harness({ role: 'ADMIN' }); await admin.flush(); admin.deliver('Invoice', invoice);
+  const admin = harness({ role: 'ADMIN', scope: 'admin' }); await admin.flush(); admin.deliver('Invoice', invoice);
   assert.equal(admin.values[1].length, 1); assert.equal(admin.calls[0].path, 'admin/transactions'); admin.stop();
 });
 test('hidden fallback pauses and return recovers without per-page socket creation', async () => {
@@ -114,4 +118,35 @@ test('authoritative reconnect removes missed deletes without dropping events rec
   const confirmed = row({ buyerConfirmed: true });
   const merged = h.state.mergeSnapshot([confirmed], [old], [old]);
   assert.equal(merged[0].buyerConfirmed, true); h.stop();
+});
+
+test('admin personal scope uses owned endpoints and filters unrelated snapshot and socket rows', async () => {
+  const own = row({ buyerId: 'admin-b', id: 'own' }), foreign = row({ id: 'foreign' });
+  const h = harness({ role: 'ADMIN', userId: 'admin-b', load: async path => path.includes('my-transactions') ? [own, foreign] : [
+    { id: 'own-invoice', userId: 'admin-b' }, { id: 'foreign-invoice', userId: 'b' },
+  ] });
+  await h.flush();
+  assert.equal(h.calls[0].path, 'transactions/my-transactions'); assert.equal(h.calls[1].path, 'transactions/my-invoices');
+  assert.deepEqual(Array.from(h.values[0], item => item.id), ['own']);
+  assert.deepEqual(Array.from(h.values[1], item => item.id), ['own-invoice']);
+  h.deliver('Transaction', foreign); h.deliver('Invoice', { id: 'foreign2', userId: 'b', updatedAt: '2026-09-08T01:00:00Z' });
+  assert.equal(h.values[0].length, 1); assert.equal(h.values[1].length, 1); h.stop();
+});
+test('old account snapshot is aborted and cannot populate a new admin personal store', async () => {
+  let resolve;
+  const a = harness({ load: path => path.includes('my-transactions') ? new Promise(r => { resolve = r; }) : [] });
+  await a.flush(); a.stop(); assert.equal(a.calls[0].options.signal.aborted, true);
+  const b = harness({ role: 'ADMIN', userId: 'admin-b' }); await b.flush();
+  resolve([row()]); await a.flush();
+  assert.equal(a.values[0].length, 0); assert.equal(b.values[0].length, 0); assert.equal(b.values[1].length, 0); b.stop();
+});
+
+test('React store identity changes on account, token and view scope before effects run', () => {
+  const h = harness({ role: 'ADMIN' });
+  const key = h.sessionKey;
+  assert.notEqual(h.keyForSession('b', 'replacement-token'), key);
+  assert.notEqual(h.keyForSession('different-user', 'test'), key);
+  assert.notEqual(h.keyForSession('b', 'test', 'admin'), key);
+  assert.notEqual(h.keyForSession(null, null), key);
+  assert.equal(h.keyForSession('b', 'test'), key); h.stop();
 });

@@ -454,7 +454,7 @@ export default function TransactionsAndInvoicesPage() {
                   <div className="flex flex-col gap-5 p-5 md:flex-row md:items-center md:p-6">
                     <div className="min-w-0 flex-1">
                       <div className="mb-2 inline-flex rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-extrabold text-slate-500">
-                        Hóa đơn thanh toán
+                        Mã hóa đơn: {inv.invoiceCode || 'Đang cập nhật'}
                       </div>
 
                       <Link

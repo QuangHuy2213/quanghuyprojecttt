@@ -15,8 +15,16 @@ type Store = {
 };
 const Context = createContext<Store | null>(null);
 
-export function TransactionProvider({ children }: { children: React.ReactNode }) {
+export function TransactionProvider({ children, scope = 'personal' }: { children: React.ReactNode; scope?: 'personal' | 'admin' }) {
   const { user, token } = useInbox();
+  // A new authenticated session gets a new store before children render, not one
+  // render after an effect reset. Old request/mutation closures retain the old store.
+  return <SessionTransactionProvider key={JSON.stringify([user?.id, user?.role, token, scope])} scope={scope}>{children}</SessionTransactionProvider>;
+}
+
+function SessionTransactionProvider({ children, scope }: { children: React.ReactNode; scope: 'personal' | 'admin' }) {
+  const { user, token } = useInbox();
+  const admin = scope === 'admin' && user?.role === 'ADMIN';
   const [transactions, writeTransactions] = useState<TransactionRow[]>([]);
   const [invoices, writeInvoices] = useState<VersionedRow[]>([]);
   const transactionRef = useRef<TransactionRow[]>([]);
@@ -41,9 +49,8 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     setTransactions([]); setInvoices([]);
     deletedRef.current = new Set();
-    if (!user || !token) { setLoading(false); return; }
+    if (!user || !token || (scope === 'admin' && !admin)) { setLoading(false); return; }
     setLoading(true);
-    const admin = user.role === 'ADMIN';
     const transactionPath = admin ? 'admin/transactions' : 'transactions/my-transactions';
     const invoicePath = admin ? 'transactions/invoices/admin/all' : 'transactions/my-invoices';
     const retryDelay = () => Math.max(getApiRetryDelay(transactionPath), getApiRetryDelay(invoicePath));
@@ -80,8 +87,9 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
           read(invoicePath),
         ]);
         if (!stopped) {
-          setTransactions(current => mergeSnapshot(current, tx.filter(row => !deleted.has(row.id)), transactionBaseline));
-          setInvoices(current => mergeSnapshot(current, inv, invoiceBaseline));
+          setTransactions(current => mergeSnapshot(current, tx.filter(row => !deleted.has(row.id) &&
+            (admin || row.buyerId === user.id || row.sellerId === user.id)), transactionBaseline));
+          setInvoices(current => mergeSnapshot(current, inv.filter(row => admin || row.userId === user.id), invoiceBaseline));
           needsSync = false;
         }
       } catch (error) { failed = true; needsSync = true; if (!stopped) console.warn('Transaction sync interrupted:', error); }
@@ -130,7 +138,7 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
       document.removeEventListener('visibilitychange', visibility);
       window.removeEventListener('transactions-updated', recover);
     };
-  }, [user?.id, user?.role, token]);
+  }, [user?.id, user?.role, token, scope, admin]);
   const relatedTransactions = useMemo(() => transactions.map(row => {
     const invoice = invoices.find(item => item.transactionId === row.id);
     return invoice ? { ...row, invoice: mergeRows(row.invoice ? [row.invoice] : [], [invoice])[0] } : row;
@@ -140,7 +148,11 @@ export function TransactionProvider({ children }: { children: React.ReactNode })
     const display = invoiceForDisplay(row);
     return transaction ? { ...display, transaction: { ...row.transaction, ...transaction, post: { ...row.transaction?.post, ...transaction.post } } } : display;
   }), [transactions, invoices]);
-  return <Context.Provider value={{ transactions: relatedTransactions, invoices: relatedInvoices, loading, refreshing, setTransactions, setInvoices, removeTransaction, refresh }}>{children}</Context.Provider>;
+  return <Context.Provider value={{
+    transactions: relatedTransactions.filter(row => admin || row.buyerId === user?.id || row.sellerId === user?.id),
+    invoices: relatedInvoices.filter(row => admin || row.userId === user?.id),
+    loading, refreshing, setTransactions, setInvoices, removeTransaction, refresh,
+  }}>{children}</Context.Provider>;
 }
 export function useTransactions() {
   const value = useContext(Context);
