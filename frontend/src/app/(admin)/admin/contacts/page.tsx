@@ -63,16 +63,16 @@ const SwipeableContactItem = ({ contact, openEmailModal, openConfirmModal, setDe
         {/* CỘT 1: THÔNG TIN KHÁCH */}
         <div className="flex-shrink-0 md:w-1/4">
           <div className="text-xl font-black tracking-tight text-slate-900">{contact.fullName}</div>
-          <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-slate-600"><span>📧</span> {contact.email}</div>
+          <div className="mt-2 flex min-w-0 items-start gap-2 text-sm font-semibold text-slate-600"><span className="flex-shrink-0">📧</span><span className="min-w-0 break-all">{contact.email}</span></div>
           <div className="mt-2 text-sm font-medium text-slate-400">{new Date(contact.createdAt).toLocaleString('vi-VN')}</div>
         </div>
 
         {/* CỘT 2: NỘI DUNG THƯ */}
         <div className="flex-1 md:w-2/4">
-          <div className="mb-3 inline-flex rounded-xl border border-slate-200 bg-slate-100 px-3.5 py-2 text-sm font-extrabold text-slate-700">
+          <div className="mb-3 flex w-full max-w-full rounded-xl border border-slate-200 bg-slate-100 px-3.5 py-2 text-sm font-extrabold leading-6 text-slate-700 break-words whitespace-normal">
             Chủ đề: {contact.subject}
           </div>
-          <p className="whitespace-pre-wrap rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-[15px] font-medium leading-7 text-slate-700">
+          <p className="whitespace-pre-wrap break-words rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-[15px] font-medium leading-7 text-slate-700">
             {contact.message}
           </p>
         </div>
@@ -198,23 +198,77 @@ export default function AdminContactsPage() {
 
   const handleSendEmail = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const contactId = emailModal.contactId;
+    const email = emailModal.email.trim();
+    const subject = emailModal.subject.trim();
+    const message = emailModal.message.trim();
+
+    if (!contactId) {
+      return showToast('Không xác định được yêu cầu cần phản hồi.', 'error');
+    }
+
+    if (!email || !subject || !message) {
+      return showToast('Vui lòng nhập đầy đủ nội dung thư.', 'error');
+    }
+
     setIsSending(true);
+
     try {
+      // Chỉ gửi những field thuộc DTO backend.
+      // `isOpen` chỉ là state UI của modal, không được gửi lên API vì
+      // ValidationPipe(forbidNonWhitelisted: true) sẽ trả 400.
+      const payload = {
+        contactId,
+        email,
+        subject,
+        message,
+      };
+
       const res = await apiFetch('admin/contacts/reply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(emailModal),
+        body: JSON.stringify(payload),
       });
 
-      if (res.ok) {
-        showToast('Gửi thư phản hồi thành công!');
-        setContacts(contacts.map(c => c.id === emailModal.contactId ? { ...c, status: 'REPLIED' } : c));
-        setEmailModal({ ...emailModal, isOpen: false }); 
-      } else {
-        showToast('Gửi thư thất bại, vui lòng thử lại.', 'error');
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
       }
-    } catch (error) {
-      showToast('Lỗi máy chủ, không thể gửi thư!', 'error');
+
+      if (!res.ok) {
+        const apiMessage = Array.isArray(data?.message)
+          ? data.message.join(', ')
+          : data?.message;
+
+        throw new Error(apiMessage || 'Gửi thư thất bại, vui lòng thử lại.');
+      }
+
+      setContacts(prev =>
+        prev.map(contact =>
+          contact.id === contactId
+            ? { ...contact, status: 'REPLIED' }
+            : contact,
+        ),
+      );
+
+      setEmailModal({
+        isOpen: false,
+        contactId: 0,
+        email: '',
+        subject: '',
+        message: '',
+      });
+
+      showToast('Gửi thư phản hồi thành công!');
+    } catch (error: any) {
+      console.error('Lỗi gửi thư phản hồi:', error);
+      showToast(
+        error?.message || 'Lỗi máy chủ, không thể gửi thư!',
+        'error',
+      );
     } finally {
       setIsSending(false);
     }
@@ -285,15 +339,15 @@ export default function AdminContactsPage() {
               <div className="space-y-4">
                 <div>
                   <label className="mb-2 block text-sm font-extrabold text-slate-700">Gửi đến (To)</label>
-                  <input type="text" readOnly value={emailModal.email} className="w-full bg-gray-100 border border-gray-200 rounded-2xl px-4 py-3.5 text-[15px] text-gray-500 font-medium" />
+                  <textarea readOnly rows={2} value={emailModal.email} className="w-full resize-none break-all whitespace-pre-wrap rounded-2xl border border-gray-200 bg-gray-100 px-4 py-3.5 text-[15px] font-medium leading-6 text-gray-500" />
                 </div>
                 <div>
                   <label className="mb-2 block text-sm font-extrabold text-slate-700">Chủ đề (Subject)</label>
-                  <input type="text" required value={emailModal.subject} onChange={e => setEmailModal({...emailModal, subject: e.target.value})} className="w-full bg-white border border-gray-200 rounded-2xl px-4 py-3.5 text-[15px] focus:ring-2 focus:ring-[#1877F2] outline-none font-bold text-gray-800" />
+                  <textarea required rows={2} value={emailModal.subject} onChange={e => setEmailModal({...emailModal, subject: e.target.value})} className="w-full resize-none break-words whitespace-pre-wrap rounded-2xl border border-gray-200 bg-white px-4 py-3.5 text-[15px] font-bold leading-6 text-gray-800 outline-none focus:ring-2 focus:ring-[#1877F2]" />
                 </div>
                 <div>
                   <label className="mb-2 block text-sm font-extrabold text-slate-700">Nội dung thư</label>
-                  <textarea required rows={8} value={emailModal.message} onChange={e => setEmailModal({...emailModal, message: e.target.value})} className="w-full bg-white border border-gray-200 rounded-2xl px-4 py-3.5 text-[15px] focus:ring-2 focus:ring-[#1877F2] outline-none resize-none leading-relaxed text-gray-700" />
+                  <textarea required rows={8} value={emailModal.message} onChange={e => setEmailModal({...emailModal, message: e.target.value})} className="w-full resize-none break-words whitespace-pre-wrap rounded-2xl border border-gray-200 bg-white px-4 py-3.5 text-[15px] leading-relaxed text-gray-700 outline-none focus:ring-2 focus:ring-[#1877F2]" />
                 </div>
               </div>
               <div className="pt-6 flex gap-3">
