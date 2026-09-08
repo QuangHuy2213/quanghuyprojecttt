@@ -9,16 +9,8 @@ import TransactionPrompt, { TransactionSummary } from './TransactionPrompt';
 import { useInbox } from './InboxProvider';
 import { apiFetch } from '@/services/api';
 import { startPolling } from '@/services/polling';
+import { watchConversation, mergeMessages, type Message } from '@/services/chat-realtime';
 
-type Message = {
-  id: number;
-  senderId: string;
-  receiverId: string;
-  text: string;
-  createdAt: string;
-  readAt: string | null;
-  postId: number | null;
-};
 type Thread = {
   peer: { id: string; fullName: string; avatarUrl?: string };
   post: { id: number; title: string } | null;
@@ -26,9 +18,6 @@ type Thread = {
   unread?: number;
 };
 const keyOf = (thread: Thread) => `${thread.peer.id}:${thread.post?.id || ''}`;
-const mergeMessages = (items: Message[]) =>
-  [...new Map(items.map((item) => [item.id, item])).values()].sort((a, b) => a.id - b.id);
-
 async function jsonRequest<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await apiFetch(path, options);
   const body = await response.text();
@@ -69,8 +58,17 @@ export default function ChatWorkspace() {
   const [error, setError] = useState('');
   const bottom = useRef<HTMLDivElement>(null);
   const draft = useRef<{ key: string; text: string; id: string } | null>(null);
-  const activeKey = useRef(conversationKey);
-  activeKey.current = conversationKey;
+  const sessionKey = `${user?.id || ''}:${token || ''}:${conversationKey}`;
+  const activeKey = useRef(sessionKey);
+  activeKey.current = sessionKey;
+  const olderRequest = useRef<AbortController | null>(null);
+  useEffect(() => {
+    activeKey.current = sessionKey;
+    return () => {
+      olderRequest.current?.abort();
+      activeKey.current = '';
+    };
+  }, [sessionKey]);
 
   const deleteConversation = async () => {
     if (!active || sending || deleting) return;
@@ -118,6 +116,7 @@ export default function ChatWorkspace() {
     setTransaction(null);
     setError('');
     setOlder(true);
+    setLoading(false);
     setText('');
     if (!user || !token || !receiverId) return;
     if (postId !== undefined && (!Number.isInteger(postId) || postId < 1)) {
@@ -136,32 +135,33 @@ export default function ChatWorkspace() {
       .catch((error) => {
         if (!controller.signal.aborted) setError(error.message);
       });
-    const poller = startPolling(async (signal) => {
-      try {
-        const data = await jsonRequest<Message[]>(`chat/messages?${query}`, { signal });
-        if (!signal.aborted)
-          setMessages((current) => mergeMessages([...current, ...data]));
-        if (postId) {
-          const tx = await jsonRequest<TransactionSummary | null>(
-            `transactions/check?user1=${user.id}&user2=${receiverId}&postId=${postId}`,
-            { signal },
-          );
-          if (!signal.aborted) setTransaction(tx);
-        }
-      } catch (error) {
-        if (!signal.aborted)
-          setError(
-            error instanceof Error ? error.message : 'Không thể đồng bộ hội thoại.',
-          );
-      }
+    const stopMessages = watchConversation({
+      userId: user.id,
+      receiverId,
+      postId,
+      load: (signal, before) => {
+        const historyQuery = new URLSearchParams(query);
+        if (before !== undefined) historyQuery.set('before', String(before));
+        return jsonRequest<Message[]>(`chat/messages?${historyQuery}`, { signal });
+      },
+      onMessages: (data) => setMessages((current) => mergeMessages([...current, ...data])),
+      onError: (error) => setError(error instanceof Error ? error.message : 'Không thể đồng bộ hội thoại.'),
     });
-    window.addEventListener('messages-updated', poller.refresh);
-    window.addEventListener('transactions-updated', poller.refresh);
+    // Transaction checks retain their existing cadence independently of message history.
+    const transactionPoller = postId ? startPolling(async (signal) => {
+      const tx = await jsonRequest<TransactionSummary | null>(
+        `transactions/check?user1=${user.id}&user2=${receiverId}&postId=${postId}`,
+        { signal },
+      );
+      if (!signal.aborted) setTransaction(tx);
+    }) : null;
+    const refreshTransaction = () => transactionPoller?.refresh();
+    window.addEventListener('transactions-updated', refreshTransaction);
     return () => {
       controller.abort();
-      poller.stop();
-      window.removeEventListener('messages-updated', poller.refresh);
-      window.removeEventListener('transactions-updated', poller.refresh);
+      stopMessages();
+      transactionPoller?.stop();
+      window.removeEventListener('transactions-updated', refreshTransaction);
     };
   }, [user?.id, token, receiverId, postId]);
 
@@ -217,7 +217,7 @@ export default function ChatWorkspace() {
     event.preventDefault();
     const content = text.trim();
     if (!content || !active || !user || sending) return;
-    const key = conversationKey;
+    const key = sessionKey;
     if (draft.current?.key !== key || draft.current.text !== content)
       draft.current = { key, text: content, id: crypto.randomUUID() };
     setSending(true);
@@ -248,23 +248,26 @@ export default function ChatWorkspace() {
   };
 
   const loadOlder = async () => {
-    if (!messages.length) return;
+    if (!messages.length || loading) return;
+    const controller = new AbortController();
+    olderRequest.current = controller;
     setLoading(true);
-    const key = conversationKey;
+    const key = sessionKey;
     try {
       const query = new URLSearchParams({
         receiverId,
         before: String(messages[0].id),
         ...(postId ? { postId: String(postId) } : {}),
       });
-      const data = await jsonRequest<Message[]>(`chat/messages?${query}`);
+      const data = await jsonRequest<Message[]>(`chat/messages?${query}`, { signal: controller.signal });
       if (activeKey.current !== key) return;
       setOlder(data.length === 50);
       setMessages((current) => mergeMessages([...data, ...current]));
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Không thể tải tin cũ.');
+      if (!controller.signal.aborted && activeKey.current === key)
+        setError(error instanceof Error ? error.message : 'Không thể tải tin cũ.');
     } finally {
-      setLoading(false);
+      if (activeKey.current === key) setLoading(false);
     }
   };
 
