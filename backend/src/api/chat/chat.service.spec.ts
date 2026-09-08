@@ -16,6 +16,10 @@ describe('Message delivery and read tracking', () => {
       intent as unknown as IntentService,
     );
   });
+  afterEach(async () => {
+    // Drain background work so each fixture remains isolated.
+    await Promise.allSettled([...(service as unknown as { analyses: Map<string, Promise<unknown>> }).analyses.values()]);
+  });
 
   it('persists one message when a sender retries with the same client message ID', async () => {
     const input = {
@@ -28,6 +32,7 @@ describe('Message delivery and read tracking', () => {
     await service.send('buyer', input);
     expect(fixture.data.message).toHaveLength(1);
     expect(fixture.data.notification).toHaveLength(0);
+    await new Promise(setImmediate);
     expect(intent.isNegotiating).toHaveBeenCalledTimes(1);
   });
 
@@ -43,6 +48,27 @@ describe('Message delivery and read tracking', () => {
     expect(fixture.data.message).toHaveLength(1);
     expect(fixture.data.transaction).toHaveLength(0);
     expect(fixture.data.notification).toHaveLength(0);
+  });
+
+  it('returns a persisted message while slow AI is still pending, then creates the proposal asynchronously', async () => {
+    let finish!: (detected: boolean) => void;
+    intent.isNegotiating.mockImplementation(() => new Promise<boolean>(resolve => { finish = resolve; }));
+    const pending = service.send('buyer', { receiverId: 'seller', postId: 1, content: 'hello', clientMessageId: 'slow' });
+    await new Promise(setImmediate);
+    expect(intent.isNegotiating).toHaveBeenCalledTimes(1);
+    let returned = false;
+    void pending.then(() => { returned = true; });
+    await new Promise(setImmediate);
+    try {
+      expect(returned).toBe(true);
+      expect(fixture.data.message).toHaveLength(1);
+      expect(fixture.data.transaction).toHaveLength(0);
+    } finally { finish(true); }
+    await pending;
+    await new Promise(setImmediate);
+    expect(fixture.data.transaction[0].status).toBe('VERIFYING');
+    expect(fixture.data.notification).toHaveLength(2);
+    expect(fixture.data.notification.every(item => item.type === 'SYSTEM')).toBe(true);
   });
 
   it('saves five distinct messages without creating bell notifications', async () => {

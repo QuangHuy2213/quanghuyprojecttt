@@ -61,4 +61,26 @@ describe('AI intent classification', () => {
       ]),
     ).toBe(false);
   });
+
+  it('logs HTTP errors safely without leaking key or conversation', async () => {
+    const service = new IntentService();
+    const log = jest.spyOn((service as any).logger, 'warn').mockImplementation(() => undefined);
+    global.fetch = jest.fn().mockResolvedValue(new Response('', { status: 503 }));
+    expect(await service.isNegotiating('private title', [{ role: 'buyer', text: 'private content' }], 'hashed-id')).toBe(false);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('reason=HTTP_503'));
+    expect(JSON.stringify(log.mock.calls)).not.toMatch(/private title|private content|test-only/);
+  });
+
+  it('sends the complete meeting/location sequence for semantic classification', async () => {
+    global.fetch = jest.fn().mockResolvedValue(Response.json({ candidates: [{ content: { parts: [{ text: '{"negotiating":true}' }] } }] }));
+    const messages = [
+      { role: 'buyer' as const, text: 'tôi muốn mua nhà' },
+      { role: 'seller' as const, text: 'bạn muốn gặp nhau ở đâu để trao đổi' },
+      { role: 'buyer' as const, text: 'để tôi gửi định vị' },
+    ];
+    expect(await new IntentService().isNegotiating('Nhà thử nghiệm', messages)).toBe(true);
+    const request = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(JSON.parse(request.contents[0].parts[0].text).conversation).toEqual(messages);
+    expect(request.generationConfig.responseSchema.required).toEqual(['negotiating']);
+  });
 });

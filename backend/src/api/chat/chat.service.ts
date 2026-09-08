@@ -2,8 +2,10 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TransactionService } from '../transaction/transaction.service';
@@ -12,6 +14,7 @@ import { ConversationDto, SendMessageDto } from './dto/chat.dto';
 
 @Injectable()
 export class ChatService {
+  private readonly logger = new Logger(ChatService.name);
   private readonly analyses = new Map<string, Promise<unknown>>();
   constructor(
     private readonly prisma: PrismaService,
@@ -106,6 +109,7 @@ export class ChatService {
     if (post?.status === 'ACTIVE') {
       const buyerId = userId === post.userId ? input.receiverId : userId;
       const analysisKey = `${post.id}:${buyerId}`;
+      const trace = createHash('sha256').update(analysisKey).digest('hex').slice(0, 12);
       const previous = this.analyses.get(analysisKey) ?? Promise.resolve();
       const analysis = previous
         .catch(() => undefined)
@@ -116,8 +120,10 @@ export class ChatService {
               input.receiverId,
               post.id,
             )
-          )
+          ) {
+            if (process.env.NODE_ENV !== 'production') this.logger.debug(`[AI SKIP] conversation=${trace} reason=existing_transaction`);
             return;
+          }
           const recent = await this.prisma.message.findMany({
             where: this.conversation(userId, input.receiverId, post.id),
             orderBy: { id: 'desc' },
@@ -128,23 +134,22 @@ export class ChatService {
               item.senderId === post.userId ? ('seller' as const) : ('buyer' as const),
             text: item.text,
           }));
-          if (await this.intent.isNegotiating(post.title, messages))
-            await this.transactions.triggerEscrowVerification(
+          if (await this.intent.isNegotiating(post.title, messages, trace)) {
+            const proposal = await this.transactions.triggerEscrowVerification(
               post.id,
               buyerId,
               post.userId!,
             );
+            if (process.env.NODE_ENV !== 'production') this.logger.debug(`[AI STATE] conversation=${trace} persisted=${Boolean(proposal)}`);
+          }
         });
       this.analyses.set(analysisKey, analysis);
-      // Persisted chat is returned even if the classifier is unavailable; no keyword fallback.
-      try {
-        await analysis;
-      } catch {
-        /* A saved message must not become a failed send when analysis fails. */
-      } finally {
-        if (this.analyses.get(analysisKey) === analysis)
-          this.analyses.delete(analysisKey);
-      }
+      // Do not hold the send response while Gemini runs. Always observe failures.
+      void analysis.catch(() => {
+        this.logger.warn(`[AI ERROR] conversation=${trace} stage=transaction_detection`);
+      }).finally(() => {
+        if (this.analyses.get(analysisKey) === analysis) this.analyses.delete(analysisKey);
+      });
     }
     return { message };
   }
