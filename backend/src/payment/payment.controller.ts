@@ -1,93 +1,117 @@
-import { Controller, Post, Get, Req, Res, UseGuards, Query, Body, UnauthorizedException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+  Req,
+  Res,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { PaymentService } from './payment.service';
 import type { Request, Response } from 'express';
-import 'dotenv/config';
 
 @Controller('payments')
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
-  // Hàm phụ trợ trích xuất userId (Do tuỳ cấu hình jwt payload của bạn lưu ở sub hay userId)
   private getUserId(req: Request): string {
     const user = req.user as any;
-    if (!user) throw new UnauthorizedException();
-    return user.sub || user.userId || user.id; 
-  }
 
-  private getBackendUrl(req: Request): string {
-    const forwardedHost = req.headers['x-forwarded-host'];
-    const forwardedProto = req.headers['x-forwarded-proto'];
-    const host = (Array.isArray(forwardedHost) ? forwardedHost[0] : forwardedHost) || req.get('host');
-    const protocol = (Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto)?.split(',')[0].trim() || req.protocol;
-
-    if (!host) {
-      return (process.env.BACKEND_URL || 'http://localhost:3001').replace(/\/+$/, '');
+    if (!user) {
+      throw new UnauthorizedException('Bạn chưa đăng nhập.');
     }
 
-    return `${protocol}://${host}`.replace(/\/+$/, '');
+    const userId = user.sub || user.userId || user.id;
+
+    if (!userId) {
+      throw new UnauthorizedException('Không xác định được người dùng.');
+    }
+
+    return String(userId);
   }
 
   private getClientIp(req: Request): string {
     const forwarded = req.headers['x-forwarded-for'];
     const value = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-    return value?.split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
+
+    return (
+      value?.split(',')[0]?.trim() ||
+      req.socket.remoteAddress ||
+      '127.0.0.1'
+    );
   }
 
-  // =======================================================
-  // API 1: Tạo URL Thanh Toán - Nâng cấp môi giới
-  // =======================================================
+  private getVnpayReturnUrl(): string {
+    const returnUrl = process.env.VNPAY_RETURN_URL?.trim();
+
+    if (!returnUrl) {
+      throw new Error('VNPAY_RETURN_URL chưa được cấu hình.');
+    }
+
+    return returnUrl.replace(/\/+$/, '');
+  }
+
   @UseGuards(AuthGuard('jwt'))
   @Post('upgrade-agent')
   async createUpgradePayment(@Req() req: Request) {
     const userId = this.getUserId(req);
     const ipAddr = this.getClientIp(req);
-    const backendUrl = this.getBackendUrl(req);
-    const returnUrl = `${backendUrl}/payments/vnpay-return`;
+    const returnUrl = this.getVnpayReturnUrl();
 
-    const paymentUrl = this.paymentService.createPaymentUrl(userId, ipAddr, returnUrl);
-    
+    const paymentUrl = this.paymentService.createPaymentUrl(
+      userId,
+      ipAddr,
+      returnUrl,
+    );
+
     return { paymentUrl };
   }
 
-  // =======================================================
-  // 🌟 MỚI: API 2: Tạo URL Thanh Toán - Trả Hóa Đơn
-  // =======================================================
   @UseGuards(AuthGuard('jwt'))
   @Post('pay-invoice')
   async createInvoicePayment(
     @Req() req: Request,
-    @Body('invoiceId') invoiceId: string
+    @Body('invoiceId') invoiceId: string,
   ) {
     const userId = this.getUserId(req);
     const ipAddr = this.getClientIp(req);
-    const backendUrl = this.getBackendUrl(req);
-    const returnUrl = `${backendUrl}/payments/vnpay-return`;
+    const returnUrl = this.getVnpayReturnUrl();
 
-    // Gọi Service mới
-    const paymentUrl = await this.paymentService.createInvoicePaymentUrl(
-      invoiceId, 
-      userId, 
-      ipAddr,
-      returnUrl
-    );
-    
+    const paymentUrl =
+      await this.paymentService.createInvoicePaymentUrl(
+        invoiceId,
+        userId,
+        ipAddr,
+        returnUrl,
+      );
+
     return { paymentUrl };
   }
 
-  // =======================================================
-  // API 3: Nhận kết quả từ VNPAY và Redirect về Frontend
-  // =======================================================
   @Get('vnpay-return')
-  async vnpayReturn(@Query() query: any, @Res() res: Response) {
-    const result = await this.paymentService.processReturn(query);
-    const frontendUrl = (process.env.FRONTEND_URL || 'https://nguyenducquanghuy.vercel.app').replace(/\/+$/, '');
-    
-    // Gắn thêm type (INVOICE hoặc UPGRADE) để Frontend biết hiển thị chữ gì cho phù hợp
+  async vnpayReturn(
+    @Query() query: any,
+    @Res() res: Response,
+  ) {
+    const result =
+      await this.paymentService.processReturn(query);
+
+    const frontendUrl = (
+      process.env.FRONTEND_URL ||
+      'https://nguyenducquanghuy.vercel.app'
+    ).replace(/\/+$/, '');
+
     if (result.success) {
-      return res.redirect(`${frontendUrl}/payment-result?status=success&type=${result.type}`);
-    } else {
-      return res.redirect(`${frontendUrl}/payment-result?status=failed`);
+      return res.redirect(
+        `${frontendUrl}/payment-result?status=success&type=${result.type}`,
+      );
     }
+
+    return res.redirect(
+      `${frontendUrl}/payment-result?status=failed`,
+    );
   }
 }
