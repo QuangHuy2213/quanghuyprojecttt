@@ -126,6 +126,7 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
         }].slice(-3));
       },
       onMessage: () => window.dispatchEvent(new Event('messages-updated')),
+      onTransactionDetected: () => window.dispatchEvent(new Event('transactions-updated')),
       onError: (error) => console.warn('Inbox sync interrupted:', error),
     });
     inboxRef.current = inbox;

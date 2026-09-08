@@ -16,6 +16,7 @@ export function startPolling(
   let controller: AbortController | undefined;
   let stopped = false;
   let running = false;
+  let refreshPending = false;
   let due = Date.now();
   const enabled = () => document.visibilityState === 'visible' &&
     (options.enabled?.() ?? Boolean(localStorage.getItem('access_token') && localStorage.getItem('user')));
@@ -36,7 +37,8 @@ export function startPolling(
       if (!controller.signal.aborted) console.error('Lỗi đồng bộ dữ liệu nền:', error);
     } finally {
       running = false;
-      due = Date.now() + (retryDelay() || interval);
+      due = Date.now() + (retryDelay() || (refreshPending ? 1000 : interval));
+      refreshPending = false;
       schedule();
     }
   };
@@ -54,6 +56,7 @@ export function startPolling(
   return {
     refresh() {
       // Realtime events are coalesced; a rapid event burst cannot start parallel fetches.
+      if (running) refreshPending = true;
       due = Math.min(due, Date.now() + 1000);
       schedule();
     },

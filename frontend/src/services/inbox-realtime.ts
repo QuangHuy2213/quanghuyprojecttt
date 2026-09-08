@@ -26,12 +26,14 @@ export function watchInbox(options: {
   onToast: (item: InboxNotification) => void;
   onMessageToast?: (message: { id: number; senderId: string; postId: number | null }) => void;
   onMessage?: () => void;
+  onTransactionDetected?: () => void;
   onError?: (error: unknown) => void;
   load?: (token: string, signal: AbortSignal) => Promise<Snapshot>;
 }) {
   let rows: InboxNotification[] = [];
   let unread = new Set<number>();
   const seen = new Set<number>();
+  const transactionSignals = new Set<number>();
   const toastedMessages = new Set<number>();
   const readMessages = new Set<number>();
   const notificationChanges = new Map<number, InboxNotification>();
@@ -49,6 +51,11 @@ export function watchInbox(options: {
   const visible = () => document.visibilityState === 'visible';
   const emit = () => { options.onNotifications(rows); options.onUnreadMessages(unread.size); };
   const announce = (item: InboxNotification, toast: boolean) => {
+    // Domain updates must not depend on toast eligibility (read flags/history/replay).
+    if (item.type === 'SYSTEM' && item.eventKey?.includes(':proposal:') && !transactionSignals.has(item.id)) {
+      transactionSignals.add(item.id);
+      options.onTransactionDetected?.();
+    }
     if (seen.has(item.id)) return;
     seen.add(item.id);
     if (toast && !item.isRead && !item.is_read && item.type !== 'WARNING_POPUP') options.onToast(item);

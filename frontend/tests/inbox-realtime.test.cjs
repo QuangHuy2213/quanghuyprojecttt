@@ -71,6 +71,17 @@ const apiRow = (id, extra = {}) => ({ id, userId: 'b', title: 'New message', con
 const deliver = (h, table, event, value, channel = [...h.channels].reverse().find(c => c.handlers.some(item => item.filter.table === table))) =>
   channel.handlers.find(item => item.filter.table === table && item.filter.event === event).cb({ new: value });
 
+test('transaction proposal signals refresh even when read or loaded from snapshot without toast', async () => {
+  let signals = 0;
+  const h = harness(async () => ({ notifications: [apiRow(1, { eventKey: 'tx:proposal:b', isRead: true })], unreadIds: [] }));
+  const inbox = h.start({ onTransactionDetected: () => { signals++; } });
+  h.channels[0].status('SUBSCRIBED'); await h.flush();
+  assert.equal(signals, 1); assert.equal(h.toasts.length, 0);
+  deliver(h, 'notifications', 'INSERT', row(2, { eventKey: 'tx2:proposal:b', is_read: true }));
+  deliver(h, 'notifications', 'INSERT', row(2, { eventKey: 'tx2:proposal:b', is_read: true }));
+  assert.equal(signals, 2); assert.equal(h.toasts.length, 0); inbox.stop();
+});
+
 test('global chat channel delivers popup without notification subscription or optional listing fields', async () => {
   const h = harness(); const popups = [];
   const inbox = h.start({ onMessageToast: item => popups.push(item) });

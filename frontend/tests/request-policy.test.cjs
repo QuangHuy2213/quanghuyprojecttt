@@ -181,6 +181,23 @@ test('guest has no background polls; paired transaction endpoints run only once 
   poller.stop();
 });
 
+test('a transaction event during an in-flight check queues one refresh instead of waiting 60 seconds', async () => {
+  const b = browser(); b.login();
+  let finish;
+  let checks = 0;
+  const poller = b.polling.startPolling(async () => {
+    checks++;
+    if (checks === 1) await new Promise(resolve => { finish = resolve; });
+  });
+  await b.tick(0); assert.equal(checks, 1);
+  poller.refresh(); poller.refresh();
+  finish(); await b.flush();
+  await b.tick(999); assert.equal(checks, 1);
+  await b.tick(1); assert.equal(checks, 2);
+  await b.tick(59_999); assert.equal(checks, 2);
+  poller.stop();
+});
+
 test('GET cache is scoped by auth, expires, and is invalidated by writes; mutations are never deduplicated', async () => {
   const b = browser();
   await b.api.apiFetch('cities'); await b.tick(1000); await b.api.apiFetch('/cities');
