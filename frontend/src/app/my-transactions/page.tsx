@@ -1,10 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import Header from '@/components/Header';
 import { apiFetch } from '@/services/api';
-import { startPolling } from '@/services/polling';
+import { useTransactions } from '@/components/TransactionProvider';
+import { useInbox } from '@/components/InboxProvider';
+import { mergeRows } from '@/services/transaction-state';
 import TransactionPrompt, { transactionLabels } from '@/components/TransactionPrompt';
 
 const invLabels: Record<string, string> = {
@@ -37,11 +39,8 @@ type ActionModalState = {
 
 export default function TransactionsAndInvoicesPage() {
   const [tab, setTab] = useState<'transactions' | 'invoices'>('transactions');
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [invoices, setInvoices] = useState<any[]>([]);
-  const [user, setUser] = useState<any>();
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const { transactions, setTransactions, invoices, loading, refreshing, refresh: load } = useTransactions();
+  const { user } = useInbox();
 
   const [toast, setToast] = useState<ToastState>({
     show: false,
@@ -63,68 +62,7 @@ export default function TransactionsAndInvoicesPage() {
     sending: false,
   });
 
-  const load = useCallback(async (showFullLoader = false, signal?: AbortSignal) => {
-    if (showFullLoader) setLoading(true);
-    else setRefreshing(true);
 
-    const token = localStorage.getItem('access_token');
-    const stored = localStorage.getItem('user');
-
-    if (!token || !stored) {
-      setLoading(false);
-      setRefreshing(false);
-      return;
-    }
-
-    try {
-      setUser(JSON.parse(stored));
-    } catch {
-      setUser(undefined);
-    }
-
-    const headers = { Authorization: `Bearer ${token}` };
-
-    try {
-      const [transactionsRes, invoicesRes] = await Promise.all([
-        apiFetch('transactions/my-transactions', {
-          signal,
-          headers,
-          cache: 'no-store',
-        }),
-        apiFetch('transactions/my-invoices', {
-          signal,
-          headers,
-          cache: 'no-store',
-        }),
-      ]);
-
-      const nextTransactions = transactionsRes.ok ? await transactionsRes.json() : null;
-      const nextInvoices = invoicesRes.ok ? await invoicesRes.json() : null;
-      if (signal?.aborted) return;
-      if (nextTransactions) setTransactions(nextTransactions);
-      if (nextInvoices) setInvoices(nextInvoices);
-    } catch (error) {
-      if (!signal?.aborted) console.error('Lỗi tải dữ liệu giao dịch:', error);
-    } finally {
-      if (showFullLoader) setLoading(false);
-      else setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    let first = true;
-    if (!localStorage.getItem('access_token') || !localStorage.getItem('user'))
-      setLoading(false);
-    const poller = startPolling(async (signal) => {
-      await load(first, signal);
-      first = false;
-    });
-    window.addEventListener('transactions-updated', poller.refresh);
-    return () => {
-      poller.stop();
-      window.removeEventListener('transactions-updated', poller.refresh);
-    };
-  }, [load]);
 
   const notify = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ show: true, message, type });
@@ -181,7 +119,7 @@ export default function TransactionsAndInvoicesPage() {
           'success',
         );
         window.dispatchEvent(new Event('transactions-updated'));
-        load(false);
+        setTransactions(current => mergeRows(current, [data]));
       } else {
         notify(data.message || 'Không thể gửi yêu cầu hủy.', 'error');
         setCancelModal((prev) => ({ ...prev, sending: false }));
@@ -235,7 +173,7 @@ export default function TransactionsAndInvoicesPage() {
           isAgreed ? 'success' : 'info',
         );
 
-        load(false);
+        setTransactions(current => mergeRows(current, [data]));
       } else {
         notify(data.message || 'Không thể xử lý yêu cầu.', 'error');
         setActionModal((prev) => ({ ...prev, sending: false }));
@@ -502,7 +440,7 @@ export default function TransactionsAndInvoicesPage() {
                       <TransactionPrompt
                         transaction={tx}
                         userId={user?.id || ''}
-                        onUpdated={() => load(false)}
+                        onUpdated={(row) => setTransactions(current => mergeRows(current, [row]))}
                       />
                     </div>
                   )}

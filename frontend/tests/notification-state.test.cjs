@@ -54,3 +54,12 @@ test('different event keys and different posts remain distinct', () => {
   ]);
   assert.equal(rows.length, 3);
 });
+
+test('distinct identical admin warnings remain queued while replay keeps one row per ID', () => {
+  const rows = mergeNotifications([
+    notification(1, { type: 'WARNING_POPUP' }),
+    notification(2, { type: 'WARNING_POPUP' }),
+    notification(1, { type: 'WARNING_POPUP' }),
+  ]);
+  assert.equal(rows.length, 2);
+});

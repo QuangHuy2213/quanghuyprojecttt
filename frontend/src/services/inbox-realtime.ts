@@ -47,6 +47,8 @@ export function watchInbox(options: {
   let generation = 0;
   let stopped = false, connected = false, closed = false, running = false, pending = false;
   let initialized = false, lastSync = 0;
+  let warningConnected = true;
+  let warningNeedsSync = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const visible = () => document.visibilityState === 'visible';
   const emit = () => { options.onNotifications(rows); options.onUnreadMessages(unread.size); };
@@ -83,7 +85,9 @@ export function watchInbox(options: {
       const owned = snapshot.notifications.filter(item => item.type !== 'MESSAGE' && (item.userId ?? item.user_id) === options.userId);
       // INSERT/UPDATE and local read acknowledgements arriving during GET win over its snapshot.
       const acknowledged = new Set(rows.filter(item => item.isRead || item.is_read).map(item => item.id));
-      rows = mergeNotifications([...notificationChanges.values(), ...owned, ...rows])
+      const newerWarnings = rows.filter(item => item.type === 'WARNING_POPUP' &&
+        Date.parse(item.updatedAt || '') > Date.parse(owned.find(row => row.id === item.id)?.updatedAt || '1970-01-01'));
+      rows = mergeNotifications([...notificationChanges.values(), ...newerWarnings, ...owned, ...rows])
         .map(item => acknowledged.has(item.id) ? { ...item, isRead: true } : item);
       unread = new Set(snapshot.unreadIds.filter(id => !readMessages.has(id)));
       for (const [id, isUnread] of messageChanges) {
@@ -91,6 +95,7 @@ export function watchInbox(options: {
       }
       for (const item of rows) announce(item, initialized);
       initialized = true;
+      warningNeedsSync = false;
       emit();
     } catch (error) {
       failed = true;
@@ -98,13 +103,13 @@ export function watchInbox(options: {
     } finally {
       running = false;
       lastSync = Date.now();
-      if (!stopped && (failed || !connected || pending)) schedule(failed || !connected ? 60_000 : 1000);
+      if (!stopped && (failed || !connected || !warningConnected || pending)) schedule(failed || !connected || !warningConnected ? 60_000 : 1000);
     }
   };
   const notification = (event: 'INSERT' | 'UPDATE', payload: Change) => {
     if (stopped) return;
     const item = notificationFromRow(payload.new, options.userId);
-    if (!item || item.type === 'MESSAGE') return;
+    if (!item || item.type === 'MESSAGE' || item.type === 'WARNING_POPUP') return;
     // Read flags are monotonic; a replayed INSERT must not undo an acknowledgement.
     const previous = rows.find(row => row.id === item.id);
     if (previous?.isRead || previous?.is_read) item.isRead = true;
@@ -186,12 +191,28 @@ export function watchInbox(options: {
   };
   const visibility = () => {
     if (!visible()) clearTimeout(timer);
-    else if (!connected || !initialized) void sync();
+    else if (!connected || !warningConnected || warningNeedsSync || !initialized) void sync();
   };
   if (isSupabaseConfigured) { schedule(10_000); connect(); connectMessages(); }
   else schedule(0);
   document.addEventListener('visibilitychange', visibility);
   return {
+    setWarningConnection(value: boolean) {
+      const previous = warningConnected;
+      warningConnected = value;
+      if (value && !previous) { warningNeedsSync = true; clearTimeout(timer); void sync(); }
+      else if (!value) schedule(60_000);
+    },
+    receiveWarning(value: InboxNotification) {
+      if (stopped || !value || value.type !== 'WARNING_POPUP' ||
+          (value.userId ?? value.user_id) !== options.userId || !Number.isInteger(value.id)) return;
+      const old = rows.find(item => item.id === value.id);
+      const incoming = old && Date.parse(old.updatedAt as string) > Date.parse(value.updatedAt as string) ? old : value;
+      const item = old?.isRead || old?.is_read ? { ...incoming, isRead: true } : incoming;
+      if (running) notificationChanges.set(item.id, item);
+      rows = mergeNotifications([item, ...rows]);
+      options.onNotifications(rows);
+    },
     refresh: () => { void sync(); },
     updateNotifications(update: InboxNotification[] | ((current: InboxNotification[]) => InboxNotification[])) {
       if (stopped) return;

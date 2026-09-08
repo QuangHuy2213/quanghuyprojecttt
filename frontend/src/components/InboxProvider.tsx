@@ -9,6 +9,8 @@ import {
   useState,
 } from 'react';
 import Link from 'next/link';
+import WarningModal from './WarningModal';
+import { onRealtime, onRealtimeStatus } from '@/services/realtime-socket';
 import type { InboxNotification } from '@/services/notification-state';
 import { watchInbox } from '@/services/inbox-realtime';
 
@@ -130,7 +132,11 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
       onError: (error) => console.warn('Inbox sync interrupted:', error),
     });
     inboxRef.current = inbox;
+    const stopWarning = onRealtime('warning:new', row => inbox.receiveWarning(row));
+    const stopAcknowledgement = onRealtime('warning:acknowledged', row => inbox.receiveWarning(row));
+    const stopStatus = onRealtimeStatus(status => inbox.setWarningConnection(status === 'connected'));
     return () => {
+      stopWarning(); stopAcknowledgement(); stopStatus();
       inboxRef.current = null;
       inbox.stop();
     };
@@ -149,6 +155,7 @@ export function InboxProvider({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
+      <WarningModal />
       <div
         className="fixed right-4 top-24 z-[100001] flex w-[calc(100%-2rem)] max-w-sm flex-col gap-3"
         aria-live="polite"

@@ -5,8 +5,10 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Header from './Header';
 import UserAvatar from './UserAvatar';
-import TransactionPrompt, { TransactionSummary } from './TransactionPrompt';
+import TransactionPrompt from './TransactionPrompt';
 import { useInbox } from './InboxProvider';
+import { useTransactions } from './TransactionProvider';
+import { mergeRows } from '@/services/transaction-state';
 import { apiFetch } from '@/services/api';
 import { startPolling } from '@/services/polling';
 import { watchConversation, mergeMessages, type Message } from '@/services/chat-realtime';
@@ -50,7 +52,10 @@ export default function ChatWorkspace() {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [active, setActive] = useState<Thread | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [transaction, setTransaction] = useState<TransactionSummary | null>(null);
+  const { transactions, setTransactions } = useTransactions();
+  const transaction = transactions.filter(row => row.postId === (postId ?? null) &&
+    ((row.buyerId === user?.id && row.sellerId === receiverId) || (row.sellerId === user?.id && row.buyerId === receiverId)))
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0] || null;
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -115,7 +120,6 @@ export default function ChatWorkspace() {
   useEffect(() => {
     setActive(null);
     setMessages([]);
-    setTransaction(null);
     setError('');
     setOlder(true);
     setLoading(false);
@@ -149,21 +153,9 @@ export default function ChatWorkspace() {
       onMessages: (data) => setMessages((current) => mergeMessages([...current, ...data])),
       onError: (error) => setError(error instanceof Error ? error.message : 'Không thể đồng bộ hội thoại.'),
     });
-    // Transaction checks retain their existing cadence independently of message history.
-    const transactionPoller = postId ? startPolling(async (signal) => {
-      const tx = await jsonRequest<TransactionSummary | null>(
-        `transactions/check?user1=${user.id}&user2=${receiverId}&postId=${postId}`,
-        { signal },
-      );
-      if (!signal.aborted) setTransaction(tx);
-    }) : null;
-    const refreshTransaction = () => transactionPoller?.refresh();
-    window.addEventListener('transactions-updated', refreshTransaction);
     return () => {
       controller.abort();
       stopMessages();
-      transactionPoller?.stop();
-      window.removeEventListener('transactions-updated', refreshTransaction);
     };
   }, [user?.id, token, receiverId, postId]);
 
@@ -373,7 +365,7 @@ export default function ChatWorkspace() {
                       key={`${transaction.id}:${transaction.status}`}
                       transaction={transaction}
                       userId={user.id}
-                      onUpdated={setTransaction}
+                      onUpdated={(row) => setTransactions(current => mergeRows(current, [row]))}
                     />
                   </div>
                 )}

@@ -4,6 +4,8 @@ import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import Header from '@/components/Header';
 import { useInbox } from '@/components/InboxProvider';
+import { useTransactions } from '@/components/TransactionProvider';
+import { mergeRows } from '@/services/transaction-state';
 import { transactionLabels } from '@/components/TransactionPrompt';
 import { apiFetch } from '@/services/api';
 import { startPolling } from '@/services/polling';
@@ -25,6 +27,7 @@ type Listing = {
 
 export default function DashboardPage() {
   const { user, token } = useInbox();
+  const { setTransactions } = useTransactions();
   const [posts, setPosts] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -107,7 +110,8 @@ export default function DashboardPage() {
     if (!soldPost) return;
     setBusy(true);
     try {
-      await mutate(`transactions/posts/${soldPost.id}/mark-sold`, 'POST', { buyerPhone });
+      const result = await mutate(`transactions/posts/${soldPost.id}/mark-sold`, 'POST', { buyerPhone });
+      setTransactions(current => mergeRows(current, [result.data || result]));
       setSoldPost(null);
       setMessage(
         'Đã gửi yêu cầu tới khách hàng. Tin chưa chuyển sang đã bán cho tới khi khách xác nhận.',

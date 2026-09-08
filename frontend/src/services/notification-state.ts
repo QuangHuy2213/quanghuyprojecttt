@@ -9,6 +9,7 @@ export type InboxNotification = {
   is_read?: boolean;
   createdAt?: string;
   created_at?: string;
+  updatedAt?: string;
   eventKey?: string;
   link?: string;
 };
@@ -27,6 +28,7 @@ export function mergeNotifications(items: InboxNotification[]) {
     if (
       !item.eventKey &&
       item.type !== 'MESSAGE' &&
+      item.type !== 'WARNING_POPUP' &&
       result.some(
         (other) =>
           !other.eventKey &&

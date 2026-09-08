@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { TransactionProvider } from '@/components/TransactionProvider';
+import { RealtimeProvider } from '@/components/RealtimeProvider';
 import { InboxProvider } from '@/components/InboxProvider';
 
 export const metadata: Metadata = {
@@ -20,7 +22,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="min-h-full bg-slate-100 text-slate-900 selection:bg-blue-100 selection:text-blue-900">
-        <InboxProvider>{children}</InboxProvider>
+        <RealtimeProvider><InboxProvider><TransactionProvider>{children}</TransactionProvider></InboxProvider></RealtimeProvider>
       </body>
     </html>
   );

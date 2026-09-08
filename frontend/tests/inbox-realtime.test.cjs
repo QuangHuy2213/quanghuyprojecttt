@@ -126,7 +126,7 @@ test('legacy MESSAGE rows in snapshot and realtime never enter bell or notificat
 
 test('global provider receives chat toast on other pages/hidden tab without fetching history', async () => {
   const layout = fs.readFileSync(require.resolve('../src/app/layout.tsx'), 'utf8');
-  assert.match(layout, /<InboxProvider>\{children\}<\/InboxProvider>/);
+  assert.match(layout, /<InboxProvider><TransactionProvider>\{children\}<\/TransactionProvider><\/InboxProvider>/);
   const h = harness(); const messages = [];
   const inbox = h.start({ onMessageToast: item => messages.push(item) });
   h.channels[0].status('SUBSCRIBED'); await h.flush();
@@ -246,12 +246,18 @@ test('fallback obeys API cooldown; missing config does not create a placeholder 
   await h.tick(30_000); assert.equal(h.calls.length, 2); inbox.stop();
 });
 
-test('admin warnings remain in state without ordinary toast; updates synchronize read status', async () => {
+test('warning socket live transport owns modal state; Supabase warning is ignored', async () => {
   const h = harness(); const inbox = h.start(); h.channels[0].status('SUBSCRIBED'); await h.flush();
   deliver(h, 'notifications', 'INSERT', row(1, { type: 'WARNING_POPUP' }));
-  assert.equal(h.batches.at(-1)[0].type, 'WARNING_POPUP'); assert.equal(h.toasts.length, 0);
-  deliver(h, 'notifications', 'UPDATE', row(1, { type: 'WARNING_POPUP', is_read: true }));
-  assert.equal(h.batches.at(-1)[0].isRead, true); assert.equal(h.calls.length, 1); inbox.stop();
+  assert.equal(h.batches.at(-1).length, 0);
+  const warning = apiRow(1, { type: 'WARNING_POPUP', updatedAt: '2026-09-08T01:00:00Z' });
+  inbox.receiveWarning(warning); inbox.receiveWarning(warning);
+  inbox.receiveWarning({ ...warning, id: 2, eventKey: null });
+  inbox.receiveWarning({ ...warning, id: 3, userId: 'other' });
+  assert.equal(h.batches.at(-1).length, 2); assert.equal(h.toasts.length, 0);
+  inbox.receiveWarning({ ...warning, isRead: true, updatedAt: '2026-09-08T02:00:00Z' });
+  inbox.receiveWarning(warning);
+  assert.equal(h.batches.at(-1).find(item => item.id === 1).isRead, true); inbox.stop();
 });
 
 test('a cached recovery snapshot cannot resurrect already acknowledged rows', async () => {
@@ -283,4 +289,31 @@ test('F/security: no browser notification writes, per-event refetch, or warning 
   assert.doesNotMatch(header, /notifications\/unread-warnings/);
   assert.doesNotMatch(inbox + transport, /\.insert\s*\(|SERVICE_ROLE_KEY/);
   assert.match(header, /item\.type !== 'MESSAGE'/);
+});
+
+test('socket warning reconnect syncs once, protects stale snapshot, and stops its fallback', async () => {
+  let resolve;
+  const h = harness(() => new Promise(r => { resolve = r; })); const inbox = h.start();
+  h.channels[0].status('SUBSCRIBED'); await h.flush();
+  const warning = apiRow(91, { type: 'WARNING_POPUP', updatedAt: '2026-09-08T02:00:00Z' });
+  inbox.receiveWarning(warning);
+  resolve({ notifications: [apiRow(91, { type: 'WARNING_POPUP', updatedAt: '2026-09-08T01:00:00Z' })], unreadIds: [] }); await h.flush();
+  assert.equal(h.batches.at(-1)[0].updatedAt, warning.updatedAt);
+  inbox.setWarningConnection(false); const calls = h.calls.length; await h.tick(59000); assert.equal(h.calls.length, calls);
+  await h.tick(1000); assert.equal(h.calls.length, calls + 1);
+  resolve({ notifications: [warning], unreadIds: [] }); await h.flush();
+  inbox.setWarningConnection(true); await h.tick(1000); resolve({ notifications: [{ ...warning, isRead: true }], unreadIds: [] }); await h.flush();
+  assert.equal(h.batches.at(-1)[0].isRead, true);
+  const synced = h.calls.length; await h.tick(300000); assert.equal(h.calls.length, synced); inbox.stop();
+});
+
+test('warning reconnect while hidden defers snapshot until visible, then synchronizes acknowledgement', async () => {
+  let acknowledged = false;
+  const h = harness(async () => ({ notifications: [apiRow(11, { type: 'WARNING_POPUP', isRead: acknowledged })], unreadIds: [] }));
+  const inbox = h.start(); h.channels[0].status('SUBSCRIBED'); await h.flush();
+  h.document.visibilityState = 'hidden'; h.document.dispatchEvent(new Event('visibilitychange'));
+  inbox.setWarningConnection(false); acknowledged = true; inbox.setWarningConnection(true);
+  const calls = h.calls.length; await h.tick(60000); assert.equal(h.calls.length, calls);
+  h.document.visibilityState = 'visible'; h.document.dispatchEvent(new Event('visibilitychange')); await h.flush();
+  assert.equal(h.batches.at(-1)[0].isRead, true); inbox.stop();
 });

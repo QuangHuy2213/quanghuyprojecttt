@@ -2,7 +2,8 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '@/services/api';
-import { startPolling } from '@/services/polling';
+import { useTransactions } from '@/components/TransactionProvider';
+import { mergeRows, transactionAction } from '@/services/transaction-state';
 import Link from 'next/link';
 
 const statusLabel: Record<string, string> = {
@@ -13,7 +14,7 @@ const statusLabel: Record<string, string> = {
   DISPUTE: 'Cần đối soát',
   FRAUD: 'Gian lận',
   PENDING_CANCEL: 'Chờ hủy',
-  CANCELLED: 'Chưa giao dịch',
+  CANCELLED: 'Đã hủy',
   CANCELLED_AFTER_SUCCESS: 'Đã hủy',
   DRAFT: 'Bản nháp',
   PENDING_PAYMENT: 'Chờ thanh toán',
@@ -348,7 +349,7 @@ export default function AdminTransactionsPage() {
   const [activeTab, setActiveTab] = useState<'TRANSACTIONS' | 'INVOICES'>('TRANSACTIONS');
 
   // States cho Giao Dịch
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const { transactions, setTransactions, invoices, setInvoices, removeTransaction, loading, refreshing, refresh: fetchData } = useTransactions();
   const [txFilter, setTxFilter] = useState('ALL');
   const [warningTarget, setWarningTarget] = useState<{
     userId: string;
@@ -356,11 +357,8 @@ export default function AdminTransactionsPage() {
   } | null>(null);
 
   // States cho Hóa Đơn
-  const [invoices, setInvoices] = useState<any[]>([]);
   const [invFilter, setInvFilter] = useState('ALL');
 
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [popup, setPopup] = useState<PopupState | null>(null);
 
   const showMessage = (
@@ -392,51 +390,7 @@ export default function AdminTransactionsPage() {
   // Lấy dữ liệu.
   // Chỉ hiển thị loading toàn trang ở lần tải đầu tiên.
   // Những lần tự đồng bộ sau đó chạy nền, chỉ khi tab đang hiển thị.
-  const fetchData = useCallback(async (showFullLoader = false, signal?: AbortSignal) => {
-    if (showFullLoader) setLoading(true);
-    else setRefreshing(true);
 
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      setLoading(false);
-      setRefreshing(false);
-      return;
-    }
-    const headers = { Authorization: `Bearer ${token}` };
-
-    try {
-      const [txRes, invRes] = await Promise.all([
-        apiFetch('admin/transactions', { headers, signal }),
-        apiFetch('transactions/invoices/admin/all', { headers, signal }),
-      ]);
-
-      const nextTransactions = txRes.ok ? await txRes.json() : null;
-      const nextInvoices = invRes.ok ? await invRes.json() : null;
-      if (signal?.aborted) return;
-      if (nextTransactions) setTransactions(nextTransactions);
-      if (nextInvoices) setInvoices(nextInvoices);
-    } catch (error) {
-      if (!signal?.aborted) console.error('Lỗi tải dữ liệu:', error);
-    } finally {
-      if (showFullLoader) setLoading(false);
-      else setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    let first = true;
-    if (!localStorage.getItem('access_token') || !localStorage.getItem('user'))
-      setLoading(false);
-    const poller = startPolling(async (signal) => {
-      await fetchData(first, signal);
-      first = false;
-    });
-    window.addEventListener('transactions-updated', poller.refresh);
-    return () => {
-      poller.stop();
-      window.removeEventListener('transactions-updated', poller.refresh);
-    };
-  }, [fetchData]);
 
   // --- Xử lý Giao dịch ---
   const handleResolveDispute = (transactionId: string, action: 'APPROVE' | 'CANCEL') => {
@@ -469,7 +423,8 @@ export default function AdminTransactionsPage() {
                 ? 'Giao dịch đã được công nhận thành công.'
                 : 'Giao dịch đã được hủy thành công.',
             );
-            fetchData(false);
+            const row = await res.json();
+            setTransactions(current => mergeRows(current, [row.data || row]));
           } else {
             const data = await res.json().catch(() => ({}));
             showMessage(
@@ -511,7 +466,7 @@ export default function AdminTransactionsPage() {
               'Đã xóa giao dịch',
               'Giao dịch đã được xóa khỏi danh sách thành công.',
             );
-            fetchData(false);
+            removeTransaction(transactionId);
           } else {
             showMessage(
               'error',
@@ -552,7 +507,8 @@ export default function AdminTransactionsPage() {
               'Phát hành hóa đơn thành công',
               'Hóa đơn đã được phát hành và yêu cầu thanh toán đã được gửi đến người dùng.',
             );
-            fetchData(false);
+            const row = await res.json();
+            setInvoices(current => mergeRows(current, [row.data || row]));
           } else {
             const data = await res.json().catch(() => ({}));
             showMessage(
@@ -577,7 +533,7 @@ export default function AdminTransactionsPage() {
 
   // Lọc dữ liệu
   const filteredTx = transactions.filter(
-    (tx) => txFilter === 'ALL' || tx.status === txFilter,
+    (tx) => txFilter === 'ALL' || (txFilter === 'CANCELLED' ? ['CANCELLED', 'CANCELLED_AFTER_SUCCESS'].includes(tx.status) : tx.status === txFilter),
   );
   const filteredInv = invoices.filter(
     (inv) => invFilter === 'ALL' || inv.status === invFilter,
@@ -734,7 +690,7 @@ export default function AdminTransactionsPage() {
               'DISPUTE',
               'FRAUD',
               'PENDING_CANCEL',
-              'CANCELLED_AFTER_SUCCESS',
+              'CANCELLED',
             ].map((status) => (
               <button
                 key={status}
@@ -919,18 +875,18 @@ export default function AdminTransactionsPage() {
                           </div>
                         ) : !tx.invoice &&
                           ['CANCELLED', 'CANCELLED_AFTER_SUCCESS'].includes(tx.status) ? (
-                          <button
+                          <div className="flex flex-col gap-2"><span>Đã kết thúc</span><button
                             onClick={() => handleDelete(tx.id)}
                             className="rounded-lg border border-rose-100 bg-rose-50 px-3.5 py-2
                               text-sm font-extrabold text-rose-600 transition-all
                               hover:border-rose-200 hover:bg-rose-100 hover:text-rose-700"
                           >
                             Xóa
-                          </button>
+                          </button></div>
                         ) : (
                           <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold text-slate-400">
                             <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
-                            Đang hoạt động
+                            {transactionAction[tx.status] || tx.status}
                           </span>
                         )}
                       </td>
