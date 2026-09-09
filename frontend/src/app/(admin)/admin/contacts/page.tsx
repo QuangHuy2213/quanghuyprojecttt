@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '@/services/api';
+import { mailRequest } from '@/services/mail-request';
 
 // 🌟 BƯỚC 1: TẠO COMPONENT THÔNG MINH CHO TỪNG BỨC THƯ (HỖ TRỢ KÉO/VUỐT)
 const SwipeableContactItem = ({ contact, openEmailModal, openConfirmModal, setDeleteModal }: any) => {
@@ -198,6 +199,7 @@ export default function AdminContactsPage() {
 
   const handleSendEmail = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSending) return;
 
     const contactId = emailModal.contactId;
     const email = emailModal.email.trim();
@@ -225,18 +227,7 @@ export default function AdminContactsPage() {
         message,
       };
 
-      const res = await apiFetch('admin/contacts/reply', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      let data: any = null;
-      try {
-        data = await res.json();
-      } catch {
-        data = null;
-      }
+      const { response: res, data } = await mailRequest('admin/contacts/reply', payload);
 
       if (!res.ok) {
         const apiMessage = Array.isArray(data?.message)
@@ -264,9 +255,9 @@ export default function AdminContactsPage() {
 
       showToast('Gửi thư phản hồi thành công!');
     } catch (error: any) {
-      console.error('Lỗi gửi thư phản hồi:', error);
       showToast(
-        error?.message || 'Lỗi máy chủ, không thể gửi thư!',
+        error?.message && error.message !== 'Failed to fetch'
+          ? error.message : 'Lỗi máy chủ, không thể gửi thư!',
         'error',
       );
     } finally {
@@ -333,7 +324,7 @@ export default function AdminContactsPage() {
           <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-[28px] border border-white/30 bg-white shadow-[0_30px_90px_-25px_rgba(15,23,42,0.55)] animate-fade-in-up">
             <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50/50 p-6">
               <h3 className="flex items-center gap-2 text-xl font-black text-slate-900">✉️ Soạn thư phản hồi</h3>
-              <button onClick={() => setEmailModal({ ...emailModal, isOpen: false })} className="text-gray-400 hover:text-red-500 font-bold text-2xl">&times;</button>
+              <button disabled={isSending} onClick={() => setEmailModal({ ...emailModal, isOpen: false })} className="text-gray-400 hover:text-red-500 font-bold text-2xl">&times;</button>
             </div>
             <form onSubmit={handleSendEmail} className="p-6 flex-1 overflow-y-auto">
               <div className="space-y-4">
@@ -343,15 +334,15 @@ export default function AdminContactsPage() {
                 </div>
                 <div>
                   <label className="mb-2 block text-sm font-extrabold text-slate-700">Chủ đề (Subject)</label>
-                  <textarea required rows={2} value={emailModal.subject} onChange={e => setEmailModal({...emailModal, subject: e.target.value})} className="w-full resize-none break-words whitespace-pre-wrap rounded-2xl border border-gray-200 bg-white px-4 py-3.5 text-[15px] font-bold leading-6 text-gray-800 outline-none focus:ring-2 focus:ring-[#1877F2]" />
+                  <textarea disabled={isSending} required rows={2} value={emailModal.subject} onChange={e => setEmailModal({...emailModal, subject: e.target.value})} className="w-full resize-none break-words whitespace-pre-wrap rounded-2xl border border-gray-200 bg-white px-4 py-3.5 text-[15px] font-bold leading-6 text-gray-800 outline-none focus:ring-2 focus:ring-[#1877F2]" />
                 </div>
                 <div>
                   <label className="mb-2 block text-sm font-extrabold text-slate-700">Nội dung thư</label>
-                  <textarea required rows={8} value={emailModal.message} onChange={e => setEmailModal({...emailModal, message: e.target.value})} className="w-full resize-none break-words whitespace-pre-wrap rounded-2xl border border-gray-200 bg-white px-4 py-3.5 text-[15px] leading-relaxed text-gray-700 outline-none focus:ring-2 focus:ring-[#1877F2]" />
+                  <textarea disabled={isSending} required rows={8} value={emailModal.message} onChange={e => setEmailModal({...emailModal, message: e.target.value})} className="w-full resize-none break-words whitespace-pre-wrap rounded-2xl border border-gray-200 bg-white px-4 py-3.5 text-[15px] leading-relaxed text-gray-700 outline-none focus:ring-2 focus:ring-[#1877F2]" />
                 </div>
               </div>
               <div className="pt-6 flex gap-3">
-                <button type="button" onClick={() => setEmailModal({ ...emailModal, isOpen: false })} className="flex-1 bg-gray-100 text-gray-600 font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors">Hủy bỏ</button>
+                <button type="button" disabled={isSending} onClick={() => setEmailModal({ ...emailModal, isOpen: false })} className="flex-1 bg-gray-100 text-gray-600 font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors">Hủy bỏ</button>
                 <button type="submit" disabled={isSending} className="flex-1 bg-[#1877F2] text-white font-bold py-3.5 rounded-xl hover:bg-blue-600 transition-colors shadow-md shadow-blue-500/30 flex items-center justify-center gap-2 disabled:opacity-70">
                   {isSending ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> Đang gửi...</> : '✈️ Gửi thư ngay'}
                 </button>

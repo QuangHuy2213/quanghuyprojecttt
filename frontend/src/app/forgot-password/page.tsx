@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { apiFetch } from '../../services/api';
+import { mailRequest } from '../../services/mail-request';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -27,22 +27,18 @@ export default function ForgotPasswordPage() {
     setIsLoading(true);
 
     try {
-      const res = await apiFetch('auth/forgot-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-
-      const data = await res.json();
+      const { response: res, data } = await mailRequest('auth/forgot-password', { email });
 
       if (!res.ok) {
-        showToast(data.message || 'Không tìm thấy email này trong hệ thống!', 'error');
+        const message = Array.isArray(data?.message) ? data.message.join(', ') : data?.message;
+        showToast(message || 'Không thể gửi email. Vui lòng thử lại sau!', 'error');
       } else {
         showToast('Đã gửi đường dẫn khôi phục! Vui lòng kiểm tra hộp thư của bạn.', 'success');
         setEmail(''); // Xoá trắng ô email sau khi gửi thành công
       }
     } catch (err) {
-      showToast('Không thể kết nối đến máy chủ. Vui lòng thử lại sau!', 'error');
+      showToast(err instanceof Error && err.message !== 'Failed to fetch'
+        ? err.message : 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau!', 'error');
     } finally {
       setIsLoading(false);
     }
