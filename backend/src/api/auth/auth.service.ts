@@ -9,25 +9,16 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 
 import * as bcrypt from 'bcrypt';
-import * as nodemailer from 'nodemailer';
+import { MailService } from '../../mail/mail.service';
 
 
 @Injectable()
 export class AuthService {
-  private transporter;
-
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
-  ) {
-    this.transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.MAIL_USER,
-        pass: process.env.MAIL_APP_PASSWORD,
-      },
-    });
-  }
+    private readonly mailService: MailService,
+  ) {}
 
 
   async register(data: any) {
@@ -143,21 +134,7 @@ export class AuthService {
     const resetLink =
       `https://nguyenducquanghuy.vercel.app/reset-password?token=${resetToken}`;
 
-    await this.transporter.sendMail({
-      from: `"Nhà Tốt Support" <${process.env.MAIL_USER}>`,
-      to: user.email,
-      subject: 'Yêu cầu đặt lại mật khẩu tài khoản Nhà Tốt',
-      html: `
-        <p>
-          Vui lòng bấm vào nút bên dưới để tiến hành đổi mật khẩu mới.
-          Đường dẫn có hiệu lực trong vòng <b>15 phút</b>.
-        </p>
-
-        <a href="${resetLink}">
-          Đặt lại mật khẩu
-        </a>
-      `,
-    });
+    await this.mailService.sendPasswordReset(user.email, resetLink);
 
     return {
       message:

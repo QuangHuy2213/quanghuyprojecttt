@@ -6,9 +6,11 @@ import { JwtModule } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GoogleStrategy } from './google.strategy'; // <-- THÊM DÒNG NÀY
 import { JwtStrategy } from './jwt.strategy';
+import { MailModule } from '../../mail/mail.module';
 
 @Module({
   imports: [
+    MailModule,
     JwtModule.register({
       secret: getJwtSecret(),
       signOptions: { expiresIn: '1d' },

@@ -2,22 +2,15 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { TransactionService } from '../transaction/transaction.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
-import * as nodemailer from 'nodemailer';
+import { MailService } from '../../mail/mail.service';
 
 @Injectable()
 export class AdminService {
   constructor(
     private prisma: PrismaService,
     private transactions: TransactionService,
+    private readonly mailService: MailService,
   ) {}
-
-  private transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.MAIL_USER,
-      pass: process.env.MAIL_APP_PASSWORD,
-    },
-  });
 
   // --- LOGIC DASHBOARD ---
   async getDashboardStats() {
@@ -297,23 +290,16 @@ export class AdminService {
     subject: string,
     message: string,
   ) {
-    await this.transporter.sendMail({
-      from: `"Nhà Tốt Support" <${process.env.MAIL_USER}>`,
-      to: emailTo,
-      subject: subject,
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; border-radius: 10px;">
-          <h2 style="color: #1877F2;">Phản hồi từ Nhà Tốt</h2>
-          <div style="font-size: 15px; line-height: 1.6;">
-            ${message.replace(/\n/g, '<br/>')}
-          </div>
-          <p style="margin-top: 30px; font-size: 13px; color: #777; border-top: 1px solid #eee; padding-top: 15px;">
-            Đội ngũ hỗ trợ Nhà Tốt.<br/>
-            Hotline: 1900 6868
-          </p>
-        </div>
-      `,
+    const contact = await this.prisma.contact.findUnique({
+      where: { id: contactId },
+      select: { email: true },
     });
+    if (!contact) throw new NotFoundException('Không tìm thấy liên hệ.');
+    if (contact.email.trim().toLowerCase() !== emailTo.trim().toLowerCase()) {
+      throw new BadRequestException('Email không khớp với liên hệ cần phản hồi.');
+    }
+
+    await this.mailService.sendContactReply(contact.email, subject, message);
 
     return this.prisma.contact.update({
       where: { id: contactId },
