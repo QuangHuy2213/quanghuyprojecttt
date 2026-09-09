@@ -2,9 +2,12 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
+import { requestTracing } from './common/request-tracing.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  // Register before the Gateway secret check so rejected requests are traced too.
+  app.use(requestTracing);
 
   app.useGlobalPipes(
     new ValidationPipe({
