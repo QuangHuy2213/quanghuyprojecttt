@@ -50,6 +50,7 @@ export default function ChatWorkspace() {
   const postId = rawPostId ? Number(rawPostId) : undefined;
   const conversationKey = `${receiverId}:${rawPostId}`;
   const [threads, setThreads] = useState<Thread[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [active, setActive] = useState<Thread | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const { transactions, setTransactions } = useTransactions();
@@ -265,6 +266,22 @@ export default function ChatWorkspace() {
     }
   };
 
+  const normalizedSearch = searchTerm.trim().toLocaleLowerCase('vi-VN');
+
+  const filteredThreads = threads.filter((thread) => {
+    if (!normalizedSearch) return true;
+
+    const fullName = thread.peer.fullName?.toLocaleLowerCase('vi-VN') || '';
+    const postTitle = thread.post?.title?.toLocaleLowerCase('vi-VN') || '';
+    const lastMessage = thread.lastMessage?.text?.toLocaleLowerCase('vi-VN') || '';
+
+    return (
+      fullName.includes(normalizedSearch) ||
+      postTitle.includes(normalizedSearch) ||
+      lastMessage.includes(normalizedSearch)
+    );
+  });
+
   return (
     <div className="flex h-dvh flex-col bg-[#f3f6fb] text-slate-900">
       <Header />
@@ -343,19 +360,52 @@ export default function ChatWorkspace() {
                 </div>
               </div>
 
-              <div className="mt-4 flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+              <div className="relative mt-4">
                 <svg
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="1.8"
-                  className="h-4 w-4 shrink-0"
+                  className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
                   aria-hidden="true"
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="m21 21-4.35-4.35"
+                  />
                   <circle cx="11" cy="11" r="7" />
                 </svg>
-                <span className="truncate">Hội thoại được sắp theo hoạt động gần nhất</span>
+
+                <input
+                  type="search"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Tìm người dùng, bài đăng..."
+                  aria-label="Tìm kiếm cuộc trò chuyện"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-11 text-sm font-medium text-slate-700 outline-none transition-all placeholder:font-normal placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                />
+
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-lg leading-none text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
+                    aria-label="Xóa nội dung tìm kiếm"
+                    title="Xóa tìm kiếm"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-2 flex items-center justify-between px-1 text-[10px] font-medium text-slate-400">
+                <span>Tìm theo tên, bài đăng hoặc tin nhắn gần nhất</span>
+                {searchTerm && (
+                  <span className="shrink-0 pl-3 text-blue-600">
+                    {filteredThreads.length}/{threads.length}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -385,8 +435,45 @@ export default function ChatWorkspace() {
                 </div>
               )}
 
+              {threads.length > 0 && filteredThreads.length === 0 && (
+                <div className="flex min-h-56 flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50/80 px-6 text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm ring-1 ring-slate-200">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      className="h-6 w-6"
+                      aria-hidden="true"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="m21 21-4.35-4.35"
+                      />
+                      <circle cx="11" cy="11" r="7" />
+                    </svg>
+                  </div>
+
+                  <p className="mt-4 text-sm font-bold text-slate-700">
+                    Không tìm thấy cuộc trò chuyện
+                  </p>
+                  <p className="mt-1 max-w-[240px] text-xs leading-5 text-slate-500">
+                    Thử tìm bằng tên người dùng, tên bài đăng hoặc nội dung tin nhắn khác.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm('')}
+                    className="mt-4 rounded-xl bg-white px-4 py-2 text-xs font-bold text-blue-600 shadow-sm ring-1 ring-slate-200 transition hover:bg-blue-50 hover:ring-blue-200"
+                  >
+                    Xóa tìm kiếm
+                  </button>
+                </div>
+              )}
+
               <div className="space-y-2">
-                {threads.map((thread) => {
+                {filteredThreads.map((thread) => {
                   const selected = keyOf(thread) === conversationKey;
 
                   return (
