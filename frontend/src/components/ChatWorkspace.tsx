@@ -489,27 +489,34 @@ export default function ChatWorkspace() {
                       }
                       className={`group relative flex w-full items-start gap-3 overflow-hidden rounded-2xl border p-3.5 text-left transition-all duration-200 ${
                         selected
-                          ? 'border-blue-200 bg-blue-50/90 shadow-sm'
-                          : 'border-transparent bg-white hover:border-slate-200 hover:bg-slate-50 hover:shadow-sm'
+                          ? 'border-blue-500/60 bg-blue-600/15 shadow-sm ring-1 ring-blue-500/10'
+                          : 'border-transparent bg-transparent hover:border-slate-300/40 hover:bg-white/5'
                       }`}
                     >
                       {selected && (
                         <span className="absolute inset-y-3 left-0 w-1 rounded-r-full bg-blue-600" />
                       )}
 
-                      <div className="relative shrink-0">
+                      <div className="shrink-0">
                         <UserAvatar user={thread.peer} className="h-11 w-11" />
-                        <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />
                       </div>
 
                       <div className="min-w-0 flex-1 pt-0.5">
                         <div className="flex items-center gap-2">
-                          <p className="min-w-0 flex-1 truncate text-sm font-extrabold text-slate-900">
+                          <p
+                            className={`min-w-0 flex-1 truncate text-sm font-extrabold ${
+                              selected ? 'text-blue-50' : 'text-slate-100'
+                            }`}
+                          >
                             {thread.peer.fullName}
                           </p>
 
                           {thread.lastMessage?.createdAt && (
-                            <time className="shrink-0 text-[10px] font-medium text-slate-400">
+                            <time
+                              className={`shrink-0 text-[10px] font-medium ${
+                                selected ? 'text-blue-200' : 'text-slate-400'
+                              }`}
+                            >
                               {formatMessageTime(thread.lastMessage.createdAt)}
                             </time>
                           )}
@@ -518,7 +525,11 @@ export default function ChatWorkspace() {
                         {thread.post && (
                           <div className="mt-1 flex items-center gap-1.5">
                             <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
-                            <p className="truncate text-xs font-semibold text-blue-700">
+                            <p
+                              className={`truncate text-xs font-semibold ${
+                                selected ? 'text-blue-200' : 'text-blue-400'
+                              }`}
+                            >
                               {thread.post.title}
                             </p>
                           </div>
@@ -527,7 +538,13 @@ export default function ChatWorkspace() {
                         <div className="mt-1.5 flex items-center gap-2">
                           <p
                             className={`min-w-0 flex-1 truncate text-xs ${
-                              thread.unread ? 'font-semibold text-slate-700' : 'text-slate-500'
+                              selected
+                                ? thread.unread
+                                  ? 'font-semibold text-blue-100'
+                                  : 'text-blue-200/90'
+                                : thread.unread
+                                  ? 'font-semibold text-slate-200'
+                                  : 'text-slate-400'
                             }`}
                           >
                             {thread.lastMessage?.text || 'Bắt đầu cuộc trò chuyện'}
@@ -605,19 +622,15 @@ export default function ChatWorkspace() {
                     </svg>
                   </Link>
 
-                  <div className="relative shrink-0">
+                  <div className="shrink-0">
                     <UserAvatar user={active?.peer} className="h-11 w-11 sm:h-12 sm:w-12" />
-                    <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500" />
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 items-center">
                       <h2 className="truncate text-sm font-extrabold text-slate-950 sm:text-base">
                         {active?.peer.fullName || 'Cuộc trò chuyện'}
                       </h2>
-                      <span className="hidden rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 sm:inline">
-                        Đang hoạt động
-                      </span>
                     </div>
 
                     {active?.post ? (
@@ -647,6 +660,8 @@ export default function ChatWorkspace() {
                     type="button"
                     onClick={deleteConversation}
                     disabled={!active || sending || deleting}
+                    title="Xóa cuộc trò chuyện"
+                    aria-label="Xóa cuộc trò chuyện"
                     className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-3 text-xs font-bold text-rose-600 transition hover:border-rose-200 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4 sm:text-sm"
                   >
                     {deleting ? (
@@ -668,7 +683,7 @@ export default function ChatWorkspace() {
                 </div>
 
                 {transaction && (
-                  <div className="border-b border-slate-200/70 bg-white px-3 py-3 sm:px-5">
+                  <div className="border-b border-slate-200/70 bg-transparent px-3 py-2 sm:px-5">
                     <TransactionPrompt
                       key={`${transaction.id}:${transaction.status}`}
                       transaction={transaction}
@@ -741,7 +756,11 @@ export default function ChatWorkspace() {
                               />
                             )}
 
-                            <div className={`max-w-[82%] sm:max-w-[72%] ${mine ? 'items-end' : 'items-start'}`}>
+                            <div
+                              className={`flex max-w-[82%] flex-col sm:max-w-[72%] ${
+                                mine ? 'items-end' : 'items-start'
+                              }`}
+                            >
                               <div
                                 className={`whitespace-pre-wrap break-words px-4 py-3 text-sm leading-5 shadow-sm ${
                                   mine
