@@ -138,15 +138,14 @@ export default function LoginPage() {
       }
 
       localStorage.setItem('access_token', data.access_token);
-
       localStorage.setItem('user', JSON.stringify(data.user));
 
+      // Đồng bộ ngay trạng thái đăng nhập cho Header / InboxProvider / các component đang sống trong layout.
       window.dispatchEvent(new Event('user-updated'));
-      showToast('Đăng nhập thành công! Đang chuyển hướng...', 'success');
 
-      setTimeout(() => {
-        router.push('/');
-      }, 1500);
+      // Chuyển trang ngay sau khi đăng nhập thành công.
+      // Dùng replace để nút Back không quay lại trang /login.
+      router.replace('/');
     } catch (err) {
       console.error('[LOGIN ERROR]', err);
 
