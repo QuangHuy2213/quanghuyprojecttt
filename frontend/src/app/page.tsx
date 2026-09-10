@@ -167,7 +167,7 @@ export default function HomePage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-100/70 text-slate-900">
+    <div className="relative flex min-h-screen flex-col overflow-x-hidden bg-[#f4f7f6] text-slate-900 transition-colors duration-300 dark:bg-[#020617] dark:text-slate-100">
       <Header />
 
       <style
@@ -181,11 +181,52 @@ export default function HomePage() {
               0%, 100% { transform: translateY(0px); }
               50% { transform: translateY(8px); }
             }
+
+            @keyframes homeBlob {
+              0% { transform: translate3d(0, 0, 0) scale(1); }
+              33% { transform: translate3d(28px, -42px, 0) scale(1.08); }
+              66% { transform: translate3d(-22px, 24px, 0) scale(0.94); }
+              100% { transform: translate3d(0, 0, 0) scale(1); }
+            }
+
             .home-float { animation: homeFloat 5s ease-in-out infinite; }
             .home-float-slow { animation: homeFloatSlow 6.5s ease-in-out infinite; }
+            .home-blob { animation: homeBlob 8s ease-in-out infinite; }
+            .home-blob-delay-1 { animation-delay: 1.8s; }
+            .home-blob-delay-2 { animation-delay: 3.6s; }
+
+            @media (prefers-reduced-motion: reduce) {
+              .home-float,
+              .home-float-slow,
+              .home-blob {
+                animation: none !important;
+              }
+            }
           `,
         }}
       />
+
+      {/* BACKGROUND BLOB - đồng bộ phong cách với trang create-post */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
+      >
+        <div
+          className="home-blob absolute left-[4%] top-[36rem] h-[28rem] w-[28rem]
+            rounded-full bg-[#1877F2] opacity-20 blur-[115px]
+            mix-blend-multiply dark:mix-blend-screen dark:opacity-10"
+        />
+        <div
+          className="home-blob home-blob-delay-1 absolute right-[3%] top-[54rem]
+            h-[30rem] w-[30rem] rounded-full bg-purple-400 opacity-20 blur-[120px]
+            mix-blend-multiply dark:mix-blend-screen dark:opacity-10"
+        />
+        <div
+          className="home-blob home-blob-delay-2 absolute bottom-[10rem] left-[28%]
+            h-[28rem] w-[28rem] rounded-full bg-emerald-300 opacity-20 blur-[115px]
+            mix-blend-multiply dark:mix-blend-screen dark:opacity-10"
+        />
+      </div>
 
       {/* POPUP THÔNG BÁO */}
       <div
@@ -228,7 +269,7 @@ export default function HomePage() {
       </div>
 
       {/* HERO */}
-      <section className="relative isolate overflow-hidden bg-slate-950 pb-36 pt-16 text-white sm:pb-40 sm:pt-20 lg:min-h-[510px]">
+      <section className="relative z-10 isolate overflow-hidden bg-slate-950 pb-36 pt-16 text-white sm:pb-40 sm:pt-20 lg:min-h-[510px]">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.32),transparent_36%),radial-gradient(circle_at_bottom_right,rgba(14,165,233,0.2),transparent_34%)]" />
         <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-blue-950/35 to-transparent" />
 
@@ -484,7 +525,7 @@ export default function HomePage() {
       </div>
 
       {/* QUICK BENEFITS */}
-      <section className="mx-auto w-full max-w-6xl px-4 pb-4">
+      <section className="relative z-10 mx-auto w-full max-w-6xl px-4 pb-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {[
             {
@@ -505,7 +546,7 @@ export default function HomePage() {
           ].map((item) => (
             <div
               key={item.title}
-              className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+              className="flex items-center gap-4 rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-sm backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-900/90"
             >
               <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-blue-50 text-xl font-black text-blue-700">
                 {item.icon}
@@ -524,7 +565,7 @@ export default function HomePage() {
       </section>
 
       {/* POST LIST */}
-      <main className="mx-auto w-full max-w-6xl flex-grow px-4 pb-14 pt-9">
+      <main className="relative z-10 mx-auto w-full max-w-6xl flex-grow px-4 pb-14 pt-9">
         <div className="mb-7 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-blue-600">
@@ -538,7 +579,7 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500 shadow-sm">
+          <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200/80 bg-white/90 px-3 py-2 text-xs font-bold text-slate-500 shadow-sm backdrop-blur-sm dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-400">
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
             Danh sách được cập nhật từ hệ thống
           </div>
@@ -547,7 +588,7 @@ export default function HomePage() {
         <PostList filters={appliedFilters} />
       </main>
 
-      <Footer />
+      <div className="relative z-10"><Footer /></div>
     </div>
   );
 }
