@@ -284,38 +284,6 @@ export default function ChatWorkspace() {
 
   return (
     <div className="flex h-dvh flex-col bg-[#f3f6fb] text-slate-900 transition-colors duration-300 dark:bg-[#070d1a] dark:text-slate-100">
-      <style jsx global>{`
-        .chat-scrollbar {
-          scrollbar-width: thin;
-          scrollbar-color: rgb(203 213 225) transparent;
-        }
-
-        .chat-scrollbar::-webkit-scrollbar {
-          width: 8px;
-          height: 8px;
-        }
-
-        .chat-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-
-        .chat-scrollbar::-webkit-scrollbar-thumb {
-          background: rgb(203 213 225);
-          border-radius: 999px;
-        }
-
-        .dark .chat-scrollbar {
-          scrollbar-color: rgb(71 85 105) transparent;
-        }
-
-        .dark .chat-scrollbar::-webkit-scrollbar-thumb {
-          background: rgb(71 85 105);
-        }
-
-        .dark .chat-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgb(100 116 139);
-        }
-      `}</style>
 
       <Header />
 

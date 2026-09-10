@@ -31,15 +31,51 @@ export default function Header() {
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    setIsDark(document.documentElement.classList.contains('dark'));
+    const root = document.documentElement;
+    const savedTheme = localStorage.getItem('theme');
+
+    const applyTheme = (dark: boolean) => {
+      root.classList.toggle('dark', dark);
+      root.style.colorScheme = dark ? 'dark' : 'light';
+      setIsDark(dark);
+    };
+
+    // Ưu tiên lựa chọn người dùng đã lưu.
+    // Nếu chưa từng chọn, dùng theme hệ điều hành.
+    const initialDark =
+      savedTheme === 'dark'
+        ? true
+        : savedTheme === 'light'
+          ? false
+          : window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+    applyTheme(initialDark);
+
+    // Đồng bộ nếu theme bị đổi từ tab khác.
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== 'theme') return;
+      applyTheme(event.newValue === 'dark');
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
   const toggleTheme = () => {
-    const next = !document.documentElement.classList.contains('dark');
-    document.documentElement.classList.toggle('dark', next);
-    document.documentElement.style.colorScheme = next ? 'dark' : 'light';
+    const root = document.documentElement;
+    const next = !root.classList.contains('dark');
+
+    root.classList.toggle('dark', next);
+    root.style.colorScheme = next ? 'dark' : 'light';
     localStorage.setItem('theme', next ? 'dark' : 'light');
     setIsDark(next);
+
+    // Cho component nào cần lắng nghe theme có thể cập nhật ngay.
+    window.dispatchEvent(
+      new CustomEvent('theme-changed', {
+        detail: { theme: next ? 'dark' : 'light' },
+      }),
+    );
   };
 
   // STATE QUẢN LÝ DROPDOWN
@@ -203,7 +239,7 @@ export default function Header() {
 
 
   return (
-    <header className="sticky top-0 z-50 border-b border-white/10 bg-slate-950/95 text-white shadow-lg shadow-slate-950/10 backdrop-blur-xl">
+    <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 text-slate-900 shadow-lg shadow-slate-900/5 backdrop-blur-xl transition-colors duration-300 dark:border-white/10 dark:bg-slate-950/95 dark:text-white dark:shadow-black/20">
       <div
         className={`fixed left-1/2 top-24 z-[100000] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 transition-all duration-300 ${
           headerToast.show
@@ -212,7 +248,7 @@ export default function Header() {
         }`}
       >
         <div
-          className={`flex items-center gap-3 rounded-2xl border bg-white px-4 py-3.5 shadow-2xl ${
+          className={`flex items-center gap-3 rounded-2xl border bg-white px-4 py-3.5 shadow-2xl transition-colors dark:bg-slate-900 ${
             headerToast.type === 'error'
               ? 'border-rose-200'
               : headerToast.type === 'success'
@@ -235,7 +271,7 @@ export default function Header() {
                 ? '✓'
                 : 'i'}
           </div>
-          <span className="text-sm font-extrabold leading-6 text-slate-700">
+          <span className="text-sm font-extrabold leading-6 text-slate-700 dark:text-slate-200">
             {headerToast.message}
           </span>
         </div>
@@ -250,7 +286,7 @@ export default function Header() {
             <div className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-3.5 py-1.5 text-xl font-black tracking-tighter text-white shadow-lg shadow-blue-500/20">
               NHÀ TỐT
             </div>
-            <span className="hidden border-l border-slate-700 pl-3 text-sm font-bold text-slate-300 sm:inline">
+            <span className="hidden border-l border-slate-200 pl-3 text-sm font-bold text-slate-600 transition-colors sm:inline dark:border-slate-700 dark:text-slate-300">
               Kênh bất động sản
             </span>
           </Link>
@@ -262,9 +298,10 @@ export default function Header() {
             onClick={toggleTheme}
             title={isDark ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}
             aria-label="Đổi chế độ sáng tối"
-            className="grid h-10 w-10 place-items-center rounded-full border border-white/10
-              bg-white/10 text-lg text-slate-200 shadow-sm transition hover:rotate-12
-              hover:bg-white/20"
+            className="grid h-10 w-10 place-items-center rounded-full border border-slate-200
+              bg-slate-50 text-lg text-slate-700 shadow-sm transition hover:rotate-12
+              hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-slate-200
+              dark:hover:bg-white/20"
           >
             {isDark ? '☀️' : '🌙'}
           </button>
@@ -276,7 +313,7 @@ export default function Header() {
               className={`relative flex items-center justify-center w-10 h-10 rounded-full shadow-sm transition-all ${
                 showFavorites
                   ? 'bg-blue-600 text-white ring-2 ring-blue-400/30'
-                  : 'border border-white/10 bg-white/10 text-slate-200 hover:bg-white/15'
+                  : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/15'
               }`}
               title="Tin đã lưu"
             >
@@ -302,14 +339,14 @@ export default function Header() {
             </button>
 
             {showFavorites && (
-              <div className="absolute right-0 top-full z-50 mt-3 flex w-96 flex-col overflow-hidden rounded-[22px] border border-slate-200 bg-white text-slate-800 shadow-2xl">
-                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3.5">
-                  <h3 className="text-sm font-black text-slate-800">
+              <div className="absolute right-0 top-full z-50 mt-3 flex w-96 flex-col overflow-hidden rounded-[22px] border border-slate-200 bg-white text-slate-800 shadow-2xl transition-colors dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3.5 transition-colors dark:border-slate-700 dark:bg-slate-800">
+                  <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">
                     Tin đã lưu ({favoritePosts.length})
                   </h3>
                   <button
                     onClick={() => setShowFavorites(false)}
-                    className="text-gray-400 hover:text-red-500 text-2xl leading-none"
+                    className="text-slate-400 hover:text-red-500 text-2xl leading-none dark:text-slate-500 dark:hover:text-red-400"
                   >
                     &times;
                   </button>
@@ -329,7 +366,7 @@ export default function Header() {
                     favoritePosts.map((post) => (
                       <div
                         key={post.id}
-                        className="flex group border-b border-gray-50 hover:bg-blue-50
+                        className="flex group border-b border-gray-50 dark:border-slate-800 hover:bg-blue-50 dark:hover:bg-blue-500/10
                           transition-colors items-center pr-3"
                       >
                         <Link
@@ -400,7 +437,7 @@ export default function Header() {
               className={`relative flex items-center justify-center w-10 h-10 rounded-full shadow-sm transition-all ${
                 showNotifications
                   ? 'bg-blue-600 text-white ring-2 ring-blue-400/30'
-                  : 'border border-white/10 bg-white/10 text-slate-200 hover:bg-white/15'
+                  : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/15'
               }`}
               title="Thông báo"
             >
@@ -426,9 +463,9 @@ export default function Header() {
             </button>
 
             {showNotifications && (
-              <div className="absolute right-0 top-full z-50 mt-3 flex w-96 flex-col overflow-hidden rounded-[22px] border border-slate-200 bg-white text-slate-800 shadow-2xl">
-                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3.5">
-                  <h3 className="text-sm font-black text-slate-800">Thông báo</h3>
+              <div className="absolute right-0 top-full z-50 mt-3 flex w-96 flex-col overflow-hidden rounded-[22px] border border-slate-200 bg-white text-slate-800 shadow-2xl transition-colors dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3.5 transition-colors dark:border-slate-700 dark:bg-slate-800">
+                  <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">Thông báo</h3>
                   <div className="flex items-center gap-4">
                     {unreadCount > 0 && (
                       <button
@@ -440,7 +477,7 @@ export default function Header() {
                     )}
                     <button
                       onClick={() => setShowNotifications(false)}
-                      className="text-gray-400 hover:text-red-500 text-2xl leading-none"
+                      className="text-slate-400 hover:text-red-500 text-2xl leading-none dark:text-slate-500 dark:hover:text-red-400"
                     >
                       &times;
                     </button>
@@ -469,7 +506,7 @@ export default function Header() {
                         <div
                           key={notif.id}
                           onClick={() => { if (notif.link) router.push(notif.link); }}
-                          className={`flex gap-3 p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors cursor-pointer ${isUnread ? 'bg-blue-50/40' : ''}`}
+                          className={`flex gap-3 p-4 border-b border-gray-50 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors cursor-pointer ${isUnread ? 'bg-blue-50/40' : ''}`}
                         >
                           <div
                             className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${isUnread ? 'bg-[#1877F2]' : 'bg-transparent'}`}
@@ -500,9 +537,10 @@ export default function Header() {
 
           <Link
             href="/chat"
-            className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-4
-              py-2.5 text-sm font-extrabold text-slate-200 transition-all
-              hover:bg-white/15 md:flex"
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4
+              py-2.5 text-sm font-extrabold text-slate-700 transition-all
+              hover:bg-slate-100 dark:border-white/10 dark:bg-white/10 dark:text-slate-200
+              dark:hover:bg-white/15 md:flex"
           >
             <svg
               className="w-4 h-4 text-[#1877F2]"
@@ -528,8 +566,9 @@ export default function Header() {
           {!user && (
             <Link
               href="/login"
-              className="rounded-xl border border-white/10 bg-white/10 px-4 py-2.5 text-sm
-                font-extrabold text-white transition-all hover:bg-white/15"
+              className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm
+                font-extrabold text-slate-800 transition-all hover:bg-slate-100
+                dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
             >
               Đăng nhập
             </Link>
@@ -552,8 +591,9 @@ export default function Header() {
                   ? 'Nâng cấp tài khoản để đăng tin'
                   : 'Đăng nhập và nâng cấp tài khoản để đăng tin'
               }
-              className="cursor-not-allowed rounded-xl border border-white/10 bg-white/5 px-5
-                py-2.5 text-sm font-extrabold text-slate-500 opacity-80"
+              className="cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-5
+                py-2.5 text-sm font-extrabold text-slate-400 opacity-80
+                dark:border-white/10 dark:bg-white/5 dark:text-slate-500"
             >
               ĐĂNG TIN
             </button>
@@ -568,12 +608,13 @@ export default function Header() {
                   setShowFavorites(false);
                   setShowNotifications(false);
                 }}
-                className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/10
-                  px-3 py-2 text-slate-200 transition-all hover:bg-white/15"
+                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50
+                  px-3 py-2 text-slate-700 transition-all hover:bg-slate-100
+                  dark:border-white/10 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/15"
               >
                 <UserAvatar user={user} className="w-6 h-6" />
                 <svg
-                  className="w-4 h-4 text-gray-500"
+                  className="w-4 h-4 text-slate-500 dark:text-slate-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
