@@ -283,17 +283,50 @@ export default function ChatWorkspace() {
   });
 
   return (
-    <div className="flex h-dvh flex-col bg-[#f3f6fb] text-slate-900">
+    <div className="flex h-dvh flex-col bg-[#f3f6fb] text-slate-900 transition-colors duration-300 dark:bg-[#070d1a] dark:text-slate-100">
+      <style jsx global>{`
+        .chat-scrollbar {
+          scrollbar-width: thin;
+          scrollbar-color: rgb(203 213 225) transparent;
+        }
+
+        .chat-scrollbar::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
+        }
+
+        .chat-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        .chat-scrollbar::-webkit-scrollbar-thumb {
+          background: rgb(203 213 225);
+          border-radius: 999px;
+        }
+
+        .dark .chat-scrollbar {
+          scrollbar-color: rgb(71 85 105) transparent;
+        }
+
+        .dark .chat-scrollbar::-webkit-scrollbar-thumb {
+          background: rgb(71 85 105);
+        }
+
+        .dark .chat-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgb(100 116 139);
+        }
+      `}</style>
+
       <Header />
 
       {!user ? (
         <main className="relative flex flex-1 items-center justify-center overflow-hidden px-4 py-10">
           <div className="pointer-events-none absolute inset-0">
-            <div className="absolute -left-24 top-10 h-72 w-72 rounded-full bg-blue-200/40 blur-3xl" />
-            <div className="absolute -right-20 bottom-0 h-80 w-80 rounded-full bg-indigo-200/40 blur-3xl" />
+            <div className="absolute -left-24 top-10 h-72 w-72 rounded-full bg-blue-200/40 blur-3xl dark:bg-blue-700/10" />
+            <div className="absolute -right-20 bottom-0 h-80 w-80 rounded-full bg-indigo-200/40 blur-3xl dark:bg-indigo-700/10" />
           </div>
 
-          <section className="relative w-full max-w-md rounded-[28px] border border-white/80 bg-white/90 p-8 text-center shadow-[0_24px_70px_-35px_rgba(15,23,42,0.45)] backdrop-blur-xl sm:p-10">
+          <section className="relative w-full max-w-md rounded-[28px] border border-white/80 bg-white/90 p-8 text-center shadow-[0_24px_70px_-35px_rgba(15,23,42,0.45)] backdrop-blur-xl transition-colors sm:p-10 dark:border-slate-700/70 dark:bg-slate-900/90 dark:shadow-[0_24px_70px_-35px_rgba(0,0,0,0.85)]">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20">
               <svg
                 viewBox="0 0 24 24"
@@ -312,10 +345,10 @@ export default function ChatWorkspace() {
               </svg>
             </div>
 
-            <h1 className="mt-6 text-2xl font-extrabold tracking-tight text-slate-950">
+            <h1 className="mt-6 text-2xl font-extrabold tracking-tight text-slate-950 dark:text-white">
               Tin nhắn Nhà Tốt
             </h1>
-            <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-slate-500">
+            <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-slate-500 dark:text-slate-400">
               Đăng nhập để trao đổi với người mua, người bán và theo dõi hội thoại theo từng bài đăng.
             </p>
 
@@ -338,24 +371,24 @@ export default function ChatWorkspace() {
           </section>
         </main>
       ) : (
-        <main className="mx-auto flex min-h-0 w-full max-w-[1480px] flex-1 overflow-hidden bg-white shadow-[0_20px_70px_-45px_rgba(15,23,42,0.45)] md:my-4 md:rounded-[28px] md:border md:border-slate-200/80">
+        <main className="mx-auto flex min-h-0 w-full max-w-[1480px] flex-1 overflow-hidden bg-white shadow-[0_20px_70px_-45px_rgba(15,23,42,0.45)] transition-colors duration-300 md:my-4 md:rounded-[28px] md:border md:border-slate-200/80 dark:bg-[#0c1425] dark:shadow-[0_20px_70px_-45px_rgba(0,0,0,0.9)] dark:md:border-slate-700/70">
           <aside
             className={`${
               receiverId ? 'hidden md:flex' : 'flex'
-            } w-full flex-col bg-white md:w-[360px] md:shrink-0 md:border-r md:border-slate-200/80`}
+            } w-full flex-col bg-white transition-colors md:w-[360px] md:shrink-0 md:border-r md:border-slate-200/80 dark:bg-[#0c1425] dark:md:border-slate-700/70`}
           >
-            <div className="border-b border-slate-100 px-5 pb-4 pt-5 sm:px-6">
+            <div className="border-b border-slate-100 px-5 pb-4 pt-5 transition-colors sm:px-6 dark:border-slate-700/70">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-600">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">
                     Trung tâm hội thoại
                   </p>
-                  <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">
+                  <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950 dark:text-white">
                     Tin nhắn
                   </h1>
                 </div>
 
-                <div className="flex h-11 min-w-11 items-center justify-center rounded-2xl bg-blue-50 px-3 text-sm font-extrabold text-blue-700">
+                <div className="flex h-11 min-w-11 items-center justify-center rounded-2xl bg-blue-50 px-3 text-sm font-extrabold text-blue-700 transition-colors dark:bg-blue-500/15 dark:text-blue-300">
                   {threads.length}
                 </div>
               </div>
@@ -366,7 +399,7 @@ export default function ChatWorkspace() {
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="1.8"
-                  className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                  className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500"
                   aria-hidden="true"
                 >
                   <path
@@ -383,14 +416,14 @@ export default function ChatWorkspace() {
                   onChange={(event) => setSearchTerm(event.target.value)}
                   placeholder="Tìm người dùng, bài đăng..."
                   aria-label="Tìm kiếm cuộc trò chuyện"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-11 text-sm font-medium text-slate-700 outline-none transition-all placeholder:font-normal placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-11 text-sm font-medium text-slate-700 outline-none transition-all placeholder:font-normal placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-100 dark:placeholder:text-slate-500 dark:hover:border-slate-600 dark:focus:border-blue-500 dark:focus:bg-slate-900 dark:focus:ring-blue-500/15"
                 />
 
                 {searchTerm && (
                   <button
                     type="button"
                     onClick={() => setSearchTerm('')}
-                    className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-lg leading-none text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
+                    className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-lg leading-none text-slate-400 transition hover:bg-slate-200 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
                     aria-label="Xóa nội dung tìm kiếm"
                     title="Xóa tìm kiếm"
                   >
@@ -399,20 +432,20 @@ export default function ChatWorkspace() {
                 )}
               </div>
 
-              <div className="mt-2 flex items-center justify-between px-1 text-[10px] font-medium text-slate-400">
+              <div className="mt-2 flex items-center justify-between px-1 text-[10px] font-medium text-slate-400 dark:text-slate-500">
                 <span>Tìm theo tên, bài đăng hoặc tin nhắn gần nhất</span>
                 {searchTerm && (
-                  <span className="shrink-0 pl-3 text-blue-600">
+                  <span className="shrink-0 pl-3 text-blue-600 dark:text-blue-400">
                     {filteredThreads.length}/{threads.length}
                   </span>
                 )}
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-4">
+            <div className="chat-scrollbar min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-4">
               {!threads.length && (
-                <div className="flex min-h-64 flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50/80 px-6 text-center">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm ring-1 ring-slate-200">
+                <div className="flex min-h-64 flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50/80 px-6 text-center transition-colors dark:border-slate-700 dark:bg-slate-900/50">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm ring-1 ring-slate-200 transition-colors dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700">
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -428,16 +461,16 @@ export default function ChatWorkspace() {
                       />
                     </svg>
                   </div>
-                  <p className="mt-4 text-sm font-bold text-slate-700">Chưa có cuộc trò chuyện</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                  <p className="mt-4 text-sm font-bold text-slate-700 dark:text-slate-200">Chưa có cuộc trò chuyện</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
                     Khi bạn liên hệ về một bài đăng, hội thoại sẽ xuất hiện tại đây.
                   </p>
                 </div>
               )}
 
               {threads.length > 0 && filteredThreads.length === 0 && (
-                <div className="flex min-h-56 flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50/80 px-6 text-center">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm ring-1 ring-slate-200">
+                <div className="flex min-h-56 flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50/80 px-6 text-center transition-colors dark:border-slate-700 dark:bg-slate-900/50">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm ring-1 ring-slate-200 transition-colors dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700">
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -455,17 +488,17 @@ export default function ChatWorkspace() {
                     </svg>
                   </div>
 
-                  <p className="mt-4 text-sm font-bold text-slate-700">
+                  <p className="mt-4 text-sm font-bold text-slate-700 dark:text-slate-200">
                     Không tìm thấy cuộc trò chuyện
                   </p>
-                  <p className="mt-1 max-w-[240px] text-xs leading-5 text-slate-500">
+                  <p className="mt-1 max-w-[240px] text-xs leading-5 text-slate-500 dark:text-slate-400">
                     Thử tìm bằng tên người dùng, tên bài đăng hoặc nội dung tin nhắn khác.
                   </p>
 
                   <button
                     type="button"
                     onClick={() => setSearchTerm('')}
-                    className="mt-4 rounded-xl bg-white px-4 py-2 text-xs font-bold text-blue-600 shadow-sm ring-1 ring-slate-200 transition hover:bg-blue-50 hover:ring-blue-200"
+                    className="mt-4 rounded-xl bg-white px-4 py-2 text-xs font-bold text-blue-600 shadow-sm ring-1 ring-slate-200 transition hover:bg-blue-50 hover:ring-blue-200 dark:bg-slate-800 dark:text-blue-300 dark:ring-slate-700 dark:hover:bg-slate-700 dark:hover:ring-slate-600"
                   >
                     Xóa tìm kiếm
                   </button>
@@ -489,8 +522,8 @@ export default function ChatWorkspace() {
                       }
                       className={`group relative flex w-full items-start gap-3 overflow-hidden rounded-2xl border p-3.5 text-left transition-all duration-200 ${
                         selected
-                          ? 'border-blue-500/60 bg-blue-600/15 shadow-sm ring-1 ring-blue-500/10'
-                          : 'border-transparent bg-transparent hover:border-slate-300/40 hover:bg-white/5'
+                          ? 'border-blue-300 bg-blue-50 shadow-sm ring-1 ring-blue-200/70 dark:border-blue-500/50 dark:bg-blue-500/10 dark:ring-blue-500/10'
+                          : 'border-transparent bg-transparent hover:border-slate-200 hover:bg-slate-50 dark:hover:border-slate-700 dark:hover:bg-white/5'
                       }`}
                     >
                       {selected && (
@@ -505,7 +538,9 @@ export default function ChatWorkspace() {
                         <div className="flex items-center gap-2">
                           <p
                             className={`min-w-0 flex-1 truncate text-sm font-extrabold ${
-                              selected ? 'text-blue-50' : 'text-slate-100'
+                              selected
+                                ? 'text-slate-950 dark:text-blue-50'
+                                : 'text-slate-900 dark:text-slate-100'
                             }`}
                           >
                             {thread.peer.fullName}
@@ -514,7 +549,9 @@ export default function ChatWorkspace() {
                           {thread.lastMessage?.createdAt && (
                             <time
                               className={`shrink-0 text-[10px] font-medium ${
-                                selected ? 'text-blue-200' : 'text-slate-400'
+                                selected
+                                  ? 'text-blue-500 dark:text-blue-200'
+                                  : 'text-slate-400 dark:text-slate-500'
                               }`}
                             >
                               {formatMessageTime(thread.lastMessage.createdAt)}
@@ -524,10 +561,12 @@ export default function ChatWorkspace() {
 
                         {thread.post && (
                           <div className="mt-1 flex items-center gap-1.5">
-                            <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
+                            <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500 dark:bg-blue-400" />
                             <p
                               className={`truncate text-xs font-semibold ${
-                                selected ? 'text-blue-200' : 'text-blue-400'
+                                selected
+                                  ? 'text-blue-700 dark:text-blue-200'
+                                  : 'text-blue-600 dark:text-blue-400'
                               }`}
                             >
                               {thread.post.title}
@@ -540,11 +579,11 @@ export default function ChatWorkspace() {
                             className={`min-w-0 flex-1 truncate text-xs ${
                               selected
                                 ? thread.unread
-                                  ? 'font-semibold text-blue-100'
-                                  : 'text-blue-200/90'
+                                  ? 'font-semibold text-slate-800 dark:text-blue-100'
+                                  : 'text-slate-600 dark:text-blue-200/90'
                                 : thread.unread
-                                  ? 'font-semibold text-slate-200'
-                                  : 'text-slate-400'
+                                  ? 'font-semibold text-slate-700 dark:text-slate-200'
+                                  : 'text-slate-500 dark:text-slate-400'
                             }`}
                           >
                             {thread.lastMessage?.text || 'Bắt đầu cuộc trò chuyện'}
@@ -563,8 +602,8 @@ export default function ChatWorkspace() {
               </div>
             </div>
 
-            <div className="hidden border-t border-slate-100 px-5 py-4 md:block">
-              <p className="text-xs leading-5 text-slate-400">
+            <div className="hidden border-t border-slate-100 px-5 py-4 transition-colors md:block dark:border-slate-700/70">
+              <p className="text-xs leading-5 text-slate-400 dark:text-slate-500">
                 Tin nhắn được đồng bộ tự động để bạn không bỏ lỡ trao đổi quan trọng.
               </p>
             </div>
@@ -573,12 +612,12 @@ export default function ChatWorkspace() {
           <section
             className={`${
               receiverId ? 'flex' : 'hidden md:flex'
-            } min-w-0 flex-1 flex-col bg-[#f8fafc]`}
+            } min-w-0 flex-1 flex-col bg-[#f8fafc] transition-colors dark:bg-[#08101f]`}
           >
             {!receiverId ? (
               <div className="relative m-auto flex max-w-md flex-col items-center px-8 py-12 text-center">
-                <div className="absolute inset-0 -z-10 rounded-full bg-blue-100/50 blur-3xl" />
-                <div className="flex h-20 w-20 items-center justify-center rounded-[26px] bg-white text-blue-600 shadow-lg shadow-slate-200/80 ring-1 ring-slate-200">
+                <div className="absolute inset-0 -z-10 rounded-full bg-blue-100/50 blur-3xl dark:bg-blue-700/10" />
+                <div className="flex h-20 w-20 items-center justify-center rounded-[26px] bg-white text-blue-600 shadow-lg shadow-slate-200/80 ring-1 ring-slate-200 transition-colors dark:bg-slate-900 dark:text-blue-400 dark:shadow-black/30 dark:ring-slate-700">
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
@@ -595,19 +634,19 @@ export default function ChatWorkspace() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="m7.5 19-3 1.5 1-3.4" />
                   </svg>
                 </div>
-                <h2 className="mt-6 text-xl font-extrabold text-slate-900">
+                <h2 className="mt-6 text-xl font-extrabold text-slate-900 dark:text-white">
                   Chọn một cuộc trò chuyện
                 </h2>
-                <p className="mt-2 text-sm leading-6 text-slate-500">
+                <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
                   Chọn người dùng ở danh sách bên trái để xem nội dung trao đổi và thông tin bài đăng.
                 </p>
               </div>
             ) : (
               <>
-                <div className="flex min-h-[76px] items-center gap-3 border-b border-slate-200/80 bg-white px-4 py-3 sm:px-5">
+                <div className="flex min-h-[76px] items-center gap-3 border-b border-slate-200/80 bg-white px-4 py-3 transition-colors sm:px-5 dark:border-slate-700/70 dark:bg-[#0c1425]">
                   <Link
                     href="/chat"
-                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 md:hidden"
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 md:hidden dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-700 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
                     aria-label="Quay lại danh sách hội thoại"
                   >
                     <svg
@@ -628,7 +667,7 @@ export default function ChatWorkspace() {
 
                   <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center">
-                      <h2 className="truncate text-sm font-extrabold text-slate-950 sm:text-base">
+                      <h2 className="truncate text-sm font-extrabold text-slate-950 sm:text-base dark:text-white">
                         {active?.peer.fullName || 'Cuộc trò chuyện'}
                       </h2>
                     </div>
@@ -636,7 +675,7 @@ export default function ChatWorkspace() {
                     {active?.post ? (
                       <Link
                         href={`/posts/${active.post.id}`}
-                        className="mt-0.5 inline-flex max-w-full items-center gap-1 text-xs font-semibold text-blue-600 transition hover:text-blue-700"
+                        className="mt-0.5 inline-flex max-w-full items-center gap-1 text-xs font-semibold text-blue-600 transition hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                       >
                         <svg
                           viewBox="0 0 24 24"
@@ -652,7 +691,7 @@ export default function ChatWorkspace() {
                         <span className="truncate">{active.post.title}</span>
                       </Link>
                     ) : (
-                      <p className="mt-0.5 text-xs text-slate-400">Trao đổi trực tiếp</p>
+                      <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">Trao đổi trực tiếp</p>
                     )}
                   </div>
 
@@ -662,7 +701,7 @@ export default function ChatWorkspace() {
                     disabled={!active || sending || deleting}
                     title="Xóa cuộc trò chuyện"
                     aria-label="Xóa cuộc trò chuyện"
-                    className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-3 text-xs font-bold text-rose-600 transition hover:border-rose-200 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4 sm:text-sm"
+                    className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-3 text-xs font-bold text-rose-600 transition hover:border-rose-200 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4 sm:text-sm dark:border-rose-500/25 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:border-rose-500/40 dark:hover:bg-rose-500/15"
                   >
                     {deleting ? (
                       <span className="h-4 w-4 animate-spin rounded-full border-2 border-rose-300 border-t-rose-600" />
@@ -683,7 +722,7 @@ export default function ChatWorkspace() {
                 </div>
 
                 {transaction && (
-                  <div className="border-b border-slate-200/70 bg-transparent px-3 py-2 sm:px-5">
+                  <div className="border-b border-slate-200/70 bg-transparent px-3 py-2 transition-colors sm:px-5 dark:border-slate-700/70">
                     <TransactionPrompt
                       key={`${transaction.id}:${transaction.status}`}
                       transaction={transaction}
@@ -695,14 +734,14 @@ export default function ChatWorkspace() {
                   </div>
                 )}
 
-                <div className="relative min-h-0 flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.06),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(99,102,241,0.06),_transparent_28%)] px-3 py-5 sm:px-6">
+                <div className="chat-scrollbar relative min-h-0 flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.06),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(99,102,241,0.06),_transparent_28%)] px-3 py-5 transition-colors sm:px-6 dark:bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.08),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(99,102,241,0.06),_transparent_28%)] dark:bg-[#08101f]">
                   <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col">
                     {older && messages.length >= 50 && (
                       <button
                         type="button"
                         disabled={loading}
                         onClick={loadOlder}
-                        className="mx-auto mb-5 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 shadow-sm transition hover:border-blue-200 hover:text-blue-700 disabled:opacity-50"
+                        className="mx-auto mb-5 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 shadow-sm transition hover:border-blue-200 hover:text-blue-700 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-blue-700 dark:hover:text-blue-300"
                       >
                         {loading && (
                           <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
@@ -713,7 +752,7 @@ export default function ChatWorkspace() {
 
                     {!messages.length && !error && (
                       <div className="m-auto flex max-w-sm flex-col items-center px-6 py-12 text-center">
-                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm ring-1 ring-slate-200">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm ring-1 ring-slate-200 transition-colors dark:bg-slate-900 dark:text-blue-400 dark:ring-slate-700">
                           <svg
                             viewBox="0 0 24 24"
                             fill="none"
@@ -729,10 +768,10 @@ export default function ChatWorkspace() {
                             />
                           </svg>
                         </div>
-                        <p className="mt-4 text-sm font-extrabold text-slate-800">
+                        <p className="mt-4 text-sm font-extrabold text-slate-800 dark:text-slate-100">
                           Bắt đầu cuộc trò chuyện
                         </p>
-                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                        <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
                           Gửi lời chào hoặc trao đổi thêm thông tin về bài đăng này.
                         </p>
                       </div>
@@ -764,22 +803,22 @@ export default function ChatWorkspace() {
                               <div
                                 className={`whitespace-pre-wrap break-words px-4 py-3 text-sm leading-5 shadow-sm ${
                                   mine
-                                    ? 'rounded-[20px] rounded-br-md bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-blue-500/10'
-                                    : 'rounded-[20px] rounded-bl-md border border-slate-200/80 bg-white text-slate-800'
+                                    ? 'rounded-[20px] rounded-br-md bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-blue-500/10 dark:from-blue-500 dark:to-indigo-500'
+                                    : 'rounded-[20px] rounded-bl-md border border-slate-200/80 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100'
                                 }`}
                               >
                                 <p>{message.text}</p>
                               </div>
 
                               <div
-                                className={`mt-1 flex items-center gap-1.5 px-1 text-[10px] font-medium text-slate-400 ${
+                                className={`mt-1 flex items-center gap-1.5 px-1 text-[10px] font-medium text-slate-400 dark:text-slate-500 ${
                                   mine ? 'justify-end' : 'justify-start'
                                 }`}
                               >
                                 <time>{formatMessageTime(message.createdAt)}</time>
                                 {mine && (
                                   <span
-                                    className={message.readAt ? 'text-blue-500' : 'text-slate-400'}
+                                    className={message.readAt ? 'text-blue-500 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'}
                                     title={message.readAt ? 'Đã xem' : 'Đã gửi'}
                                   >
                                     {message.readAt ? '✓✓' : '✓'}
@@ -799,7 +838,7 @@ export default function ChatWorkspace() {
                 {error && (
                   <div
                     role="alert"
-                    className="flex items-start gap-2.5 border-t border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700 sm:px-6"
+                    className="flex items-start gap-2.5 border-t border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-700 transition-colors sm:px-6 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300"
                   >
                     <svg
                       viewBox="0 0 24 24"
@@ -818,9 +857,9 @@ export default function ChatWorkspace() {
 
                 <form
                   onSubmit={send}
-                  className="border-t border-slate-200/80 bg-white px-3 py-3 sm:px-5 sm:py-4"
+                  className="border-t border-slate-200/80 bg-white px-3 py-3 transition-colors sm:px-5 sm:py-4 dark:border-slate-700/70 dark:bg-[#0c1425]"
                 >
-                  <div className="mx-auto flex w-full max-w-4xl items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-1.5 pl-4 shadow-sm transition-colors hover:border-slate-300 focus-within:border-blue-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-500/10 sm:gap-3 sm:pl-5">
+                  <div className="mx-auto flex w-full max-w-4xl items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-1.5 pl-4 shadow-sm transition-colors hover:border-slate-300 focus-within:border-blue-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-500/10 sm:gap-3 sm:pl-5 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600 dark:focus-within:border-blue-600 dark:focus-within:bg-slate-900 dark:focus-within:ring-blue-500/15">
                     <input
                       aria-label="Nội dung tin nhắn"
                       maxLength={4000}
@@ -828,10 +867,10 @@ export default function ChatWorkspace() {
                       value={text}
                       onChange={(event) => setText(event.target.value)}
                       placeholder="Nhập tin nhắn..."
-                      className="min-w-0 flex-1 bg-transparent py-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed"
+                      className="min-w-0 flex-1 bg-transparent py-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed dark:text-slate-100 dark:placeholder:text-slate-500"
                     />
 
-                    <div className="hidden shrink-0 text-[10px] font-medium tabular-nums text-slate-400 sm:block">
+                    <div className="hidden shrink-0 text-[10px] font-medium tabular-nums text-slate-400 sm:block dark:text-slate-500">
                       {text.length}/4000
                     </div>
 
@@ -859,7 +898,7 @@ export default function ChatWorkspace() {
                     </button>
                   </div>
 
-                  <p className="mt-2 hidden text-center text-[10px] text-slate-400 sm:block">
+                  <p className="mt-2 hidden text-center text-[10px] text-slate-400 sm:block dark:text-slate-500">
                     Tin nhắn được đồng bộ theo thời gian thực và gắn với bài đăng đang trao đổi.
                   </p>
                 </form>
