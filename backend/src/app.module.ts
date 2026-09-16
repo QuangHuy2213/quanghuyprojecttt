@@ -12,8 +12,9 @@ import { PaymentModule } from './payment/payment.module';
 import { TransactionModule } from './api/transaction/transaction.module';
 import { ChatModule } from './api/chat/chat.module';
 import { CommunityModule } from './api/community/community.module';
+import { AiModule } from './ai/ai.module';
 @Module({
-  imports: [AuthModule, RealtimeModule, NotificationModule, AdminModule, PaymentModule, TransactionModule, ChatModule, CommunityModule],
+  imports: [AuthModule, RealtimeModule, NotificationModule, AdminModule, PaymentModule, TransactionModule, ChatModule, CommunityModule, AiModule],
   controllers: [AppController, PostsController],
   providers: [AppService, PostsService, PrismaService],
 })
